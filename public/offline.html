@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Offline — Atelier</title>
+  <style>
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+      background-color: #F8FAFC;
+      font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+      -webkit-font-smoothing: antialiased;
+      color: #0F172A;
+    }
+    .card {
+      background: #fff;
+      border: 1px solid #E2E8F0;
+      border-radius: 16px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, .12);
+      max-width: 420px;
+      width: 100%;
+      padding: 2.5rem 2rem;
+      text-align: center;
+    }
+    .mark {
+      width: 56px; height: 56px;
+      border-radius: 16px;
+      background: #0F172A;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 1.25rem;
+    }
+    .mark svg { width: 26px; height: 26px; }
+    h1 { font-size: 1.125rem; font-weight: 700; margin: 0 0 .5rem; letter-spacing: -.01em; }
+    p { font-size: .875rem; line-height: 1.6; color: #64748B; margin: 0 0 1.75rem; }
+    button {
+      background: #0F172A; color: #fff; border: 0;
+      font: inherit; font-size: .875rem; font-weight: 500;
+      padding: .625rem 1.25rem; border-radius: 8px; cursor: pointer;
+      transition: background .2s;
+    }
+    button:hover { background: #1E293B; }
+    .hint {
+      margin-top: 1.5rem; padding-top: 1.25rem;
+      border-top: 1px solid #E2E8F0;
+      font-size: .75rem; color: #94A3B8; line-height: 1.6;
+    }
+    .hint code {
+      background: #F1F5F9; padding: .125rem .375rem;
+      border-radius: 4px; font-size: .7rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="mark">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="6" cy="6" r="3"></circle>
+        <circle cx="6" cy="18" r="3"></circle>
+        <line x1="20" y1="4" x2="8.12" y2="15.88"></line>
+        <line x1="14.47" y1="14.48" x2="20" y2="20"></line>
+        <line x1="8.12" y1="8.12" x2="12" y2="12"></line>
+      </svg>
+    </div>
+
+    <h1>Can't reach the server</h1>
+    <p>Atelier stores everything in your shop's database, so it needs the server running to show your orders and customers.</p>
+
+    <button onclick="location.reload()">Try again</button>
+
+    <div class="hint">
+      If you're running locally, check that <strong>XAMPP</strong> (or <code>php artisan serve</code>) is still running, then try again.
+    </div>
+  </div>
+
+  <script>
+    // Reconnect automatically the moment the network comes back.
+    window.addEventListener('online', () => location.reload());
+  </script>
+</body>
+</html>

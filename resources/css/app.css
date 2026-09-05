@@ -1,0 +1,21 @@
+/* Self-hosted so the app works offline and never depends on a CDN being
+   reachable. Font Awesome pinned to 6.5.1 — the same version the CDN served. */
+@import '@fortawesome/fontawesome-free/css/all.min.css';
+
+/* Inter, matching the weights the design uses. */
+@import '@fontsource/inter/300.css';
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/600.css';
+@import '@fontsource/inter/700.css';
+@import '@fontsource/inter/800.css';
+
+/* Sora powers the .font-display class used by confirmation dialog titles. */
+@import '@fontsource/sora/400.css';
+@import '@fontsource/sora/500.css';
+@import '@fontsource/sora/600.css';
+@import '@fontsource/sora/700.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

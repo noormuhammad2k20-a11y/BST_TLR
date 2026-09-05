@@ -1,0 +1,1058 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Checkout - Ultra Premium Compact</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
+        rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Custom Scrollbar */
+        .overflow-y-auto::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+
+        .overflow-y-auto::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .overflow-y-auto::-webkit-scrollbar-thumb {
+            background: #e2e8f0;
+            border-radius: 10px;
+        }
+
+        .overflow-y-auto:hover::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+        }
+
+        /* Number Inputs */
+        input[type=number]::-webkit-inner-spin-button,
+        input[type=number]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        input[type=number] {
+            -moz-appearance: textfield;
+        }
+
+        /* SPA Transitions */
+        .pos-step {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            opacity: 0;
+            pointer-events: none;
+            transform: translateX(60px);
+            transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1), transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .pos-step.is-active {
+            opacity: 1;
+            pointer-events: auto;
+            transform: translateX(0);
+            z-index: 10;
+        }
+
+        .pos-step.is-previous {
+            opacity: 0;
+            transform: translateX(-60px);
+            pointer-events: none;
+        }
+
+        .pos-step.is-next {
+            opacity: 0;
+            transform: translateX(60px);
+            pointer-events: none;
+        }
+
+        /* Stepper CSS */
+        #pos-stepper .pos-stepper-dot {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: #f1f5f9;
+            color: #94a3b8;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 800;
+            transition: all 0.3s ease;
+            border: 1px solid #e2e8f0;
+        }
+
+        #pos-stepper .pos-stepper-line {
+            flex: 1;
+            height: 2px;
+            background: #e2e8f0;
+            transition: all 0.3s ease;
+            min-width: 20px;
+            border-radius: 2px;
+        }
+
+        #pos-stepper .pos-stepper-step.is-active .pos-stepper-dot {
+            background: #4f46e5;
+            color: white;
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+            border-color: #4f46e5;
+        }
+
+        #pos-stepper .pos-stepper-step.is-active .pos-stepper-label {
+            color: #4f46e5;
+        }
+
+        #pos-stepper .pos-stepper-step.is-done .pos-stepper-dot {
+            background: #10b981;
+            color: white;
+            border-color: #10b981;
+        }
+
+        #pos-stepper .pos-stepper-step.is-done .pos-stepper-label {
+            color: #059669;
+        }
+
+        #pos-stepper .pos-stepper-step.is-done+.pos-stepper-line {
+            background: #10b981;
+        }
+
+        /* Ultra-Compact Payment Methods */
+        .pay-method.stacked {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px;
+            background: white;
+            border: 2px solid #f1f5f9;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: left;
+        }
+
+        .pay-method.stacked:hover {
+            border-color: #c7d2fe;
+            background: #fcfcff;
+        }
+
+        .pay-method.stacked.active {
+            border-color: #4f46e5;
+            background: #eef2ff;
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        }
+
+        .pay-method.stacked .pay-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            background: #f8fafc;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #64748b;
+            font-size: 13px;
+            transition: all 0.2s;
+            border: 1px solid #e2e8f0;
+        }
+
+        .pay-method.stacked.active .pay-icon {
+            background: linear-gradient(135deg, #4f46e5, #4338ca);
+            color: white;
+            border-color: transparent;
+        }
+
+        /* Premium Buttons */
+        .btn-primary {
+            background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
+            color: white;
+            font-weight: 600;
+            border-radius: 0.5rem;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 4px -1px rgba(79, 70, 229, 0.2);
+        }
+
+        .btn-primary:hover {
+            box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.3);
+            transform: translateY(-1px);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #059669 0%, #047857 100%);
+            color: white;
+            font-weight: 600;
+            border-radius: 0.5rem;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 4px -1px rgba(5, 150, 105, 0.2);
+        }
+
+        .btn-success:hover {
+            box-shadow: 0 4px 6px -1px rgba(5, 150, 105, 0.3);
+            transform: translateY(-1px);
+        }
+
+        .btn-ghost {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            background-color: #f8fafc;
+            color: #475569;
+            font-weight: 600;
+            font-size: 0.75rem;
+            border-radius: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            transition: all 0.2s;
+            border: 1px solid #e2e8f0;
+        }
+
+        .btn-ghost:hover {
+            background-color: #f1f5f9;
+            color: #0f172a;
+        }
+
+        /* Premium Input */
+        .input-premium {
+            width: 100%;
+            padding: 0.5rem 0.75rem;
+            background-color: #fcfcfd;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.5rem;
+            font-size: 0.8125rem;
+            font-weight: 500;
+            color: #0f172a;
+            transition: all 0.2s;
+        }
+
+        .input-premium:focus {
+            outline: none;
+            border-color: #4f46e5;
+            background-color: white;
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
+        }
+
+        /* Bottom Dock Animations */
+        .dock-bar {
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .dock-bar.bump {
+            animation: dockBump 0.3s ease;
+        }
+
+        @keyframes dockBump {
+
+            0%,
+            100% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.01);
+            }
+        }
+
+        .cart-drawer {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .cart-drawer.open {
+            max-height: 40vh;
+        }
+
+        /* Animations */
+        .cell-num {
+            font-variant-numeric: tabular-nums;
+            font-feature-settings: "tnum";
+        }
+
+        @keyframes pop-in {
+            0% {
+                transform: scale(0.8);
+                opacity: 0;
+            }
+
+            40% {
+                transform: scale(1.1);
+            }
+
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        .success-pop {
+            animation: pop-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+
+        .success-ring {
+            transform: scale(0);
+            animation: ring 0.8s ease-out forwards;
+        }
+
+        @keyframes ring {
+            0% {
+                transform: scale(0);
+                opacity: 0.8;
+            }
+
+            100% {
+                transform: scale(2);
+                opacity: 0;
+            }
+        }
+
+        .success-check {
+            stroke-dasharray: 48;
+            stroke-dashoffset: 48;
+            animation: draw-check 0.3s 0.2s ease-out forwards;
+        }
+
+        @keyframes draw-check {
+            to {
+                stroke-dashoffset: 0;
+            }
+        }
+
+        .fade-up {
+            opacity: 0;
+            transform: translateY(8px);
+            animation: fade-up-anim 0.4s ease-out forwards;
+        }
+
+        @keyframes fade-up-anim {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes modalIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px) scale(0.98);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .modal-in {
+            animation: modalIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+    </style>
+</head>
+
+<body class="text-slate-800">
+
+    <div class="p-4 md:p-6 max-w-[1600px] mx-auto">
+
+        <!-- Header & Stepper -->
+        <div class="mb-4 flex items-center justify-between gap-4 flex-wrap">
+            <div>
+                <h1 class="text-lg font-black text-slate-900 tracking-tight">Smart Checkout</h1>
+                <p class="text-xs text-slate-500 mt-0.5 font-medium">Tap products to add them to the dock</p>
+            </div>
+            <div class="flex items-center w-full max-w-md bg-white border border-slate-200 rounded-xl shadow-sm px-4 py-2"
+                id="pos-stepper">
+                <div class="pos-stepper-step is-active flex items-center gap-2" data-step="1">
+                    <span class="pos-stepper-dot">1</span>
+                    <span class="pos-stepper-label text-xs font-semibold text-slate-500 whitespace-nowrap">Build
+                        Cart</span>
+                </div>
+                <div class="pos-stepper-line"></div>
+                <div class="pos-stepper-step flex items-center gap-2" data-step="2">
+                    <span class="pos-stepper-dot">2</span>
+                    <span
+                        class="pos-stepper-label text-xs font-semibold text-slate-500 whitespace-nowrap">Payment</span>
+                </div>
+                <div class="pos-stepper-line"></div>
+                <div class="pos-stepper-step flex items-center gap-2" data-step="3">
+                    <span class="pos-stepper-dot"><i class="fa-solid fa-check text-[9px]"></i></span>
+                    <span class="pos-stepper-label text-xs font-semibold text-slate-500 whitespace-nowrap">Done</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Container -->
+        <div id="checkout-container"
+            class="relative w-full overflow-hidden rounded-2xl bg-slate-100/50 border border-slate-200 shadow-sm"
+            style="height: calc(100vh - 9.5rem); min-height: 480px;">
+
+            <!-- ============================================== -->
+            <!-- STEP 1: FULL WIDTH PRODUCTS + FLOATING DOCK    -->
+            <!-- ============================================== -->
+            <div id="step-1-pos" class="pos-step is-active flex flex-col h-full">
+
+                <!-- Toolbar -->
+                <div class="p-2 border-b border-slate-200 bg-white flex gap-2 items-center z-10 relative shrink-0">
+                    <div class="relative flex-1 min-w-0">
+                        <i
+                            class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none"></i>
+                        <input type="search" id="pos-search" placeholder="Search products..."
+                            class="input-premium w-full pl-9 pr-4 text-sm" autocomplete="off">
+                    </div>
+                    <div class="w-40 shrink-0">
+                        <select class="input-premium w-full cursor-pointer text-sm">
+                            <option>All Categories</option>
+                            <option>Fabric</option>
+                            <option>Ready-to-Wear</option>
+                        </select>
+                    </div>
+                    <div class="w-28 shrink-0">
+                        <select class="input-premium w-full cursor-pointer text-sm">
+                            <option>All Units</option>
+                            <option>Meters</option>
+                            <option>Pieces</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Full Width Dense Products Grid -->
+                <div class="flex-1 min-h-0 overflow-y-auto p-3 bg-slate-50/50">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2.5"
+                        id="products-grid"></div>
+                </div>
+
+                <!-- Floating Bottom Dock -->
+                <div class="absolute bottom-3 left-3 right-3 z-30 pointer-events-none">
+                    <div id="dock-bar"
+                        class="dock-bar pointer-events-auto bg-white/95 backdrop-blur-md border border-slate-200 shadow-2xl rounded-2xl overflow-hidden">
+
+                        <!-- Slide-up Cart Drawer -->
+                        <div id="cart-drawer" class="cart-drawer">
+                            <div class="p-3 max-h-[35vh] overflow-y-auto border-b border-slate-100">
+                                <div class="flex justify-between items-center mb-2">
+                                    <h3 class="text-xs font-bold text-slate-800">Cart Items</h3>
+                                    <button onclick="clearCart()"
+                                        class="text-[10px] font-bold text-rose-600 hover:text-rose-700">CLEAR
+                                        ALL</button>
+                                </div>
+                                <ul id="cart-list" class="space-y-1.5"></ul>
+                            </div>
+                        </div>
+
+                        <!-- Dock Bar Content -->
+                        <div class="p-2.5 pl-4 flex items-center justify-between gap-4">
+                            <button onclick="toggleCart()" class="flex items-center gap-2.5 group">
+                                <span id="dock-count"
+                                    class="bg-indigo-600 text-white text-[10px] font-bold w-6 h-6 rounded-full flex items-center justify-center transform transition-transform group-hover:scale-110">0</span>
+                                <span class="font-bold text-slate-800 text-xs">View Cart</span>
+                                <i class="fa-solid fa-chevron-up text-slate-400 text-[9px] transition-transform"
+                                    id="drawer-icon"></i>
+                            </button>
+
+                            <div class="flex items-center gap-4">
+                                <div class="text-right">
+                                    <span
+                                        class="block text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-0.5">Total</span>
+                                    <span class="text-lg font-black text-slate-900 tracking-tight cell-num leading-none"
+                                        id="dock-total">Rs 0</span>
+                                </div>
+                                <button onclick="goToCheckout()"
+                                    class="btn-primary px-5 py-2 text-[11px] flex items-center justify-center gap-2 disabled:opacity-50"
+                                    id="btn-checkout" disabled>
+                                    Proceed <i class="fa-solid fa-arrow-right text-[9px]"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- ============================================== -->
+            <!-- STEP 2: SPLIT LAYOUT (SUMMARY LEFT, PAYMENT RIGHT) -->
+            <!-- ============================================== -->
+            <div id="step-2-checkout"
+                class="pos-step is-next flex bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden h-full">
+
+                <!-- LEFT: Order Summary -->
+                <div class="w-80 shrink-0 bg-slate-50/50 border-r border-slate-200 flex flex-col min-h-0 h-full">
+                    <div class="p-4 border-b border-slate-200 shrink-0 flex justify-between items-center">
+                        <h3 class="text-sm font-bold text-slate-800">Order Summary</h3>
+                        <button onclick="goToStep(1)" class="btn-ghost py-1.5 px-2.5 text-[10px]">
+                            <i class="fa-solid fa-arrow-left text-[9px]"></i> Edit
+                        </button>
+                    </div>
+
+                    <div class="flex-1 min-h-0 flex flex-col justify-center px-4 py-3">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Items</span>
+                            <span class="text-[10px] text-slate-400 font-medium" id="checkout-item-count">0 items</span>
+                        </div>
+                        <div id="checkout-summary-list" class="space-y-1.5 overflow-y-auto min-h-0 pr-1"></div>
+                    </div>
+
+                    <div class="p-4 border-t border-slate-200 bg-white shrink-0 space-y-1.5">
+                        <div class="flex justify-between text-[11px] text-slate-500">
+                            <span>Subtotal</span>
+                            <span class="cell-num font-medium text-slate-700" id="checkout-subtotal">Rs 0</span>
+                        </div>
+                        <div class="flex justify-between text-[11px] text-slate-500">
+                            <span>Discount</span>
+                            <span class="cell-num font-medium text-rose-600" id="checkout-discount">-Rs 0</span>
+                        </div>
+                        <div class="flex justify-between items-end pt-1.5 border-t border-slate-100 mt-1.5">
+                            <span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Grand
+                                Total</span>
+                            <span class="text-lg font-black text-slate-900 tracking-tight cell-num"
+                                id="checkout-total">Rs 0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- RIGHT: Payment Controls (Ultra-Compact) -->
+                <div class="flex-1 flex flex-col bg-white min-h-0 h-full p-5">
+
+                    <div class="flex items-center justify-between mb-4 shrink-0">
+                        <h2 class="text-sm font-bold text-slate-900 tracking-tight">Payment Method</h2>
+                        <span class="text-[10px] text-slate-400 font-medium bg-slate-100 px-2 py-0.5 rounded-full">Step
+                            2 of 3</span>
+                    </div>
+
+                    <div class="flex-1 min-h-0 flex flex-col justify-center space-y-4">
+                        <div class="grid grid-cols-4 gap-2">
+                            <button type="button" class="pay-method stacked active">
+                                <div class="pay-icon shrink-0"><i class="fa-solid fa-money-bill-wave text-[11px]"></i>
+                                </div>
+                                <div class="min-w-0 w-full">
+                                    <div class="font-bold text-slate-900 text-[11px] truncate">Cash</div>
+                                </div>
+                            </button>
+                            <button type="button" class="pay-method stacked">
+                                <div class="pay-icon shrink-0"><i class="fa-solid fa-credit-card text-[11px]"></i></div>
+                                <div class="min-w-0 w-full">
+                                    <div class="font-bold text-slate-900 text-[11px] truncate">Card</div>
+                                </div>
+                            </button>
+                            <button type="button" class="pay-method stacked">
+                                <div class="pay-icon shrink-0"><i class="fa-solid fa-building-columns text-[11px]"></i>
+                                </div>
+                                <div class="min-w-0 w-full">
+                                    <div class="font-bold text-slate-900 text-[11px] truncate">Transfer</div>
+                                </div>
+                            </button>
+                            <button type="button" class="pay-method stacked">
+                                <div class="pay-icon shrink-0"><i class="fa-solid fa-mobile-screen text-[11px]"></i>
+                                </div>
+                                <div class="min-w-0 w-full">
+                                    <div class="font-bold text-slate-900 text-[11px] truncate">EasyPaisa</div>
+                                </div>
+                            </button>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="p-3 bg-slate-50/50 border border-slate-200 rounded-xl">
+                                <label
+                                    class="block text-[9px] font-bold text-slate-500 mb-1 uppercase tracking-wider">Amount
+                                    Received</label>
+                                <div class="relative">
+                                    <span
+                                        class="absolute left-2.5 top-1/2 -translate-y-1/2 font-bold text-slate-400 text-[11px]">Rs</span>
+                                    <input type="number" id="paid-amount" value="0" min="0" step="0.01"
+                                        class="w-full pl-8 pr-12 py-2 bg-white border border-slate-200 rounded-lg text-sm font-black text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-100 transition-all cell-num"
+                                        oninput="calculateChange()" placeholder="0">
+                                    <button onclick="setFullPayment()"
+                                        class="absolute right-1.5 top-1/2 -translate-y-1/2 bg-slate-900 text-white hover:bg-indigo-600 text-[9px] font-bold px-2 py-1 rounded transition-all shadow-sm">Full</button>
+                                </div>
+                                <div class="grid grid-cols-4 gap-1 mt-2">
+                                    <button onclick="addTender(500)"
+                                        class="py-1 rounded bg-white border border-slate-200 text-[9px] font-bold text-slate-600 hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-600 transition-all cell-num">+500</button>
+                                    <button onclick="addTender(1000)"
+                                        class="py-1 rounded bg-white border border-slate-200 text-[9px] font-bold text-slate-600 hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-600 transition-all cell-num">+1k</button>
+                                    <button onclick="addTender(2000)"
+                                        class="py-1 rounded bg-white border border-slate-200 text-[9px] font-bold text-slate-600 hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-600 transition-all cell-num">+2k</button>
+                                    <button onclick="clearTender()"
+                                        class="py-1 rounded bg-white border border-slate-200 text-[9px] font-bold text-slate-400 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 transition-all">Clr</button>
+                                </div>
+                            </div>
+                            <div
+                                class="p-3 rounded-xl border border-slate-200 bg-white flex flex-col justify-center items-center text-center shadow-sm">
+                                <span class="text-[9px] font-bold text-slate-500 uppercase tracking-widest"
+                                    id="change-label">Change Return</span>
+                                <span class="text-lg font-black text-slate-900 tracking-tight cell-num mt-0.5"
+                                    id="change-amount">Rs 0</span>
+                                <span class="text-[9px] text-slate-400 mt-1 font-medium" id="change-hint">Enter
+                                    amount</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="shrink-0 mt-4 flex justify-center">
+                        <button onclick="submitCheckout()"
+                            class="btn-success w-full max-w-xs py-2.5 rounded-lg text-[11px] flex items-center justify-center gap-2"
+                            id="btn-submit-order">
+                            <i class="fa-solid fa-circle-check text-[10px]"></i> Complete Sale
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ============================================== -->
+            <!-- STEP 3: SPLIT LAYOUT (RECEIPT LEFT, SUCCESS RIGHT) -->
+            <!-- ============================================== -->
+            <div id="step-3-success" class="pos-step is-next flex gap-3 p-1 h-full">
+
+                <!-- LEFT: Items Sold / Receipt -->
+                <div
+                    class="flex-1 bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col min-h-0 h-full overflow-hidden">
+                    <div class="px-5 pt-4 pb-3 border-b border-slate-200 shrink-0">
+                        <h3 class="text-sm font-bold text-slate-900">Sale Receipt</h3>
+                        <p class="text-[11px] text-slate-500 mt-0.5 font-medium">Invoice <span
+                                class="font-bold text-slate-700 cell-num">INV-10293</span> · Walk-in Customer</p>
+                    </div>
+
+                    <div class="flex-1 min-h-0 flex flex-col justify-center px-5 py-3">
+                        <div class="flex justify-between items-center mb-2">
+                            <h4 class="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Items Sold</h4>
+                            <span class="text-[10px] text-slate-400 font-medium" id="success-item-count">0 items</span>
+                        </div>
+                        <div class="space-y-1.5 overflow-y-auto min-h-0 pr-1" id="success-items"></div>
+                    </div>
+
+                    <div class="px-5 py-3 border-t border-slate-200 bg-slate-50/50 shrink-0">
+                        <div class="flex justify-between items-end">
+                            <span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Total</span>
+                            <span class="text-lg font-black text-slate-900 tracking-tight cell-num"
+                                id="success-total">Rs 0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- RIGHT: Success Summary & Actions -->
+                <div
+                    class="w-80 shrink-0 bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-center px-5 py-5 min-h-0 h-full overflow-y-auto">
+
+                    <div class="flex flex-col items-center text-center mb-5">
+                        <div class="relative w-12 h-12 shrink-0 mb-2">
+                            <span class="success-ring absolute inset-0 rounded-full bg-emerald-500"></span>
+                            <div
+                                class="success-pop relative w-12 h-12 rounded-full bg-emerald-50 border-2 border-emerald-200 flex items-center justify-center">
+                                <svg class="success-check w-6 h-6" viewBox="0 0 52 52" fill="none" aria-hidden="true">
+                                    <path d="M14 27l8 8 16-16" stroke="#059669" stroke-width="5" stroke-linecap="round"
+                                        stroke-linejoin="round" />
+                                </svg>
+                            </div>
+                        </div>
+                        <h2 class="fade-up text-base font-black text-slate-900 tracking-tight"
+                            style="animation-delay:.2s">Sale Complete</h2>
+                    </div>
+
+                    <div class="fade-up grid grid-cols-2 gap-2 mb-4" style="animation-delay:.34s">
+                        <div
+                            class="p-3 rounded-lg bg-gradient-to-br from-emerald-50 to-white border border-emerald-200">
+                            <div class="text-[9px] font-bold text-emerald-700 uppercase tracking-widest">Paid</div>
+                            <div class="text-base font-black text-emerald-600 cell-num mt-0.5" id="success-paid">Rs 0
+                            </div>
+                        </div>
+                        <div class="p-3 rounded-lg border border-slate-200 bg-gradient-to-br from-slate-50 to-white">
+                            <div class="text-[9px] font-bold uppercase tracking-widest text-slate-500">Change</div>
+                            <div class="text-base font-black cell-num mt-0.5 text-slate-900" id="success-change">Rs 0
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="fade-up space-y-1.5" style="animation-delay:.46s">
+                        <button onclick="startNewSale()"
+                            class="btn-primary w-full py-2.5 text-[11px] flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-plus text-[9px]"></i> New Sale
+                        </button>
+                        <div class="grid grid-cols-2 gap-1.5">
+                            <button class="btn-ghost py-2">
+                                <i class="fa-solid fa-receipt text-[9px]"></i> Receipt
+                            </button>
+                            <button class="btn-ghost py-2">
+                                <i class="fa-solid fa-list text-[9px]"></i> Orders
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- ============================================== -->
+    <!-- PREMIUM NEW CUSTOMER MODAL                     -->
+    <!-- ============================================== -->
+    <div id="customer-modal"
+        class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="modal-in bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden">
+            <div class="px-5 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-lg bg-indigo-100 flex items-center justify-center text-indigo-600">
+                        <i class="fa-solid fa-user-plus text-xs"></i>
+                    </div>
+                    <h3 class="text-sm font-black text-slate-900 tracking-tight">Quick Add Customer</h3>
+                </div>
+                <button onclick="closeModal()"
+                    class="text-slate-400 hover:text-slate-600 hover:bg-slate-200 w-7 h-7 rounded-lg flex items-center justify-center transition">
+                    <i class="fa-solid fa-xmark text-xs"></i>
+                </button>
+            </div>
+            <div class="p-5">
+                <form id="quick-customer-form" onsubmit="saveCustomer(event)">
+                    <div class="mb-3">
+                        <label class="block text-[10px] font-bold text-slate-600 mb-1 uppercase tracking-wider">Full
+                            Name *</label>
+                        <div class="relative">
+                            <i
+                                class="fa-solid fa-user absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[11px]"></i>
+                            <input type="text" class="input-premium w-full pl-9 pr-3" placeholder="e.g. Ahmed Khan"
+                                required>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="block text-[10px] font-bold text-slate-600 mb-1 uppercase tracking-wider">Phone
+                            Number</label>
+                        <div class="relative">
+                            <i
+                                class="fa-solid fa-phone absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[11px]"></i>
+                            <input type="text" class="input-premium w-full pl-9 pr-3" placeholder="e.g. 03001234567">
+                        </div>
+                    </div>
+                    <div class="mb-4">
+                        <label
+                            class="block text-[10px] font-bold text-slate-600 mb-1 uppercase tracking-wider">City</label>
+                        <div class="relative">
+                            <i
+                                class="fa-solid fa-city absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[11px]"></i>
+                            <input type="text" class="input-premium w-full pl-9 pr-3" placeholder="e.g. Karachi">
+                        </div>
+                    </div>
+                    <button type="submit"
+                        class="btn-primary w-full py-2.5 text-xs flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-check text-[10px]"></i> Save Customer
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Mock Data ---
+        const mockProducts = [
+            { id: 1, name: "Alkaram Khaddar", cat: "Winter", price: 1200, stock: 45.5, unit: "meter" },
+            { id: 2, name: "Gul Ahmed Premium Lawn", cat: "Summer", price: 1800, stock: 12, unit: "meter" },
+            { id: 3, name: "Bareeze Ready-to-Wear", cat: "Unstitched", price: 3500, stock: 5, unit: "pcs" },
+            { id: 4, name: "Sana Safinaz Silk", cat: "Luxury", price: 8500, stock: 0, unit: "meter" },
+            { id: 5, name: "Junaid Jamshed Kurti", cat: "Ready-to-Wear", price: 4500, stock: 20, unit: "pcs" },
+            { id: 6, name: "Maria B. Embroidered", cat: "Luxury", price: 9200, stock: 8.5, unit: "meter" },
+            { id: 7, name: "Sapphire Wash & Wear", cat: "Summer", price: 1400, stock: 50, unit: "meter" },
+            { id: 8, name: "Edenrobe T-Shirt", cat: "Menswear", price: 1500, stock: 100, unit: "pcs" },
+            { id: 9, name: "Nishat Linen Trouser", cat: "Bottoms", price: 2500, stock: 15, unit: "pcs" },
+            { id: 10, name: "Charcoal Denim Jacket", cat: "Menswear", price: 6500, stock: 4, unit: "pcs" },
+            { id: 11, name: "Firdous Cotton Suit", cat: "Unstitched", price: 4200, stock: 30, unit: "meter" },
+            { id: 12, name: "Amir Adnan Sherwani", cat: "Formal", price: 25000, stock: 2, unit: "pcs" },
+        ];
+
+        let cart = [];
+        let currentStep = 1;
+        let isDockOpen = false;
+
+        // --- DOM Elements ---
+        const productsGrid = document.getElementById('products-grid');
+        const cartList = document.getElementById('cart-list');
+        const dockCount = document.getElementById('dock-count');
+        const dockTotal = document.getElementById('dock-total');
+        const dockBar = document.getElementById('dock-bar');
+        const cartDrawer = document.getElementById('cart-drawer');
+        const drawerIcon = document.getElementById('drawer-icon');
+        const modal = document.getElementById('customer-modal');
+
+        // --- Render Products (Ultra Compact Horizontal Cards) ---
+        function renderProducts() {
+            productsGrid.innerHTML = mockProducts.map(p => {
+                const isLow = p.stock > 0 && p.stock <= 10;
+                const stockLabel = p.stock % 1 === 0 ? p.stock : p.stock.toFixed(2);
+                return `
+            <div class="relative flex items-center gap-2.5 p-2.5 bg-white rounded-lg border border-slate-200 cursor-pointer transition-all duration-200 group hover:border-indigo-400 hover:shadow-sm ${p.stock <= 0 ? 'opacity-50 pointer-events-none' : ''}"
+                 onclick="addToCart(${p.id})">
+                ${p.stock <= 0 ? `<div class="absolute top-1 right-1 z-10 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-white bg-rose-500 rounded">Out</div>` : ''}
+                <div class="w-11 h-11 shrink-0 rounded-md overflow-hidden bg-slate-50 border border-slate-100 flex items-center justify-center">
+                    <i class="fa-solid fa-tag text-slate-300 text-sm"></i>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <h3 class="text-[13px] font-semibold text-slate-800 truncate group-hover:text-indigo-600 transition-colors">${p.name}</h3>
+                    <div class="flex items-center gap-1.5 mt-0.5">
+                        <span class="text-[9px] font-medium text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">${p.cat}</span>
+                        <span class="text-[9px] font-medium flex items-center gap-1 ${isLow ? 'text-rose-500' : 'text-emerald-500'}">
+                            <span class="w-1.5 h-1.5 rounded-full ${isLow ? 'bg-rose-500' : 'bg-emerald-500'}"></span>
+                            ${stockLabel} ${p.unit === 'meter' ? 'm' : 'pcs'}
+                        </span>
+                    </div>
+                    <p class="text-[13px] font-bold text-slate-900 mt-1">Rs ${p.price.toLocaleString()}</p>
+                </div>
+                <div class="shrink-0 w-7 h-7 rounded-full bg-slate-50 text-slate-400 flex items-center justify-center transition-all group-hover:bg-indigo-600 group-hover:text-white shadow-sm">
+                    <i class="fa-solid fa-plus text-[10px]"></i>
+                </div>
+            </div>`;
+            }).join('');
+        }
+
+        // --- Cart Logic ---
+        window.addToCart = function (id) {
+            const p = mockProducts.find(x => x.id === id);
+            if (!p) return;
+            const existing = cart.find(item => item.id === id);
+            if (existing) {
+                existing.qty += 1;
+            } else {
+                cart.push({ id: p.id, name: p.name, price: p.price, qty: 1, unit: p.unit, maxStock: p.stock });
+            }
+
+            // Bump animation
+            dockBar.classList.remove('bump');
+            void dockBar.offsetWidth;
+            dockBar.classList.add('bump');
+
+            renderCart();
+        }
+
+        window.addDecQty = function (id, amount) {
+            const item = cart.find(i => i.id === id);
+            if (item) {
+                item.qty += amount;
+                if (item.qty <= 0) {
+                    cart = cart.filter(i => i.id !== id);
+                }
+                renderCart();
+            }
+        }
+
+        window.clearCart = function () {
+            cart = [];
+            renderCart();
+        }
+
+        window.toggleCart = function () {
+            isDockOpen = !isDockOpen;
+            if (isDockOpen) {
+                cartDrawer.classList.add('open');
+                drawerIcon.classList.add('rotate-180');
+            } else {
+                cartDrawer.classList.remove('open');
+                drawerIcon.classList.remove('rotate-180');
+            }
+        }
+
+        function renderCart() {
+            if (cart.length === 0) {
+                dockCount.innerText = '0';
+                dockTotal.innerText = 'Rs 0';
+                document.getElementById('btn-checkout').disabled = true;
+                cartList.innerHTML = `<li class="text-center text-slate-400 text-xs py-4">Cart is empty</li>`;
+            } else {
+                dockCount.innerText = cart.length;
+                document.getElementById('btn-checkout').disabled = false;
+
+                cartList.innerHTML = cart.map(item => {
+                    const total = item.price * item.qty;
+                    const isMeter = item.unit === 'meter';
+                    const stepUp = isMeter ? 0.5 : 1;
+                    return `
+                <li class="group flex items-center gap-2 p-2 bg-slate-50 border border-slate-200 rounded-md hover:border-indigo-300 transition-all">
+                    <div class="flex-1 min-w-0">
+                        <div class="font-semibold text-slate-800 text-[11px] truncate leading-tight">${item.name}</div>
+                        <div class="text-[9px] text-slate-400 mt-0.5 cell-num">Rs ${item.price.toLocaleString()} / ${isMeter ? 'm' : 'pc'}</div>
+                    </div>
+                    <div class="flex items-center gap-0.5 shrink-0 bg-white border border-slate-200 rounded-md p-0.5">
+                        <button onclick="addDecQty(${item.id}, -${stepUp})" class="w-5 h-5 flex items-center justify-center text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors text-[9px]"><i class="fa-solid fa-minus"></i></button>
+                        <input type="number" value="${item.qty}" class="w-8 text-center bg-transparent border-0 text-[11px] font-bold text-slate-800 focus:outline-none cell-num">
+                        <button onclick="addDecQty(${item.id}, ${stepUp})" class="w-5 h-5 flex items-center justify-center text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors text-[9px]"><i class="fa-solid fa-plus"></i></button>
+                    </div>
+                    <div class="w-14 text-right shrink-0">
+                        <div class="font-bold text-slate-900 text-[11px] cell-num">Rs ${total.toLocaleString()}</div>
+                    </div>
+                </li>`;
+                }).join('');
+            }
+            updateTotals();
+        }
+
+        function updateTotals() {
+            let subtotal = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+            dockCount.innerText = cart.length;
+            dockTotal.innerText = 'Rs ' + subtotal.toLocaleString();
+        }
+
+        // --- Step 2 Logic ---
+        window.goToCheckout = function () {
+            if (cart.length === 0) return;
+            toggleCart(); // Close drawer if open
+
+            let subtotal = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+            let total = subtotal;
+
+            const summaryList = document.getElementById('checkout-summary-list');
+            summaryList.innerHTML = cart.map((item, i) => `
+            <div class="fade-up flex justify-between items-center gap-2 text-[11px] p-1.5 rounded-md bg-white border border-slate-200" style="animation-delay:${Math.min(i * 40, 300)}ms">
+                <div class="min-w-0">
+                    <div class="font-semibold text-slate-800 truncate">${item.name}</div>
+                    <div class="text-[9px] text-slate-500 cell-num flex items-center gap-1">
+                        <span>${item.qty} ${item.unit === 'meter' ? 'm' : 'pc'}</span>
+                        <span class="text-slate-300">×</span>
+                        <span>Rs ${item.price.toLocaleString()}</span>
+                    </div>
+                </div>
+                <div class="font-bold text-slate-900 shrink-0 cell-num">Rs ${(item.price * item.qty).toLocaleString()}</div>
+            </div>
+        `).join('');
+
+            document.getElementById('checkout-item-count').innerText = `${cart.length} items`;
+            document.getElementById('checkout-subtotal').innerText = 'Rs ' + subtotal.toLocaleString();
+            document.getElementById('checkout-total').innerText = 'Rs ' + total.toLocaleString();
+
+            document.getElementById('paid-amount').value = total;
+            calculateChange();
+            goToStep(2);
+        }
+
+        window.setFullPayment = function () {
+            let subtotal = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+            document.getElementById('paid-amount').value = subtotal;
+            calculateChange();
+        }
+
+        window.addTender = function (amount) {
+            let current = parseFloat(document.getElementById('paid-amount').value) || 0;
+            document.getElementById('paid-amount').value = current + amount;
+            calculateChange();
+        }
+
+        window.clearTender = function () {
+            document.getElementById('paid-amount').value = '';
+            calculateChange();
+        }
+
+        window.calculateChange = function () {
+            let subtotal = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+            let total = subtotal;
+            let paid = parseFloat(document.getElementById('paid-amount').value) || 0;
+
+            const changeLabel = document.getElementById('change-label');
+            const changeAmt = document.getElementById('change-amount');
+            const hint = document.getElementById('change-hint');
+
+            if (paid >= total) {
+                changeLabel.innerText = 'Change Return';
+                changeAmt.innerText = 'Rs ' + (paid - total).toLocaleString();
+                changeAmt.className = 'text-lg font-black tracking-tight text-emerald-600 cell-num mt-0.5';
+                hint.textContent = paid > total ? 'Hand this back to customer' : 'Exact amount';
+                hint.className = 'text-[9px] text-slate-400 mt-1 font-medium';
+            } else {
+                changeLabel.innerText = 'Balance Due';
+                changeAmt.innerText = 'Rs ' + (total - paid).toLocaleString();
+                changeAmt.className = 'text-lg font-black tracking-tight text-rose-600 cell-num mt-0.5';
+                hint.textContent = 'Will be added to ledger';
+                hint.className = 'text-[9px] text-rose-500 mt-1 font-medium';
+            }
+        }
+
+        // --- Step 3 Logic ---
+        window.submitCheckout = function () {
+            let subtotal = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+            let total = subtotal;
+            let paid = parseFloat(document.getElementById('paid-amount').value) || 0;
+            let change = paid > total ? paid - total : 0;
+
+            document.getElementById('success-total').innerText = 'Rs ' + total.toLocaleString();
+            document.getElementById('success-paid').innerText = 'Rs ' + paid.toLocaleString();
+            document.getElementById('success-change').innerText = 'Rs ' + change.toLocaleString();
+            document.getElementById('success-item-count').innerText = `${cart.length} items`;
+
+            const successItems = document.getElementById('success-items');
+            successItems.innerHTML = cart.map(item => `
+            <div class="flex justify-between items-center gap-2 p-1.5 rounded-md border border-slate-200 bg-white hover:bg-slate-50 transition-colors">
+                <div class="min-w-0">
+                    <div class="text-[11px] font-semibold text-slate-800 truncate">${item.name}</div>
+                    <div class="text-[9px] text-slate-500 cell-num mt-0.5 flex items-center gap-1">
+                        <span>${item.qty} ${item.unit === 'meter' ? 'm' : 'pc'}</span>
+                        <span class="text-slate-300">×</span>
+                        <span>Rs ${item.price.toLocaleString()}</span>
+                    </div>
+                </div>
+                <div class="text-[11px] font-bold text-slate-900 shrink-0 cell-num">Rs ${(item.price * item.qty).toLocaleString()}</div>
+            </div>
+        `).join('');
+
+            goToStep(3);
+        }
+
+        window.startNewSale = function () {
+            cart = [];
+            renderCart();
+            goToStep(1);
+        }
+
+        // --- Modal Logic ---
+        window.openModal = function () {
+            modal.classList.remove('hidden');
+        }
+
+        window.closeModal = function () {
+            modal.classList.add('hidden');
+        }
+
+        window.saveCustomer = function (e) {
+            e.preventDefault();
+            closeModal();
+            alert('Customer saved successfully!');
+        }
+
+        // --- SPA Step Machine ---
+        function goToStep(step) {
+            currentStep = step;
+            const panels = {
+                1: document.getElementById('step-1-pos'),
+                2: document.getElementById('step-2-checkout'),
+                3: document.getElementById('step-3-success'),
+            };
+
+            Object.entries(panels).forEach(([n, el]) => {
+                const num = Number(n);
+                el.classList.remove('is-active', 'is-next', 'is-previous');
+                el.classList.add(num === step ? 'is-active' : (num < step ? 'is-previous' : 'is-next'));
+            });
+
+            document.querySelectorAll('.pos-stepper-step').forEach(el => {
+                const num = Number(el.dataset.step);
+                el.classList.toggle('is-active', num === step);
+                el.classList.toggle('is-done', num < step);
+            });
+        }
+
+        // --- Payment Method Selection ---
+        document.querySelectorAll('.pay-method.stacked').forEach(btn => {
+            btn.addEventListener('click', function () {
+                document.querySelectorAll('.pay-method.stacked').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+            });
+        });
+
+        // --- Init ---
+        renderProducts();
+        renderCart(); // Initialize empty cart state
+    </script>
+
+</body>
+
+</html>

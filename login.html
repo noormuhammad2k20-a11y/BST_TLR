@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Atelier - Enterprise Tailor Management</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Sora:wght@400;500;600;700&display=swap"
+    rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+
+    h1,
+    h2,
+    h3,
+    h4,
+    .font-display {
+      font-family: 'Sora', sans-serif;
+    }
+
+    /* Clean Enterprise Background */
+    .login-bg-enterprise {
+      background-color: #f8fafc;
+      background-image:
+        linear-gradient(to right, rgba(241, 245, 249, 0.8) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(241, 245, 249, 0.8) 1px, transparent 1px);
+      background-size: 40px 40px;
+    }
+
+    /* Premium Crisp Card */
+    .enterprise-card {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 24px 48px -12px rgba(15, 23, 42, 0.08), 0 0 0 1px rgba(255, 255, 255, 0.5);
+    }
+
+    /* Ultra-Professional Input Styles */
+    .pro-input {
+      background-color: #ffffff;
+      border: 1px solid #cbd5e1;
+      color: #0f172a;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .pro-input::placeholder {
+      color: #94a3b8;
+      font-weight: 400;
+    }
+
+    .pro-input:hover {
+      border-color: #94a3b8;
+    }
+
+    .pro-input:focus {
+      background-color: #ffffff;
+      border-color: #4f46e5;
+      box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.08);
+      outline: none;
+    }
+
+    /* Custom Checkbox */
+    .custom-checkbox:checked {
+      background-color: #4f46e5;
+      border-color: #4f46e5;
+    }
+
+    /* Image Overlay Gradient */
+    .image-overlay {
+      background: linear-gradient(105deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 27, 75, 0.8) 40%, rgba(79, 70, 229, 0.4) 100%);
+    }
+
+    /* Smooth pop animation for card */
+    @keyframes popIn {
+      0% {
+        opacity: 0;
+        transform: scale(0.98) translateY(10px);
+      }
+
+      100% {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+      }
+    }
+
+    .pop-anim {
+      animation: popIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+  </style>
+</head>
+
+<body class="login-bg-enterprise flex items-center justify-center min-h-screen p-4 overflow-hidden relative">
+
+  <!-- Ambient Background Glows -->
+  <div
+    class="absolute top-0 left-0 w-[500px] h-[500px] bg-indigo-100/40 rounded-full filter blur-[120px] pointer-events-none">
+  </div>
+  <div
+    class="absolute bottom-0 right-0 w-[500px] h-[500px] bg-blue-100/40 rounded-full filter blur-[120px] pointer-events-none">
+  </div>
+
+  <!-- Compact Split Login Card -->
+  <div
+    class="relative z-10 grid grid-cols-1 md:grid-cols-2 max-w-4xl w-full enterprise-card rounded-2xl overflow-hidden pop-anim">
+
+    <!-- Left Side: Image & Corporate Branding -->
+    <div class="hidden md:block relative bg-slate-900">
+      <img src="https://images.unsplash.com/photo-1591348278863-a8fb3887e2aa?q=80&w=1974&auto=format&fit=crop"
+        class="absolute inset-0 w-full h-full object-cover opacity-60" alt="Bespoke Tailoring">
+
+      <!-- Professional Gradient Overlay -->
+      <div class="absolute inset-0 image-overlay"></div>
+
+      <div class="relative z-10 h-full flex flex-col justify-between p-10 text-white">
+
+        <!-- Top Logo -->
+        <div class="flex items-center gap-3">
+          <div
+            class="w-10 h-10 rounded-xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20 shadow-lg">
+            <i class="fa-solid fa-scissors text-base text-white"></i>
+          </div>
+          <span class="text-xl font-bold tracking-tight font-display">ATELIER</span>
+        </div>
+
+        <!-- Center Content -->
+        <div class="py-10">
+          <div
+            class="inline-flex items-center gap-2 px-3 py-1 bg-white/10 backdrop-blur-sm border border-white/20 rounded-full text-xs font-medium mb-6">
+            <span class="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"></span>
+            Enterprise Edition v2.0
+          </div>
+          <h2 class="text-4xl font-bold mb-4 font-display leading-tight tracking-tight">
+            The future of<br>bespoke tailoring.
+          </h2>
+          <p class="text-slate-300 text-sm max-w-sm leading-relaxed font-light">
+            Streamline your measurements, orders, and client history with precision-built software designed for modern
+            ateliers.
+          </p>
+        </div>
+
+        <!-- Bottom Social Proof -->
+        <div class="border-t border-white/10 pt-6">
+          <div class="flex items-center gap-4">
+            <div class="flex -space-x-3">
+              <div
+                class="w-9 h-9 rounded-full border-2 border-slate-900 bg-indigo-500 flex items-center justify-center text-xs font-bold">
+                AK</div>
+              <div
+                class="w-9 h-9 rounded-full border-2 border-slate-900 bg-blue-500 flex items-center justify-center text-xs font-bold">
+                RM</div>
+              <div
+                class="w-9 h-9 rounded-full border-2 border-slate-900 bg-purple-500 flex items-center justify-center text-xs font-bold">
+                SK</div>
+            </div>
+            <div class="text-xs">
+              <div class="font-semibold text-white">Trusted by 500+ tailors</div>
+              <div class="text-slate-400">Across 12 countries globally</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Side: Compact Login Form -->
+    <div class="p-8 md:p-12 flex flex-col justify-center bg-white">
+      <div class="mb-8">
+        <!-- Mobile Logo -->
+        <div class="flex md:hidden items-center gap-2 mb-8">
+          <div class="w-9 h-9 rounded-lg bg-indigo-600 flex items-center justify-center"><i
+              class="fa-solid fa-scissors text-white text-sm"></i></div>
+          <span class="text-lg font-bold tracking-wide text-slate-800 font-display">ATELIER</span>
+        </div>
+
+        <h1 class="text-2xl font-bold text-slate-900 mb-2 font-display tracking-tight">Sign in to your account</h1>
+        <p class="text-slate-500 text-sm">Enter your credentials to access the dashboard</p>
+      </div>
+
+      <form class="space-y-5" onsubmit="event.preventDefault(); handleLogin();">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-2 uppercase tracking-wider">Email Address</label>
+          <div class="relative">
+            <i class="fa-solid fa-envelope absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+            <input type="email" value="admin@atelier.com"
+              class="pro-input w-full pl-11 pr-4 py-3 rounded-lg text-sm font-medium" placeholder="you@atelier.com">
+          </div>
+        </div>
+
+        <div>
+          <div class="flex justify-between items-center mb-2">
+            <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider">Password</label>
+            <a href="#" onclick="showToast('Reset link sent to email!', 'info'); return false;"
+              class="text-xs font-semibold text-indigo-600 hover:text-indigo-700 transition">Forgot password?</a>
+          </div>
+          <div class="relative">
+            <i class="fa-solid fa-lock absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+            <input type="password" value="atelier2024" id="password-input"
+              class="pro-input w-full pl-11 pr-12 py-3 rounded-lg text-sm font-medium" placeholder="••••••••">
+            <button type="button" id="toggle-password"
+              class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 transition w-6 h-6 flex items-center justify-center">
+              <i class="fa-regular fa-eye text-sm"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between pt-2">
+          <label class="flex items-center gap-2 cursor-pointer text-slate-600 hover:text-slate-900 transition group">
+            <input type="checkbox"
+              class="custom-checkbox w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-0 transition">
+            <span class="text-xs font-medium">Keep me signed in for 30 days</span>
+          </label>
+        </div>
+
+        <button type="submit" id="login-btn"
+          class="w-full bg-indigo-600 text-white py-3 rounded-lg text-sm font-semibold hover:bg-indigo-700 active:scale-[0.98] transition-all duration-200 shadow-sm flex items-center justify-center gap-2 group mt-2">
+          <span>Access Dashboard</span>
+          <i class="fa-solid fa-arrow-right text-xs group-hover:translate-x-1 transition"></i>
+        </button>
+      </form>
+
+      <div class="mt-10 pt-6 border-t border-slate-100">
+        <div class="flex items-center justify-center gap-8 text-xs text-slate-400">
+          <span class="flex items-center gap-2"><i class="fa-solid fa-shield-halved text-slate-500"></i> SOC 2
+            Compliant</span>
+          <span class="flex items-center gap-2"><i class="fa-solid fa-lock text-slate-500"></i> 256-bit Encrypted</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="fixed top-8 right-8 z-50 hidden transition-all duration-300"
+    style="transform: translateX(120%);">
+    <div class="bg-white border border-slate-200 text-slate-700 px-4 py-3 rounded-xl shadow-xl flex items-center gap-3">
+      <i id="toast-icon" class="fa-solid fa-circle-check text-emerald-500"></i>
+      <span id="toast-msg" class="text-sm font-medium">Success!</span>
+    </div>
+  </div>
+
+  <script>
+    // Password Toggle
+    const togglePass = document.getElementById('toggle-password');
+    const passInput = document.getElementById('password-input');
+
+    togglePass.addEventListener('click', () => {
+      if (passInput.type === 'password') {
+        passInput.type = 'text';
+        togglePass.innerHTML = '<i class="fa-regular fa-eye-slash text-sm"></i>';
+      } else {
+        passInput.type = 'password';
+        togglePass.innerHTML = '<i class="fa-regular fa-eye text-sm"></i>';
+      }
+    });
+
+    // Fake Login Handler
+    function handleLogin() {
+      const btn = document.getElementById('login-btn');
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Authenticating...';
+      btn.disabled = true;
+      btn.classList.add('opacity-80', 'cursor-not-allowed');
+
+      setTimeout(() => {
+        showToast('Authentication Successful', 'success');
+        btn.innerHTML = '<span>Access Dashboard</span> <i class="fa-solid fa-check text-xs"></i>';
+        setTimeout(() => {
+          btn.innerHTML = '<span>Access Dashboard</span> <i class="fa-solid fa-arrow-right text-xs"></i>';
+          btn.disabled = false;
+          btn.classList.remove('opacity-80', 'cursor-not-allowed');
+        }, 1500);
+      }, 1200);
+    }
+
+    // Toast Function
+    function showToast(message, type = 'info') {
+      const toast = document.getElementById('toast');
+      const icon = document.getElementById('toast-icon');
+      const msg = document.getElementById('toast-msg');
+
+      msg.textContent = message;
+
+      if (type === 'success') {
+        icon.className = 'fa-solid fa-circle-check text-emerald-500';
+      } else if (type === 'info') {
+        icon.className = 'fa-solid fa-circle-info text-indigo-500';
+      }
+
+      toast.classList.remove('hidden');
+      setTimeout(() => {
+        toast.style.transform = 'translateX(0)';
+      }, 10);
+
+      setTimeout(() => {
+        toast.style.transform = 'translateX(120%)';
+        setTimeout(() => toast.classList.add('hidden'), 300);
+      }, 3000);
+    }
+  </script>
+</body>
+
+</html>

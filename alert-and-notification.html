@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Notifications & Confirmations System</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  body { font-family: 'Inter', sans-serif; }
+  h1, h2, h3, h4, .font-display { font-family: 'Sora', sans-serif; }
+
+  /* Enterprise background */
+  .login-bg-enterprise {
+    background-color: #f8fafc;
+    background-image: 
+      linear-gradient(to right, rgba(241, 245, 249, 0.8) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(241, 245, 249, 0.8) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  /* === PROFESSIONAL TOAST STYLES === */
+  .toast-success, .toast-info, .toast-warning, .toast-error {
+    color: #ffffff;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 4px 10px -2px rgba(0, 0, 0, 0.04);
+    position: relative;
+    overflow: hidden;
+  }
+  .toast-success::before, .toast-info::before, .toast-warning::before, .toast-error::before {
+    content: '';
+    position: absolute;
+    top: 0; bottom: 0; left: 0;
+    width: 4px;
+    background: rgba(255, 255, 255, 0.3);
+  }
+  .toast-success { background: #047857; }
+  .toast-info    { background: #4338ca; }
+  .toast-warning { background: #b45309; }
+  .toast-error   { background: #be123c; }
+
+  @keyframes toastIn {
+    0% { opacity: 0; transform: translateX(120%) scale(0.95); }
+    100% { opacity: 1; transform: translateX(0) scale(1); }
+  }
+  .toast-anim-in { animation: toastIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+  /* === MODAL POPUP STYLES === */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background-color: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    padding: 1rem;
+  }
+  .modal-overlay.active {
+    opacity: 1;
+    visibility: visible;
+  }
+  .modal-card {
+    background: #ffffff;
+    border-radius: 1rem;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    width: 100%;
+    max-width: 440px;
+    padding: 2rem;
+    transform: scale(0.95) translateY(20px);
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
+    overflow: hidden;
+  }
+  .modal-overlay.active .modal-card {
+    transform: scale(1) translateY(0);
+  }
+</style>
+</head>
+<body class="login-bg-enterprise min-h-screen flex items-center justify-center p-4 relative overflow-y-auto">
+
+  <!-- Ambient Background Glows -->
+  <div class="absolute top-0 left-0 w-[500px] h-[500px] bg-indigo-100/40 rounded-full filter blur-[120px] pointer-events-none"></div>
+  <div class="absolute bottom-0 right-0 w-[500px] h-[500px] bg-blue-100/40 rounded-full filter blur-[120px] pointer-events-none"></div>
+
+  <!-- Main Dual Panel Container -->
+  <div class="relative z-10 grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl w-full">
+    
+    <!-- ============================================== -->
+    <!--           1. TOAST NOTIFICATIONS PANEL         -->
+    <!-- ============================================== -->
+    <div class="bg-white border border-slate-200 rounded-2xl shadow-xl p-6 md:p-8 h-fit">
+      <div class="flex items-center gap-3 mb-6">
+        <div class="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center shadow-lg">
+          <i class="fa-solid fa-bolt text-white text-sm"></i>
+        </div>
+        <div>
+          <h2 class="text-lg font-bold text-slate-900 font-display tracking-tight">Toast Notifications</h2>
+          <p class="text-xs text-slate-500">Temporary popups for instant feedback</p>
+        </div>
+      </div>
+
+      <div class="space-y-2.5">
+        <button onclick="showToast('Authentication Successful', 'success')" 
+                class="w-full bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 py-2.5 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2">
+          <i class="fa-solid fa-circle-check text-emerald-600"></i> Trigger Success
+        </button>
+        <button onclick="showToast('Reset link sent to email!', 'info')" 
+                class="w-full bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 py-2.5 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2">
+          <i class="fa-solid fa-circle-info text-indigo-600"></i> Trigger Info
+        </button>
+        <button onclick="showToast('Please review your input fields', 'warning')" 
+                class="w-full bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 py-2.5 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2">
+          <i class="fa-solid fa-triangle-exclamation text-amber-600"></i> Trigger Warning
+        </button>
+        <button onclick="showToast('Invalid credentials provided', 'error')" 
+                class="w-full bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 py-2.5 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2">
+          <i class="fa-solid fa-circle-xmark text-rose-600"></i> Trigger Error
+        </button>
+      </div>
+    </div>
+
+    <!-- ============================================== -->
+    <!--      2. CONFIRMATION ACTIONS PANEL             -->
+    <!-- ============================================== -->
+    <div class="bg-white border border-slate-200 rounded-2xl shadow-xl p-6 md:p-8 h-fit flex flex-col">
+      <div class="flex items-center gap-3 mb-6">
+        <div class="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center shadow-lg">
+          <i class="fa-solid fa-shield-halved text-white text-sm"></i>
+        </div>
+        <div>
+          <h2 class="text-lg font-bold text-slate-900 font-display tracking-tight">Action Center</h2>
+          <p class="text-xs text-slate-500">Click below to trigger confirmation modal</p>
+        </div>
+      </div>
+
+      <!-- Premium Action Triggers -->
+      <div class="space-y-3">
+        <!-- Delete Action -->
+        <button onclick="showConfirmation('delete')" class="w-full flex items-center justify-between p-3.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl transition group">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
+              <i class="fa-solid fa-trash-can text-sm"></i>
+            </div>
+            <div class="text-left">
+              <h4 class="text-sm font-semibold text-slate-900">Delete User Account</h4>
+              <p class="text-xs text-slate-500">Permanently erase user data</p>
+            </div>
+          </div>
+          <i class="fa-solid fa-chevron-right text-slate-400 group-hover:translate-x-1 transition text-xs"></i>
+        </button>
+
+        <!-- Approve Action -->
+        <button onclick="showConfirmation('approve')" class="w-full flex items-center justify-between p-3.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl transition group">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <i class="fa-solid fa-circle-check text-sm"></i>
+            </div>
+            <div class="text-left">
+              <h4 class="text-sm font-semibold text-slate-900">Approve Order #4092</h4>
+              <p class="text-xs text-slate-500">Process order for immediate dispatch</p>
+            </div>
+          </div>
+          <i class="fa-solid fa-chevron-right text-slate-400 group-hover:translate-x-1 transition text-xs"></i>
+        </button>
+
+        <!-- Logout Action -->
+        <button onclick="showConfirmation('logout')" class="w-full flex items-center justify-between p-3.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl transition group">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+              <i class="fa-solid fa-arrow-right-from-bracket text-sm"></i>
+            </div>
+            <div class="text-left">
+              <h4 class="text-sm font-semibold text-slate-900">End Current Session</h4>
+              <p class="text-xs text-slate-500">Log out from this device securely</p>
+            </div>
+          </div>
+          <i class="fa-solid fa-chevron-right text-slate-400 group-hover:translate-x-1 transition text-xs"></i>
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ============================================== -->
+  <!--           MODAL POPUP COMPONENT                -->
+  <!-- ============================================== -->
+  <div id="confirmation-modal" class="modal-overlay">
+    <div class="modal-card">
+      <!-- Close Button (Top Right) -->
+      <button onclick="closeModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-900 transition w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100">
+        <i class="fa-solid fa-xmark text-base"></i>
+      </button>
+
+      <!-- Modal Content -->
+      <div class="flex flex-col items-center text-center">
+        <div id="modal-icon-bg" class="w-16 h-16 rounded-full flex items-center justify-center mb-5">
+          <i id="modal-icon" class="fa-solid fa-trash-can text-2xl"></i>
+        </div>
+        <h3 id="modal-title" class="text-xl font-bold text-slate-900 font-display tracking-tight mb-2">Delete User Account?</h3>
+        <p id="modal-msg" class="text-sm text-slate-500 leading-relaxed mb-8 max-w-xs">This will permanently erase all data related to this user. This action cannot be undone.</p>
+      </div>
+
+      <!-- Modal Footer Buttons -->
+      <div class="flex justify-end gap-3">
+        <!-- Cancel Button (Left) -->
+        <button onclick="closeModal()" class="bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 text-sm font-semibold py-2.5 px-5 rounded-lg transition">
+          Cancel
+        </button>
+        <!-- Confirm Button (Right) -->
+        <button id="modal-confirm-btn" onclick="confirmAction()" class="bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold py-2.5 px-5 rounded-lg transition flex items-center gap-2 shadow-sm">
+          <i class="fa-solid fa-check text-xs"></i> Confirm Delete
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Floating Toast Element -->
+  <div id="toast" class="fixed top-8 right-8 z-[110] hidden" style="transform: translateX(120%);">
+    <div id="toast-wrapper" class="px-5 py-3.5 rounded-lg flex items-center gap-3 min-w-[280px]">
+      <i id="toast-icon" class="fa-solid fa-circle-check text-white text-base"></i>
+      <span id="toast-msg" class="text-sm font-medium tracking-tight text-white">Success!</span>
+    </div>
+  </div>
+
+  <script>
+    // ==========================================
+    // TOAST LOGIC 
+    // ==========================================
+    function showToast(message, type = 'info') {
+      const toast = document.getElementById('toast');
+      const wrapper = document.getElementById('toast-wrapper');
+      const icon = document.getElementById('toast-icon');
+      const msg = document.getElementById('toast-msg');
+      
+      toast.classList.remove('toast-anim-in');
+      msg.textContent = message;
+      wrapper.className = 'px-5 py-3.5 rounded-lg flex items-center gap-3 min-w-[280px]';
+      
+      if (type === 'success') {
+        wrapper.classList.add('toast-success');
+        icon.className = 'fa-solid fa-circle-check text-white text-base';
+      } else if (type === 'info') {
+        wrapper.classList.add('toast-info');
+        icon.className = 'fa-solid fa-circle-info text-white text-base';
+      } else if (type === 'warning') {
+        wrapper.classList.add('toast-warning');
+        icon.className = 'fa-solid fa-triangle-exclamation text-white text-base';
+      } else if (type === 'error') {
+        wrapper.classList.add('toast-error');
+        icon.className = 'fa-solid fa-circle-xmark text-white text-base';
+      }
+      
+      toast.classList.remove('hidden');
+      void toast.offsetWidth; 
+      toast.classList.add('toast-anim-in');
+      
+      clearTimeout(window.toastTimer);
+      window.toastTimer = setTimeout(() => {
+        toast.style.transform = 'translateX(120%) scale(0.95)';
+        toast.style.opacity = '0';
+        toast.style.transition = 'all 0.3s ease-out';
+        setTimeout(() => {
+          toast.classList.add('hidden');
+          toast.style.transform = '';
+          toast.style.opacity = '';
+          toast.style.transition = '';
+        }, 300);
+      }, 3000);
+    }
+
+    // ==========================================
+    // MODAL POPUP LOGIC
+    // ==========================================
+    let currentActionConfig = null;
+
+    function showConfirmation(type) {
+      const modal = document.getElementById('confirmation-modal');
+      const iconBg = document.getElementById('modal-icon-bg');
+      const icon = document.getElementById('modal-icon');
+      const title = document.getElementById('modal-title');
+      const msg = document.getElementById('modal-msg');
+      const confirmBtn = document.getElementById('modal-confirm-btn');
+      
+      const configs = {
+        delete: {
+          title: 'Delete User Account?',
+          msg: 'This will permanently erase all data related to this user. This action cannot be undone.',
+          icon: 'fa-trash-can',
+          iconColor: 'text-rose-600',
+          iconBg: 'bg-rose-50',
+          confirmText: 'Confirm Delete',
+          confirmClass: 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-500/30',
+          toastMsg: 'Account deleted successfully',
+          toastType: 'error'
+        },
+        approve: {
+          title: 'Approve Order #4092?',
+          msg: 'Are you sure you want to approve this order for processing and dispatch?',
+          icon: 'fa-circle-check',
+          iconColor: 'text-emerald-600',
+          iconBg: 'bg-emerald-50',
+          confirmText: 'Approve Order',
+          confirmClass: 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/30',
+          toastMsg: 'Order approved successfully',
+          toastType: 'success'
+        },
+        logout: {
+          title: 'End Current Session?',
+          msg: 'You will be immediately logged out. Please ensure all your work is saved.',
+          icon: 'fa-arrow-right-from-bracket',
+          iconColor: 'text-amber-600',
+          iconBg: 'bg-amber-50',
+          confirmText: 'Logout Now',
+          confirmClass: 'bg-amber-600 hover:bg-amber-700 text-white shadow-amber-500/30',
+          toastMsg: 'Logged out successfully',
+          toastType: 'warning'
+        }
+      };
+
+      currentActionConfig = configs[type];
+      const c = currentActionConfig;
+      
+      // Setup Modal Content
+      iconBg.className = `w-16 h-16 rounded-full flex items-center justify-center mb-5 ${c.iconBg}`;
+      icon.className = `fa-solid ${c.icon} text-2xl ${c.iconColor}`;
+      title.textContent = c.title;
+      msg.textContent = c.msg;
+      
+      // Setup Confirm Button
+      confirmBtn.className = `${c.confirmClass} text-sm font-semibold py-2.5 px-5 rounded-lg transition flex items-center gap-2 shadow-md`;
+      confirmBtn.innerHTML = `<i class="fa-solid fa-check text-xs"></i> ${c.confirmText}`;
+      
+      // Show Modal
+      modal.classList.add('active');
+    }
+
+    function closeModal() {
+      document.getElementById('confirmation-modal').classList.remove('active');
+    }
+
+    function confirmAction() {
+      if (!currentActionConfig) return;
+      closeModal();
+      // Slight delay to let modal close animation start before toast pops
+      setTimeout(() => {
+        showToast(currentActionConfig.toastMsg, currentActionConfig.toastType);
+      }, 150); 
+    }
+
+    // Close modal if clicked outside the card
+    document.getElementById('confirmation-modal').addEventListener('click', function(e) {
+      if (e.target === this) {
+        closeModal();
+      }
+    });
+
+    // Close modal on ESC key
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        closeModal();
+      }
+    });
+  </script>
+</body>
+</html>

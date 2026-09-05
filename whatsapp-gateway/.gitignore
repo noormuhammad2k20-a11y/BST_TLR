@@ -1,0 +1,13 @@
+node_modules/
+
+# The linked WhatsApp session. Treat these files like a password: anyone who
+# copies them can send messages as you.
+session/
+session.broken-*/
+
+# Contains your gateway token.
+config.json
+
+# Runtime logs.
+gateway.log
+gateway.log.old

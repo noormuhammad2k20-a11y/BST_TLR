@@ -1,0 +1,503 @@
+@extends('cloth-store.layouts.app')
+@section('title', 'Orders Management')
+@section('spaPage', 'cloth-store-orders')
+
+@section('content')
+@php $filtered = request()->anyFilled(['search', 'status', 'payment_method', 'date']); @endphp
+
+<x-cloth-store.page-header
+  title="Orders"
+  :subtitle="number_format($stats['total_orders']) . ' orders on record · manage and track customer sales'">
+  <x-slot:actions>
+    <button class="btn-cs-ghost" onclick="window.print()">
+      <i class="fa-solid fa-print text-[10px]"></i> Print
+    </button>
+    <a href="{{ route('cloth-store.checkout.index') }}" class="btn-cs-primary">
+      <i class="fa-solid fa-plus text-[10px]"></i> New Sale
+    </a>
+  </x-slot:actions>
+</x-cloth-store.page-header>
+
+<div class="page grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+  <x-cloth-store.stat-card
+    label="Today's Sales" icon="fa-rupee-sign" tone="emerald"
+    :value="'Rs ' . number_format($stats['today_sales'])"
+    :sub="$stats['today_count'] . ' ' . \Illuminate\Support\Str::plural('transaction', $stats['today_count']) . ' today'" />
+
+  <x-cloth-store.stat-card
+    label="Meters Sold Today" icon="fa-ruler-horizontal" tone="sky"
+    :value="rtrim(rtrim(number_format($stats['today_meters'], 2), '0'), '.') . ' m'"
+    sub="Fabric moved today" />
+
+  @php
+    // Built in PHP: a bound attribute is passed through without HTML-decoding,
+    // so &quot; entities written inline would render literally.
+    $outstandingSub = $stats['outstanding'] > 0
+        ? '<span class="text-red-500 font-semibold">Awaiting collection</span>'
+        : 'All invoices settled';
+  @endphp
+  <x-cloth-store.stat-card
+    label="Outstanding" icon="fa-circle-exclamation" :tone="$stats['outstanding'] > 0 ? 'red' : 'slate'"
+    :value="'Rs ' . number_format($stats['outstanding'])"
+    :sub="$outstandingSub" />
+
+  <x-cloth-store.stat-card
+    label="Total Orders" icon="fa-receipt" tone="indigo"
+    :value="number_format($stats['total_orders'])"
+    sub="All time" />
+</div>
+
+<x-cloth-store.panel :flush="false" class="mb-6">
+    <form data-filter-form method="GET" action="{{ route('cloth-store.orders.index') }}" class="flex flex-wrap gap-3 items-end">
+        <div class="flex-1 min-w-[220px]">
+            <label class="label-cs">Search</label>
+            <div class="relative">
+                <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none"></i>
+                <input type="search" name="search" value="{{ request('search') }}" autocomplete="off"
+                       placeholder="Invoice, customer or phone..." class="input-cs w-full pl-9">
+            </div>
+        </div>
+
+        <div class="w-44">
+            <label class="label-cs">Status</label>
+            <select name="status" class="input-cs w-full">
+                <option value="">All Statuses</option>
+                @foreach(['Completed', 'Pending', 'Processing', 'Ready', 'Cancelled', 'Returned'] as $s)
+                    <option value="{{ $s }}" @selected(request('status') == $s)>{{ $s }}</option>
+                @endforeach
+            </select>
+        </div>
+
+        <div class="w-44">
+            <label class="label-cs">Payment</label>
+            <select name="payment_method" class="input-cs w-full">
+                <option value="">All Methods</option>
+                @foreach(['Cash', 'Card', 'Bank Transfer', 'EasyPaisa', 'JazzCash', 'Cheque'] as $m)
+                    <option value="{{ $m }}" @selected(request('payment_method') == $m)>{{ $m }}</option>
+                @endforeach
+            </select>
+        </div>
+
+        <div class="w-40">
+            <label class="label-cs">Date</label>
+            <select name="date" class="input-cs w-full">
+                <option value="">All Time</option>
+                <option value="today" @selected(request('date') == 'today')>Today</option>
+                <option value="week"  @selected(request('date') == 'week')>This Week</option>
+                <option value="month" @selected(request('date') == 'month')>This Month</option>
+            </select>
+        </div>
+
+        @if($filtered)
+            <a href="{{ route('cloth-store.orders.index') }}" class="btn-cs-ghost">
+                <i class="fa-solid fa-xmark text-[10px]"></i> Clear
+            </a>
+        @endif
+    </form>
+</x-cloth-store.panel>
+
+<x-cloth-store.panel>
+    <table class="table-cs">
+        <thead>
+            <tr>
+                <th>Invoice</th>
+                <th>Customer</th>
+                <th class="text-center">Items</th>
+                <th class="text-right">Meters</th>
+                <th class="text-right">Total</th>
+                <th>Payment</th>
+                <th class="text-center">Status</th>
+                <th class="text-right">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @forelse($orders as $o)
+                @php
+                    $due = (float) $o->total_amount - (float) $o->paid_amount;
+                    $isCancelled = in_array($o->status, ['Cancelled', 'Returned'], true);
+
+                    $badge = match ($o->status) {
+                        'Completed'             => 'badge-delivered',
+                        'Cancelled', 'Returned' => 'badge-overdue',
+                        'Processing', 'Ready'   => 'badge-progress',
+                        default                 => 'badge-pending',
+                    };
+
+                    $name = $o->customer->name ?? 'Walk-in Customer';
+                    $initials = collect(preg_split('/\s+/', trim($name)))
+                        ->filter()->take(2)
+                        ->map(fn ($w) => mb_strtoupper(mb_substr($w, 0, 1)))
+                        ->implode('') ?: '?';
+
+                    $meters = (float) $o->total_meters_sold;
+                @endphp
+                <tr>
+                    <td>
+                        <button onclick="viewOrder({{ $o->id }})"
+                                class="cell-strong hover:text-indigo-600 transition-colors text-left">
+                            {{ $o->invoice_number }}
+                        </button>
+                        <div class="cell-muted">{{ $o->created_at->format('d M Y · h:i A') }}</div>
+                    </td>
+
+                    <td>
+                        <div class="flex items-center gap-2.5">
+                            <div class="avatar sm shrink-0">{{ $initials }}</div>
+                            <div class="min-w-0">
+                                <div class="cell-strong truncate">{{ $name }}</div>
+                                <div class="cell-muted truncate">{{ $o->customer->phone ?? '—' }}</div>
+                            </div>
+                        </div>
+                    </td>
+
+                    <td class="text-center">
+                        <span class="inline-flex items-center justify-center min-w-6 h-6 px-1.5 rounded-full bg-slate-100 text-xs font-bold text-slate-600 cell-num">
+                            {{ $o->items->count() }}
+                        </span>
+                    </td>
+
+                    <td class="text-right cell-num text-slate-600 font-medium">
+                        {{ rtrim(rtrim(number_format($meters, 2), '0'), '.') }} m
+                    </td>
+
+                    <td class="text-right">
+                        <div class="cell-strong cell-num">Rs {{ number_format((float) $o->total_amount) }}</div>
+                        @if($due > 0 && !$isCancelled)
+                            <div class="text-[10px] font-bold text-red-500 uppercase tracking-wide cell-num">
+                                Due Rs {{ number_format($due) }}
+                            </div>
+                        @elseif(!$isCancelled)
+                            <div class="text-[10px] font-bold text-emerald-600 uppercase tracking-wide">Paid</div>
+                        @endif
+                    </td>
+
+                    <td>
+                        <span class="badge badge-neutral">{{ $o->payment_method ?: '—' }}</span>
+                    </td>
+
+                    <td class="text-center">
+                        <span class="badge {{ $badge }}">{{ $o->status }}</span>
+                    </td>
+
+                    <td>
+                        <div class="flex items-center justify-end gap-1 row-actions">
+                            <button onclick="viewOrder({{ $o->id }})" class="btn-cs-icon" title="View details" aria-label="View {{ $o->invoice_number }}">
+                                <i class="fa-solid fa-eye text-xs"></i>
+                            </button>
+                            <button onclick="printReceipt({{ $o->id }})" class="btn-cs-icon" title="Print receipt" aria-label="Print {{ $o->invoice_number }}">
+                                <i class="fa-solid fa-print text-xs"></i>
+                            </button>
+                            {{-- Status changes move stock, so they go through the API
+                                 and report success or failure rather than posting a
+                                 form and reloading the page. --}}
+                            <select data-order-status data-id="{{ $o->id }}"
+                                    aria-label="Update status for {{ $o->invoice_number }}"
+                                    class="text-xs rounded-lg py-1 pl-2 pr-6 bg-slate-50 border border-slate-200 hover:bg-white text-slate-600 font-medium focus:ring-0 focus:border-slate-400 cursor-pointer">
+                                <option value="" disabled selected>Update</option>
+                                @foreach(['Pending', 'Processing', 'Ready', 'Completed', 'Cancelled'] as $s)
+                                    <option value="{{ $s }}" @disabled($o->status === $s)>{{ $s === 'Cancelled' ? 'Cancel' : $s }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    </td>
+                </tr>
+            @empty
+                <x-cloth-store.empty-state
+                    :colspan="8"
+                    icon="fa-cart-shopping"
+                    :title="$filtered ? 'No orders match those filters' : 'No orders yet'"
+                    :message="$filtered
+                        ? 'Try widening your search or clearing the filters.'
+                        : 'Completed sales from Smart Checkout will appear here.'" />
+            @endforelse
+        </tbody>
+    </table>
+
+    <x-slot:footer>
+        <x-cloth-store.pagination :paginator="$orders" noun="order" />
+    </x-slot:footer>
+</x-cloth-store.panel>
+
+<!-- ORDER VIEW MODAL -->
+<div id="orderModal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm">
+    <div class="min-h-screen flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col">
+            
+            <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                <h3 class="text-lg font-bold text-slate-900 flex items-center gap-2"><i class="fa-solid fa-file-invoice text-indigo-600"></i> Order Details</h3>
+                <button onclick="document.getElementById('orderModal').classList.add('hidden')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+
+            <div class="p-6">
+                <!-- Top Row -->
+                <div class="flex justify-between items-start mb-8 pb-6 border-b border-slate-100">
+                    <div>
+                        <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Invoice Number</div>
+                        <div class="text-2xl font-black text-slate-900 tracking-tight" id="modal-inv">INV-XXX</div>
+                        <div class="mt-2 text-sm text-slate-500 flex gap-4">
+                            <span id="modal-date"><i class="fa-regular fa-calendar mr-1"></i> Date</span>
+                            <span id="modal-status-badge"></span>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Customer</div>
+                        <div class="font-bold text-slate-800" id="modal-customer-name">Name</div>
+                        <div class="text-sm text-slate-500" id="modal-customer-phone">Phone</div>
+                    </div>
+                </div>
+
+                <!-- Items Table -->
+                <div class="mb-8">
+                    <h4 class="text-sm font-bold text-slate-900 mb-3">Itemized Bill</h4>
+                    <table class="w-full text-left text-sm border-collapse">
+                        <thead>
+                            <tr class="border-b border-slate-200 text-slate-500">
+                                <th class="py-2 font-semibold">Product</th>
+                                <th class="py-2 font-semibold text-center">Qty / Meters</th>
+                                <th class="py-2 font-semibold text-right">Unit Rate</th>
+                                <th class="py-2 font-semibold text-right">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody id="modal-items-list" class="divide-y divide-slate-100">
+                            <!-- JS Injected -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Financials -->
+                <div class="flex justify-end">
+                    <div class="w-72 space-y-3">
+                        <div class="flex justify-between text-sm text-slate-600">
+                            <span>Subtotal:</span>
+                            <span class="font-semibold text-slate-900" id="modal-subtotal">Rs 0</span>
+                        </div>
+                        <div class="flex justify-between text-sm text-slate-600">
+                            <span>Discount:</span>
+                            <span class="font-semibold text-rose-600" id="modal-discount">Rs 0</span>
+                        </div>
+                        <div class="flex justify-between items-end pt-3 border-t border-slate-200">
+                            <span class="text-xs font-bold text-slate-800 uppercase">Total Amount:</span>
+                            <span class="text-xl font-black text-indigo-600" id="modal-total">Rs 0</span>
+                        </div>
+                        <div class="flex justify-between text-sm pt-2 border-t border-slate-100">
+                            <span class="text-slate-600">Paid (<span id="modal-method">Cash</span>):</span>
+                            <span class="font-bold text-emerald-600" id="modal-paid">Rs 0</span>
+                        </div>
+                        <div class="flex justify-between text-sm text-slate-600">
+                            <span>Remaining Due:</span>
+                            <span class="font-bold text-rose-600" id="modal-due">Rs 0</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
+                <button onclick="document.getElementById('orderModal').classList.add('hidden')" class="px-5 py-2.5 rounded-lg font-bold text-slate-600 hover:bg-slate-200 transition">Close</button>
+                <button id="modal-print-btn" class="px-6 py-2.5 rounded-lg font-bold bg-indigo-600 text-white hover:bg-indigo-700 transition shadow-md flex items-center gap-2">
+                    <i class="fa-solid fa-print"></i> Print Receipt
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- THERMAL RECEIPT MODAL (Shared logic) -->
+<div id="receiptModal" class="hidden fixed inset-0 z-[60] bg-slate-900/80 backdrop-blur-sm overflow-y-auto">
+    <div class="min-h-screen flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-[360px] relative">
+            <button onclick="document.getElementById('receiptModal').classList.add('hidden')" class="absolute -top-3 -right-3 w-8 h-8 bg-slate-800 text-white rounded-full flex items-center justify-center hover:bg-slate-900 border-2 border-white"><i class="fa-solid fa-xmark text-sm"></i></button>
+            
+            <div id="receipt-content" class="thermal-receipt mb-6 text-left">
+                <!-- Injected via JS -->
+            </div>
+
+            <div class="flex gap-2">
+                <button onclick="window.print()" class="flex-1 bg-indigo-600 text-white py-2.5 rounded-lg font-bold hover:bg-indigo-700 text-sm"><i class="fa-solid fa-print mr-1"></i> Print Receipt</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.thermal-receipt {
+    max-width: 302px;   /* 80mm at 96dpi ≈ 302px */
+    margin: 0 auto;
+    padding: 0 4px;
+    font-family: 'Courier New', Courier, monospace;
+    color: #000;
+    background: #fff;
+    font-size: 12px;
+    line-height: 1.35;
+}
+.tr-center { text-align: center; }
+.tr-hr { border: 0; border-top: 1px dashed #444; margin: 8px 0; }
+.tr-row { display: flex; justify-content: space-between; }
+.tr-shop-name { font-size: 15px; font-weight: 900; letter-spacing: -0.01em; }
+.tr-shop-sub { font-size: 10px; color: #444; margin-top: 2px; }
+.tr-table { font-size: 10px; text-transform: uppercase; font-weight: 700; }
+.tr-total { font-size: 14px; font-weight: 900; }
+
+@media print {
+    body > *:not(#receiptModal) { display: none !important; }
+    #receiptModal { display: block !important; position: static !important; background: transparent !important; }
+    #receiptModal > div { min-height: auto !important; padding: 0 !important; display: block !important; }
+    #receiptModal .bg-white { box-shadow: none !important; border-radius: 0 !important; padding: 0 !important; max-width: 100% !important; margin: 0 !important; }
+    #receiptModal button { display: none !important; }
+    .thermal-receipt { border: none !important; margin: 0 !important; width: 100% !important; }
+}
+</style>
+@endsection
+
+@push('scripts')
+<script>
+    /* Order status changes: async, with the row refreshed in place.
+       A rejected change (e.g. not enough stock to reinstate a cancelled
+       order) must leave the select showing the real status, not the one the
+       user picked — so the control is reset on failure. */
+    document.addEventListener('change', async (e) => {
+        const select = e.target.closest?.('[data-order-status]');
+        if (!select || !select.value) return;
+
+
+        const id = select.dataset.id;
+        const status = select.value;
+        select.disabled = true;
+
+        try {
+            const res = await Atelier.api.post(`/cloth-store/orders/${id}/status`, { status });
+            toast(res.message || 'Order updated', 'success');
+            // Re-render the current page so the badge, totals and any stock
+            // dependent columns reflect the change.
+            await SpaRouter.navigate(location.href, { push: false, scroll: false });
+        } catch (err) {
+            Atelier.reportError(err, 'Could not update the order');
+            select.selectedIndex = 0;
+            select.disabled = false;
+        }
+    }, { signal: Atelier.pageSignal() });
+
+    let currentOrder = null;
+
+    window.viewOrder = function(id) {
+        fetch(`{{ url('cloth-store/orders') }}/${id}`)
+            .then(res => res.json())
+            .then(order => {
+                currentOrder = order;
+                document.getElementById('modal-inv').innerText = order.invoice_number;
+                document.getElementById('modal-date').innerHTML = `<i class="fa-regular fa-calendar mr-1"></i> ` + new Date(order.created_at).toLocaleString();
+                
+                let bClass = 'badge-pending';
+                if(order.status == 'Completed') bClass = 'badge-delivered';
+                if(order.status == 'Cancelled' || order.status == 'Returned') bClass = 'badge-overdue';
+                document.getElementById('modal-status-badge').innerHTML = `<span class="badge ${bClass}">${order.status}</span>`;
+
+                document.getElementById('modal-customer-name').innerText = order.customer ? order.customer.name : 'Walk-in Customer';
+                document.getElementById('modal-customer-phone').innerText = order.customer ? (order.customer.phone || '') : '';
+
+                let itemsHtml = order.items.map(i => `
+                    <tr>
+                        <td class="py-3 text-slate-800 font-medium">${i.product ? i.product.name : 'Unknown Product'}</td>
+                        <td class="py-3 text-center text-slate-600">${Number(i.quantity)}</td>
+                        <td class="py-3 text-right text-slate-600">Rs ${Number(i.unit_price).toLocaleString()}</td>
+                        <td class="py-3 text-right font-bold text-slate-900">Rs ${Number(i.total).toLocaleString()}</td>
+                    </tr>
+                `).join('');
+                document.getElementById('modal-items-list').innerHTML = itemsHtml;
+
+                document.getElementById('modal-subtotal').innerText = 'Rs ' + Number(order.subtotal).toLocaleString();
+                document.getElementById('modal-discount').innerText = 'Rs ' + Number(order.discount).toLocaleString();
+                document.getElementById('modal-total').innerText = 'Rs ' + Number(order.total_amount).toLocaleString();
+                document.getElementById('modal-method').innerText = order.payment_method;
+                document.getElementById('modal-paid').innerText = 'Rs ' + Number(order.paid_amount).toLocaleString();
+                
+                let due = Number(order.total_amount) - Number(order.paid_amount);
+                if (due < 0) due = 0;
+                document.getElementById('modal-due').innerText = 'Rs ' + due.toLocaleString();
+
+                document.getElementById('modal-print-btn').onclick = () => { printReceipt(order.id, order); };
+                
+                document.getElementById('orderModal').classList.remove('hidden');
+            });
+    };
+
+    window.printReceipt = function(id, orderData = null) {
+        const modal = document.getElementById('receiptModal');
+        if (modal && modal.parentElement !== document.body) {
+            document.body.appendChild(modal);
+        }
+
+        if (orderData) {
+            renderReceipt(orderData);
+        } else {
+            fetch(`{{ url('cloth-store/orders') }}/${id}`)
+                .then(res => res.json())
+                .then(order => {
+                    renderReceipt(order);
+                });
+        }
+    };
+
+    function renderReceipt(order) {
+        const shop = window.Atelier?.shop || {};
+        const escapeStr = str => (window.Atelier && window.Atelier.escapeHtml) ? window.Atelier.escapeHtml(str) : str;
+        const cName = order.customer ? order.customer.name : 'Walk-in Customer';
+
+        let itemsHtml = (order.items || []).map(i => `
+            <div class="tr-row" style="margin-bottom:2px;">
+              <div style="flex:1;text-align:left;padding-right:4px;">${escapeStr(i.product ? i.product.name : 'Item')}</div>
+              <div style="width:38px;text-align:center;">${Number(i.quantity)}${i.product?.unit === 'meter' ? 'm' : ''}</div>
+              <div style="width:60px;text-align:right;">${Number(i.total).toLocaleString()}</div>
+            </div>
+        `).join('');
+
+        let paid = Number(order.paid_amount);
+        let due = Math.max(0, Number(order.total_amount) - paid);
+
+        const shopName = shop.name || 'Cloth Store';
+
+        const html = `
+            <div class="tr-center">
+                <div class="tr-shop-name">${escapeStr(shopName)}</div>
+                ${shop.tagline ? `<div class="tr-shop-sub">${escapeStr(shop.tagline)}</div>` : ''}
+                ${shop.address ? `<div class="tr-shop-sub">${escapeStr(shop.address)}</div>` : ''}
+                ${shop.phone ? `<div class="tr-shop-sub">Ph: ${escapeStr(shop.phone)}</div>` : ''}
+            </div>
+            <hr class="tr-hr">
+            <div style="font-size:11px;">
+                <div class="tr-row"><span>Invoice</span><strong>${order.invoice_number}</strong></div>
+                <div class="tr-row"><span>Date</span><span>${new Date(order.created_at).toLocaleString()}</span></div>
+                <div class="tr-row"><span>Customer</span><strong>${escapeStr(cName)}</strong></div>
+            </div>
+            <hr class="tr-hr">
+            <div class="tr-table tr-row" style="border-bottom:1px solid #000;padding-bottom:3px;margin-bottom:5px;">
+                <div style="flex:1;text-align:left;">Item</div>
+                <div style="width:38px;text-align:center;">Qty</div>
+                <div style="width:60px;text-align:right;">Total</div>
+            </div>
+            <div>${itemsHtml}</div>
+            <hr class="tr-hr">
+            <div style="font-size:11px;">
+                <div class="tr-row"><span>Subtotal</span><span>Rs ${Number(order.subtotal).toLocaleString()}</span></div>
+                ${Number(order.discount) > 0 ? `<div class="tr-row"><span>Discount</span><span>-Rs ${Number(order.discount).toLocaleString()}</span></div>` : ''}
+                <div class="tr-row tr-total" style="border-top:1px solid #000;margin-top:4px;padding-top:4px;">
+                    <span>TOTAL</span><span>Rs ${Number(order.total_amount).toLocaleString()}</span>
+                </div>
+            </div>
+
+            <hr class="tr-hr" style="margin-top:12px; margin-bottom:6px;">
+            <div class="tr-center" style="line-height:1.2;">
+                <div style="font-size:9px; text-transform:uppercase; color:#555;">Developed By</div>
+                <div style="font-size:13px; font-weight:bold; margin-top:2px; color:#000;">NOOR M HINGORJO</div>
+                <div style="font-size:11px; color:#000; margin-top:1px;">0303 4980786</div>
+                <div style="font-size:9px; color:#555; margin-top:3px;">POS & MANAGEMENT SYSTEM</div>
+                <div style="font-size:11px; font-weight:bold; margin-top:5px; color:#000;">THANK YOU!</div>
+            </div>
+            <hr class="tr-hr" style="margin-top:6px; margin-bottom:0;">
+        `;
+        
+        document.getElementById('receipt-content').innerHTML = html;
+        document.getElementById('receiptModal').classList.remove('hidden');
+        document.getElementById('orderModal').classList.add('hidden'); // Close the other one if open
+    }
+</script>
+@endpush
