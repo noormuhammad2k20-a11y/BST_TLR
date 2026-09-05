@@ -22,3 +22,13 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+*.sql
+*.sql.gz
+/backups/
+/tmp/
+/whatsapp-gateway/config.json
+/whatsapp-gateway/session/
+/whatsapp-gateway/node_modules/
+/dev/artifacts/
+.env.testing

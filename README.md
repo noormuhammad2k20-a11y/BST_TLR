@@ -1,59 +1,135 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Tailor and Cloth Store Management
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Laravel 12 application for tailoring orders, measurements, delivery, payments,
+tailors, reporting, POS sales, single-shop inventory, direct market stock intake,
+returns, and customer ledgers.
 
-## About Laravel
+## Requirements
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+- PHP 8.2 or newer with BCMath, cURL, DOM, Fileinfo, Intl, Mbstring, OpenSSL,
+  PDO MySQL, Sodium, XML, and Zip
+- MySQL 8 or a compatible MariaDB release
+- Composer 2, Node.js 20 or newer, and npm
+- A web server whose document root is this project's `public/` directory
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+SQLite is suitable for lightweight unit tests only. Production and business
+integration tests require MySQL/MariaDB because transaction locking is part of
+the accounting and inventory design.
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## Installation
 
-## Learning Laravel
+```text
+composer install --no-dev --optimize-autoloader
+npm ci
+npm run build
+copy .env.example .env
+php artisan key:generate
+```
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+Configure the database, `APP_URL`, mail, queue, session, and cache values in
+`.env`. Then run:
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+```text
+php artisan migrate --force
+php artisan production:setup
+php artisan storage:link
+php artisan optimize
+```
 
-## Laravel Sponsors
+`production:setup` installs the permission catalog and required settings. It
+retains existing users, roles, grants, and passwords. If no active administrator
+exists, it interactively creates one without printing or storing a plaintext
+password. Do not use `DatabaseSeeder` in production; it contains demonstration
+records.
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+## Required background processes
 
-### Premium Partners
+Run `php artisan queue:work --tries=3` when the queue connection is not `sync`.
+Run `php artisan schedule:run` every minute from Task Scheduler or cron. The
+scheduler advances configured order stages and uses overlap protection.
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+## Upgrade and data reconciliation
 
-## Contributing
+Back up the database and uploaded files before upgrading. Never run
+`migrate:fresh` against client data.
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+```text
+php artisan migrate:status
+php artisan migrate --force
+php artisan settings:encrypt-secrets
+php artisan settings:encrypt-secrets --apply
+php artisan integrity:reconcile
+```
 
-## Code of Conduct
+The secret and integrity commands default to dry-run. `integrity:reconcile`
+reports negative balances, stock/location mismatches, unallocated legacy
+payments, historical processed returns, and users without cloth-store roles. It
+does not guess whether a historical refund was paid or overwrite stock totals.
+An evidence-backed invoice can be recalculated explicitly with
+`--apply --order=<id>` after its history has been reviewed.
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+Before opening POS after this upgrade, resolve every reported stock mismatch.
+New stock operations reject mismatched products so they cannot deepen existing
+corruption. Review negative customer balances and historical returns against
+receipts, bank/cash evidence, payments, and ledger entries.
 
-## Security Vulnerabilities
+Existing Manager, Cashier, Inventory Staff, and Accountant roles are not
+automatically elevated. Assign and review their grants in user management after
+running `ProductionPermissionsSeeder`. Newly created default roles receive
+conservative grants.
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+## WhatsApp gateway
 
-## License
+The optional Node gateway lives in `whatsapp-gateway/`. Install it there with
+`npm ci`. Configure a unique token of at least 32 characters in an untracked
+`config.json` or `GATEWAY_TOKEN`, and use the same token in application Settings.
+The gateway accepts authentication only through `X-Gateway-Token`.
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+It binds to `127.0.0.1` by default. Set `GATEWAY_HOST` only when Laravel runs on
+another trusted machine, then restrict the port with a firewall or private
+network. The QR/session endpoints carry account authority; never expose the
+gateway directly to the internet. Rotate any token or copied `session/` data
+that has appeared in exports, logs, screenshots, or version control.
+
+The gateway is an unofficial WhatsApp Web integration. The application retains
+its manual WhatsApp fallback when the gateway is unavailable.
+
+## Testing
+
+```text
+php artisan test
+npm run build
+node --test whatsapp-gateway/security.test.js
+```
+
+Business tests use the fixed, isolated `atelier_integrity_test` database:
+
+```text
+php dev/tools/test-database.php
+php dev/tools/test-database.php --reset-data
+set INTEGRITY_MYSQL=1
+php artisan test --testsuite=Integration
+php dev/tools/concurrency.php
+```
+
+On PowerShell use `$env:INTEGRITY_MYSQL='1'` and remove the environment variable
+afterward. The concurrency helper runs payment, reversal, checkout, and return
+races through independent MySQL processes. Test helpers refuse
+to target the configured working database.
+
+## Backups and deployment
+
+- Back up the database and `storage/app/public`; encrypt backups at rest.
+- Exclude `.env`, SQL dumps, gateway configuration/session files, and logs from
+  source control. Never place backups under the public web root.
+- Put the app into maintenance mode, deploy, migrate, build assets, rebuild
+  caches, restart queue workers, run reconciliation in dry-run mode, then restore
+  service.
+- Set `APP_ENV=production`, `APP_DEBUG=false`, secure cookies under HTTPS, and a
+  production log level such as `warning`.
+- Test login, POS stock movement, payments/refunds, printing, queue processing,
+  scheduling, backups, and gateway connectivity on staging before cutover.
+
+The repository-root `.htaccess` blocks sensitive source and development paths
+for accidental XAMPP root deployments, but it is defense in depth. The correct
+web document root remains `public/`.

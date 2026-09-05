@@ -78,13 +78,13 @@ class PricingService
      * which is what makes "Enable Tax" actually increase a bill rather than
      * only decorate the invoice.
      */
-    public static function grandTotal(float $pricedAmount): float
+    public static function grandTotal(string|int $pricedAmount): string
     {
-        if (Settings::bool('tax_inclusive')) {
-            return round($pricedAmount, 2);
-        }
-
-        return round($pricedAmount * self::multiplier(), 2);
+        $amount=Decimal::value($pricedAmount);
+        if (Settings::bool('tax_inclusive')) return $amount;
+        $tax=Settings::bool('tax_enabled')?Settings::str('tax_rate'):'0';
+        $charge=Settings::bool('service_charge_enabled')?Settings::str('service_charge_rate'):'0';
+        return Decimal::add($amount,Decimal::ratio($amount,Decimal::add($tax,$charge),'100.00'));
     }
 
     /**

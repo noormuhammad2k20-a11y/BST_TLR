@@ -39,7 +39,7 @@ class StaffController extends Controller
 
         $member = Staff::create($data);
 
-        ActivityLogger::created($member, "{$member->name} added to the team", 'staff');
+        ActivityLogger::created($member, "{$member->name} added as a tailor", 'staff');
         StatsService::flush();
 
         return response()->json([
@@ -116,7 +116,7 @@ class StaffController extends Controller
         $name = $staff->name;
         $staff->delete();
 
-        ActivityLogger::log('Deleted Staff', "{$name} removed from the team", 'staff', null, [], 'deleted');
+        ActivityLogger::log('Deleted Tailor', "{$name} removed from the tailor directory", 'staff', null, [], 'deleted');
         StatsService::flush();
 
         return response()->json(['success' => true, 'message' => "{$name} removed."]);
@@ -184,15 +184,18 @@ class StaffController extends Controller
     {
         $validated = $request->validate([
             'amount'  => ['required', 'numeric', 'min:0.01'],
-            'method'  => ['required', 'string', 'max:50'],
+            'method'  => ['required', Rule::in(StaffPayment::METHODS)],
             'period'  => ['nullable', 'string', 'regex:/^\d{4}-\d{2}$/'],
             'paid_on' => ['nullable', 'date'],
             'notes'   => ['nullable', 'string', 'max:500'],
+            'operation_key' => ['required', 'string', 'max:100'],
         ]);
 
         $period = $validated['period'] ?? now()->format('Y-m');
 
         $payment = DB::transaction(function () use ($staff, $validated, $period) {
+            Staff::whereKey($staff->id)->lockForUpdate()->firstOrFail();
+            abort_if(StaffPayment::where('operation_key',$validated['operation_key'])->exists(),409,'This payment was already submitted.');
             $payment = StaffPayment::create([
                 'staff_id'    => $staff->id,
                 'amount'      => $validated['amount'],
@@ -201,6 +204,7 @@ class StaffController extends Controller
                 'paid_on'     => $validated['paid_on'] ?? now()->toDateString(),
                 'notes'       => $validated['notes'] ?? null,
                 'recorded_by' => Auth::id(),
+                'operation_key' => $validated['operation_key'],
                 // Provisional; corrected below once the month's totals are known.
                 'status'      => 'Partial',
             ]);
@@ -233,14 +237,31 @@ class StaffController extends Controller
     public function destroyPayment(StaffPayment $payment): JsonResponse
     {
         $staff = $payment->staff;
-        $payment->delete();
+        DB::transaction(function () use ($payment) {
+            Staff::whereKey($payment->staff_id)->lockForUpdate()->firstOrFail();
+            $payment=StaffPayment::whereKey($payment->id)->lockForUpdate()->firstOrFail();
+            abort_if($payment->reversed_at,422,'Payment is already reversed.');
+            $payment->update(['reversed_at'=>now(),'reversed_by'=>Auth::id()]);
+            StaffPayment::create([
+                'staff_id'=>$payment->staff_id,
+                'amount'=>$payment->amount,
+                'method'=>$payment->method,
+                'period'=>$payment->period,
+                'paid_on'=>now()->toDateString(),
+                'status'=>'Reversal',
+                'notes'=>'Reversal of staff payment #'.$payment->id,
+                'recorded_by'=>Auth::id(),
+                'reverses_payment_id'=>$payment->id,
+                'operation_key'=>'staff-payment-reversal-'.$payment->id,
+            ]);
+        });
 
-        ActivityLogger::log('Salary payment removed', "Payment reversed for {$staff?->name}", 'staff', $staff, [], 'deleted');
+        ActivityLogger::log('Salary payment reversed', "Payment reversed for {$staff?->name}", 'staff', $staff, ['payment_id'=>$payment->id], 'reversed');
         StatsService::flush();
 
         return response()->json([
             'success' => true,
-            'message' => 'Payment removed.',
+            'message' => 'Payment reversed; the original entry was retained.',
             'staff'   => $staff ? $this->serialize($this->fresh($staff->id)) : null,
         ]);
     }
@@ -320,7 +341,7 @@ class StaffController extends Controller
             'phone'          => ['nullable', 'string', 'max:50'],
             'address'        => ['nullable', 'string', 'max:500'],
             'joining_date'   => ['nullable', 'date'],
-            'role'           => ['required', 'string', 'max:100'],
+            'role'           => ['required', Rule::in(Staff::ROLES)],
             'salary_type'    => ['required', Rule::in(Staff::SALARY_TYPES)],
             'monthly_salary' => ['nullable', 'numeric', 'min:0'],
             'per_suit_rate'  => ['nullable', 'numeric', 'min:0'],
@@ -339,6 +360,8 @@ class StaffController extends Controller
         return Staff::query()
             ->withSum('workLogs as work_logs_sum_amount', 'amount')
             ->withSum('workLogs as work_logs_sum_quantity', 'quantity')
+            ->withSum(['workLogs as week_pieces' => fn ($q) => $q->whereBetween('completed_on', [now()->startOfWeek()->toDateString(), now()->endOfWeek()->toDateString()])], 'quantity')
+            ->withSum(['workLogs as month_pieces' => fn ($q) => $q->whereYear('completed_on', now()->year)->whereMonth('completed_on', now()->month)], 'quantity')
             ->withSum('payments as payments_sum_amount', 'amount')
             ->withCount([
                 'orders as assigned_count' => fn ($q) => $q->whereNotIn('status', ['Delivered', 'Completed', 'Cancelled']),
@@ -376,6 +399,8 @@ class StaffController extends Controller
             'notes'        => $s->notes ?? '',
 
             'pieces'       => (float) ($s->work_logs_sum_quantity ?? 0),
+            'week_pieces'  => (float) ($s->week_pieces ?? 0),
+            'month_pieces' => (float) ($s->month_pieces ?? 0),
             'work_amount'  => (float) ($s->work_logs_sum_amount ?? 0),
             'paid_total'   => (float) ($s->payments_sum_amount ?? 0),
             'assigned'     => (int) ($s->assigned_count ?? 0),
@@ -404,6 +429,8 @@ class StaffController extends Controller
             'inactive'     => $all->count() - $active->count(),
             'monthly_bill' => round((float) $monthlyBill, 2),
             'pending'      => round((float) $pending, 2),
+            'week_pieces'  => (float) StaffWorkLog::whereBetween('completed_on', [now()->startOfWeek()->toDateString(), now()->endOfWeek()->toDateString()])->sum('quantity'),
+            'month_pieces' => (float) StaffWorkLog::whereYear('completed_on', now()->year)->whereMonth('completed_on', now()->month)->sum('quantity'),
             'pieces'       => (float) StaffWorkLog::sum('quantity'),
             'work_amount'  => (float) StaffWorkLog::sum('amount'),
         ];

@@ -96,7 +96,10 @@ class BackupService
             'version'     => self::FORMAT_VERSION,
             'exported_at' => now()->toIso8601String(),
             'shop'        => Settings::str('store_name'),
-            'settings'    => Setting::query()->pluck('value', 'key')->all(),
+            'settings'    => Setting::query()->pluck('value', 'key')->mapWithKeys(function ($value, $key) {
+                $secret = !empty(Settings::SCHEMA[$key]['secret']);
+                return [$key => $secret ? '[redacted]' : $value];
+            })->all(),
             'counts'      => self::counts(),
             'data'        => $data,
         ];
@@ -229,7 +232,7 @@ class BackupService
 
         try {
             DB::transaction(function () use ($payload, $types, $mode, &$imported, &$skipped) {
-                DB::statement('SET FOREIGN_KEY_CHECKS=0');
+
 
                 foreach ($types as $type) {
                     $meta = self::TYPES[$type];
@@ -243,8 +246,8 @@ class BackupService
                         $rows = [];
                     }
 
-                    if ($mode === 'replace') {
-                        DB::table($table)->delete();
+                    if ($mode === 'replace' && DB::table($table)->exists()) {
+                        throw new \RuntimeException('Replacement of populated tables requires an offline verified restore. Use merge to import new records.');
                     }
 
                     $columns = Schema::getColumnListing($table);
@@ -269,6 +272,9 @@ class BackupService
                                 continue;
                             }
 
+                            if (isset($filtered['id']) && DB::table($table)->where('id',$filtered['id'])->exists()) {
+                                $skipped[$type]++; continue;
+                            }
                             $clean[] = $filtered;
                         }
 
@@ -297,10 +303,10 @@ class BackupService
                     }
                 }
 
-                DB::statement('SET FOREIGN_KEY_CHECKS=1');
+
             });
         } catch (\Throwable $e) {
-            DB::statement('SET FOREIGN_KEY_CHECKS=1');
+
 
             return ['success' => false, 'message' => 'Restore failed and was rolled back: ' . $e->getMessage()];
         }
@@ -340,6 +346,9 @@ class BackupService
                 /** @var class-string<Model> $model */
                 $model = self::TYPES[$type]['model'];
 
+                if (in_array($type,['payments','expenses','activity'],true)) {
+                    throw new \RuntimeException('Financial and audit history cannot be purged through the admin panel.');
+                }
                 $deleted[$type] = $model::query()->count();
                 $model::query()->delete();
             }

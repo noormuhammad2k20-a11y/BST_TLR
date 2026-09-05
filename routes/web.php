@@ -17,7 +17,6 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PrintingController;
 use App\Http\Controllers\SettingController;
 use App\Http\Controllers\StaffController;
-use App\Http\Controllers\TeamController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SearchController;
 use App\Http\Controllers\PwaController;
@@ -50,7 +49,7 @@ Route::post('logout', [LoginController::class, 'logout'])
 | Authenticated application
 |--------------------------------------------------------------------------
 */
-Route::middleware('auth')->group(function () {
+Route::middleware(['auth', 'active', 'business'])->group(function () {
 
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
 
@@ -195,13 +194,6 @@ Route::middleware('auth')->group(function () {
         Route::post('settings/clear-notifications', [SettingController::class, 'clearNotifications'])
             ->name('settings.clear-notifications');
 
-        /* Team */
-        Route::get('settings/team', [TeamController::class, 'index'])->name('settings.team.index');
-        Route::post('settings/team', [TeamController::class, 'store'])->name('settings.team.store');
-        Route::put('settings/team/{user}', [TeamController::class, 'update'])->name('settings.team.update');
-        Route::patch('settings/team/{user}/active', [TeamController::class, 'toggleActive'])->name('settings.team.active');
-        Route::post('settings/team/{user}/password', [TeamController::class, 'resetPassword'])->name('settings.team.password');
-        Route::delete('settings/team/{user}', [TeamController::class, 'destroy'])->name('settings.team.destroy');
     });
 
     /*
@@ -214,6 +206,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/', [\App\Http\Controllers\ClothStore\DashboardController::class, 'index'])->name('dashboard');
         Route::get('reports', [\App\Http\Controllers\ClothStore\ReportController::class, 'index'])->name('reports.index');
         Route::get('reports/pdf', [\App\Http\Controllers\ClothStore\ReportController::class, 'pdf'])->name('reports.pdf');
+
 
         // Products & Categories
         Route::resource('categories', \App\Http\Controllers\ClothStore\CategoryController::class);
@@ -291,10 +284,6 @@ Route::middleware('auth')->group(function () {
             // copy won and silently 403'd every non-admin user. They now live
             // once, above, outside this group.
 
-            Route::get('users', [\App\Http\Controllers\ClothStore\UserController::class, 'index'])->name('users.index');
-            Route::post('users', [\App\Http\Controllers\ClothStore\UserController::class, 'storeUser'])->name('users.store');
-            Route::post('roles', [\App\Http\Controllers\ClothStore\UserController::class, 'storeRole'])->name('roles.store');
-            
             Route::get('loyalty', [\App\Http\Controllers\ClothStore\LoyaltyController::class, 'index'])->name('loyalty.index');
             Route::post('loyalty/adjust', [\App\Http\Controllers\ClothStore\LoyaltyController::class, 'adjust'])->name('loyalty.adjust');
         });

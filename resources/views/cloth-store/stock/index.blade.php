@@ -195,18 +195,14 @@
                     <!-- Operation Type -->
                     <div class="sm:col-span-2">
                         <label class="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-2">Operation Type</label>
-                        <div class="grid grid-cols-4 gap-2">
+                        <div class="grid grid-cols-3 gap-2">
                             <label class="cursor-pointer">
                                 <input type="radio" name="operation" value="in" class="peer sr-only" checked onchange="toggleTxFields()">
-                                <div class="px-3 py-2 text-center rounded-lg border border-slate-200 peer-checked:border-emerald-500 peer-checked:bg-emerald-50 peer-checked:text-emerald-700 text-sm font-semibold text-slate-600 transition">Stock In</div>
+                                <div class="px-3 py-2 text-center rounded-lg border border-slate-200 peer-checked:border-emerald-500 peer-checked:bg-emerald-50 peer-checked:text-emerald-700 text-sm font-semibold text-slate-600 transition">Market Purchase</div>
                             </label>
                             <label class="cursor-pointer">
                                 <input type="radio" name="operation" value="out" class="peer sr-only" onchange="toggleTxFields()">
                                 <div class="px-3 py-2 text-center rounded-lg border border-slate-200 peer-checked:border-rose-500 peer-checked:bg-rose-50 peer-checked:text-rose-700 text-sm font-semibold text-slate-600 transition">Stock Out</div>
-                            </label>
-                            <label class="cursor-pointer">
-                                <input type="radio" name="operation" value="transfer" class="peer sr-only" onchange="toggleTxFields()">
-                                <div class="px-3 py-2 text-center rounded-lg border border-slate-200 peer-checked:border-sky-500 peer-checked:bg-sky-50 peer-checked:text-sky-700 text-sm font-semibold text-slate-600 transition">Transfer</div>
                             </label>
                             <label class="cursor-pointer">
                                 <input type="radio" name="operation" value="adjustment" class="peer sr-only" onchange="toggleTxFields()">
@@ -244,12 +240,11 @@
                     <div>
                         <label class="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-2">Reason</label>
                         <select name="reason" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:border-indigo-500 focus:bg-white transition shadow-sm">
-                            <option value="Restock">Restock / Purchase</option>
+                            <option value="Market stock purchase">Bought from market</option>
                             <option value="Damaged">Damaged</option>
                             <option value="Lost">Lost / Missing</option>
                             <option value="Returned">Returned by Customer</option>
                             <option value="Manual Adjustment">Manual Adjustment</option>
-                            <option value="Location Transfer">Location Transfer</option>
                         </select>
                     </div>
 
@@ -272,30 +267,10 @@
                         </select>
                     </div>
 
-                    <!-- Location Transfer (From / To) -->
-                    <div id="field-transfer" class="sm:col-span-2 hidden grid-cols-2 gap-5">
-                        <div>
-                            <label class="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-2">From Location</label>
-                            <select name="from_location_id" id="input-from-location" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:border-indigo-500 focus:bg-white transition shadow-sm">
-                                @foreach($locations as $loc)
-                                <option value="{{ $loc->id }}">{{ $loc->name }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-2">To Location</label>
-                            <select name="to_location_id" id="input-to-location" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:border-indigo-500 focus:bg-white transition shadow-sm">
-                                @foreach($locations as $loc)
-                                <option value="{{ $loc->id }}">{{ $loc->name }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-                    </div>
-
                     <!-- Reference & Notes -->
                     <div>
                         <label class="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-2">Reference / Invoice #</label>
-                        <input type="text" name="reference" placeholder="e.g. PO-1234" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:border-indigo-500 focus:bg-white transition shadow-sm">
+                        <input type="text" name="reference" placeholder="e.g. Market receipt 1234" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:border-indigo-500 focus:bg-white transition shadow-sm">
                     </div>
                     <div>
                         <label class="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-2">Notes</label>
@@ -375,26 +350,7 @@
     
     function toggleTxFields() {
         let op = document.querySelector('input[name="operation"]:checked').value;
-        let singleLoc = document.getElementById('field-location');
-        let transferLoc = document.getElementById('field-transfer');
         let adjType = document.getElementById('field-adj-type');
-        
-        if (op === 'transfer') {
-            singleLoc.classList.add('hidden');
-            document.getElementById('input-location').removeAttribute('required');
-            transferLoc.classList.remove('hidden');
-            transferLoc.classList.add('grid');
-            document.getElementById('input-from-location').setAttribute('required', 'required');
-            document.getElementById('input-to-location').setAttribute('required', 'required');
-        } else {
-            transferLoc.classList.add('hidden');
-            transferLoc.classList.remove('grid');
-            document.getElementById('input-from-location').removeAttribute('required');
-            document.getElementById('input-to-location').removeAttribute('required');
-            singleLoc.classList.remove('hidden');
-            document.getElementById('input-location').setAttribute('required', 'required');
-        }
-
         if (op === 'adjustment') {
             adjType.classList.remove('hidden');
         } else {

@@ -42,8 +42,8 @@ class OrderService
                 $measurementId = $sheetIds[0] ?? null;
             }
 
-            $priced  = (float) ($data['total'] ?? 0);
-            $advance = (float) ($data['advance'] ?? 0);
+            $priced  = Decimal::value((string)($data['total'] ?? '0'));
+            $advance = Decimal::value((string)($data['advance'] ?? '0'));
             $status  = $data['status'] ?? 'Pending';
 
             // Tax and service charge that are configured as *exclusive* are
@@ -51,6 +51,7 @@ class OrderService
             // genuinely owes and the balance can never disagree with the
             // invoice. Inclusive rates leave the priced figure untouched.
             $total = PricingService::grandTotal($priced);
+            if (Decimal::cmp($advance,$total)>0) throw ValidationException::withMessages(['advance'=>'Advance exceeds invoice total.']);
 
             $order = Order::create([
                 'customer_id'        => $customer->id,
@@ -66,7 +67,7 @@ class OrderService
                 'style_notes'        => $data['style_notes'] ?? null,
                 'total'              => $total,
                 'advance'            => $advance,
-                'balance'            => max($total - $advance, 0),
+                'balance'            => Decimal::max(Decimal::sub($total,$advance)),
                 'status'             => $status,
                 'priority'           => $data['priority'] ?? 'Normal',
                 'progress'           => Order::progressFor($status),
@@ -112,10 +113,10 @@ class OrderService
             NotificationService::orderCreated($order);
 
             // Send the shop's own ORDER CREATED template, if it is switched on.
-            WhatsAppService::sendTemplate('order-created', $order);
+            DB::afterCommit(fn()=>WhatsAppService::sendTemplate('order-created', $order));
 
             // SMS channel — fires independently of WhatsApp.
-            SmsService::sendTemplate('order-created', $order);
+            DB::afterCommit(fn()=>SmsService::sendTemplate('order-created', $order));
 
             ActivityLogger::created(
                 $order,
@@ -135,16 +136,17 @@ class OrderService
     public function update(Order $order, array $data): Order
     {
         return DB::transaction(function () use ($order, $data) {
+            $order=Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
             $previousStatus = $order->status;
             $newStatus      = $data['status'] ?? $previousStatus;
 
             // A re-priced order goes through the same tax rules as a new one;
             // an untouched total is already inclusive and must not be re-taxed.
             $total = array_key_exists('total', $data)
-                ? PricingService::grandTotal((float) $data['total'])
-                : (float) $order->total;
+                ? PricingService::grandTotal((string) $data['total'])
+                : (string) $order->total;
 
-            $advance = array_key_exists('advance', $data) ? (float) $data['advance'] : (float) $order->advance;
+            $advance = array_key_exists('advance', $data) ? (string) $data['advance'] : (string) $order->advance;
 
             $order->fill(array_filter([
                 'garment'            => $data['garment'] ?? null,
@@ -189,7 +191,7 @@ class OrderService
 
             $order->total    = $total;
             $order->advance  = $advance;
-            $order->balance  = max($total - $this->paidTotal($order, $advance), 0);
+            $order->balance  = Decimal::max(Decimal::sub($total,app(TailoringFinanceService::class)->paid($order)));
             $order->status   = $newStatus;
             $order->progress = Order::progressFor($newStatus);
 
@@ -224,6 +226,7 @@ class OrderService
     public function changeStatus(Order $order, string $status, ?string $note = null): Order
     {
         return DB::transaction(function () use ($order, $status, $note) {
+            $order=Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
             $from = $order->status;
 
             if ($from === $status) {
@@ -326,8 +329,8 @@ class OrderService
     public function recalculateBalance(Order $order): Order
     {
         // Counts the advance exactly once: it is already a payment row.
-        $paid = $this->paidTotal($order, (float) $order->advance);
-        $order->forceFill(['balance' => max((float) $order->total - $paid, 0)])->save();
+        $paid = app(TailoringFinanceService::class)->paid($order);
+        $order->forceFill(['balance' => Decimal::max(Decimal::sub((string)$order->total, $paid))])->save();
 
         // Auto-deliver on full payment when the shop has opted in.
         if ($order->balance <= 0
@@ -524,44 +527,17 @@ class OrderService
      * another one — otherwise the ledger and the `advance` column disagree and
      * the receipt has to guess which of the two is real.
      */
-    private function syncAdvancePayment(Order $order, float $advance): void
+    private function syncAdvancePayment(Order $order, string $advance): void
     {
-        $advance = round($advance, 2);
-        $row     = $order->payments()->where('type', 'Advance')->orderBy('id')->first();
-
-        if ($advance <= 0) {
-            $row?->delete();
-
-            return;
+        // Editing an invoice must not rewrite money already received.
+        if (Decimal::cmp((string)$advance, (string)$order->getOriginal('advance')) !== 0) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['advance'=>'Use Payments & Billing to record or reverse an existing deposit.']);
         }
-
-        if ($row) {
-            if (round((float) $row->amount, 2) !== $advance) {
-                $row->forceFill(['amount' => $advance])->save();
-            }
-
-            return;
-        }
-
-        Payment::create([
-            'invoice_id'     => $order->display_invoice,
-            'order_id'       => $order->id,
-            'customer_id'    => $order->customer_id,
-            'amount'         => $advance,
-            'type'           => 'Advance',
-            'status'         => 'Completed',
-            'payment_method' => 'Cash',
-            'date'           => now(),
-            'recorded_by'    => Auth::id(),
-        ]);
     }
 
     private function paidTotal(Order $order, float $advance): float
     {
-        $payments = (float) $order->payments()->sum('amount');
-        $recorded = (float) $order->payments()->where('type', 'Advance')->sum('amount');
-
-        return round($payments + Order::unrecordedAdvance($advance, $recorded), 2);
+        return (float) app(TailoringFinanceService::class)->paid($order);
     }
 
     private function applyStatusTimestamps(Order $order, string $status): void

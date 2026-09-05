@@ -13,6 +13,9 @@ class Setting extends Model
 
     protected static function booted(): void
     {
+        static::saving(function (Setting $setting) {
+            if ($setting->isDirty('value')) $setting->value=\App\Services\SecretSettings::encode($setting->key,$setting->value);
+        });
         static::saved(fn () => static::flushCache());
         static::deleted(fn () => static::flushCache());
     }
@@ -30,9 +33,14 @@ class Setting extends Model
      */
     public static function map(): array
     {
-        return Cache::rememberForever(self::CACHE_KEY, function () {
-            return static::query()->pluck('value', 'key')->all();
+        // Shared caches contain ciphertext only, including after legacy secret conversion.
+        $values=Cache::rememberForever(self::CACHE_KEY, function () {
+            return static::query()->whereNotIn('key',collect(\App\Services\Settings::SCHEMA)->filter(fn($m)=>!empty($m['secret']))->keys())->pluck('value','key')->all();
         });
+        foreach (static::query()->whereIn('key',collect(\App\Services\Settings::SCHEMA)->filter(fn($m)=>!empty($m['secret']))->keys())->pluck('value','key') as $key=>$value) {
+            $values[$key]=\App\Services\SecretSettings::decode($key,$value);
+        }
+        return $values;
     }
 
     public static function getValue(string $key, $default = null)

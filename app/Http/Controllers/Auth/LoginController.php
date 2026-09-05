@@ -42,6 +42,7 @@ class LoginController extends Controller
         $request->session()->regenerate();
 
         $user = Auth::user();
+        if ($user) $request->session()->put('auth_session_version', (int)$user->session_version);
         $user->forceFill(['last_login_at' => now()])->save();
 
         ActivityLogger::log(
@@ -59,6 +60,7 @@ class LoginController extends Controller
     public function logout(Request $request): RedirectResponse
     {
         $user = Auth::user();
+        if ($user) $request->session()->put('auth_session_version', (int)$user->session_version);
 
         if ($user) {
             ActivityLogger::log(

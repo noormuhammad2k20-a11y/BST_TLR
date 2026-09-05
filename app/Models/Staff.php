@@ -29,8 +29,8 @@ class Staff extends Model
     /** How a staff member is paid. */
     public const SALARY_TYPES = ['Monthly', 'Per Suit', 'Both'];
 
-    /** Starting points, not a closed list — the field is free text. */
-    public const ROLES = ['Master Tailor', 'Tailor', 'Cutter', 'Helper', 'Finisher', 'Presser'];
+    /** This directory contains stitchers only. */
+    public const ROLES = ['Master Tailor', 'Tailor'];
 
     /* ------------------------------------------------------------------ */
     /* Relationships                                                       */
@@ -48,7 +48,7 @@ class Staff extends Model
 
     public function payments(): HasMany
     {
-        return $this->hasMany(StaffPayment::class)->orderByDesc('paid_on');
+        return $this->hasMany(StaffPayment::class)->whereNull('reversed_at')->whereNull('reverses_payment_id')->orderByDesc('paid_on');
     }
 
     public function workLogs(): HasMany

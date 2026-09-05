@@ -35,7 +35,7 @@ class StoreOrderRequest extends FormRequest
             // a guarantee — this is the rule that actually holds.
             'delivery_date'      => ['required', 'date', 'after_or_equal:today'],
             'time_slot'          => ['nullable', 'string', 'max:100'],
-            'payment_method'     => ['nullable', 'string', 'max:50'],
+            'payment_method'     => ['nullable', Rule::in(\App\Models\Payment::METHODS)],
             'notes'              => ['nullable', 'string', 'max:2000'],
             'quantity'           => ['nullable', 'integer', 'min:1', 'max:999'],
             'measurements'       => ['nullable', 'array'],

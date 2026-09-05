@@ -10,8 +10,8 @@
         <a href="{{ route('cloth-store.stock.index') }}" class="btn-cs-ghost">
             <i class="fa-solid fa-warehouse text-[10px]"></i> Inventory
         </a>
-        <a href="javascript:void(0)" onclick="toast('Purchase Orders coming soon!', 'info')" class="btn-cs-primary">
-            <i class="fa-solid fa-file-contract text-[10px]"></i> Raise PO
+        <a href="{{ route('cloth-store.stock.index') }}" class="btn-cs-primary">
+            <i class="fa-solid fa-plus text-[10px]"></i> Record Market Stock
         </a>
     </x-slot:actions>
 </x-cloth-store.page-header>
@@ -98,7 +98,7 @@
                             <button onclick="ignoreAlert({{ $item->id }})" class="btn-cs-icon danger" title="Ignore this alert">
                                 <i class="fa-solid fa-eye-slash text-xs"></i>
                             </button>
-                            <a href="javascript:void(0)" onclick="toast('Purchase Orders coming soon!', 'info')" class="btn-cs-ghost py-1.5 px-2.5" title="Raise a purchase order">
+                            <a href="{{ route('cloth-store.stock.index') }}" class="btn-cs-ghost py-1.5 px-2.5" title="Record a market stock purchase">
                                 <i class="fa-solid fa-cart-plus text-[10px]"></i> PO
                             </a>
                         </div>

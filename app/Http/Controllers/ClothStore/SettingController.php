@@ -75,7 +75,6 @@ class SettingController extends Controller
             'notif_low_stock' => '1',
             'notif_out_stock' => '1',
             'notif_customer_due' => '1',
-            'notif_supplier_due' => '1',
             'notif_expense_created' => '0',
             
             'theme_mode' => 'light'
@@ -96,7 +95,7 @@ class SettingController extends Controller
             'rcpt_show_customer', 'rcpt_show_payment', 'rcpt_show_unit', 'rcpt_show_qty', 'rcpt_show_rate',
             'rcpt_show_subtotal', 'rcpt_show_discount', 'rcpt_show_tax', 'rcpt_auto_print',
             'allow_partial_returns', 'allow_exchange', 'require_return_approval', 'return_restock_auto',
-            'notif_low_stock', 'notif_out_stock', 'notif_customer_due', 'notif_supplier_due', 'notif_expense_created'
+            'notif_low_stock', 'notif_out_stock', 'notif_customer_due', 'notif_expense_created'
         ];
 
         foreach ($booleanKeys as $key) {

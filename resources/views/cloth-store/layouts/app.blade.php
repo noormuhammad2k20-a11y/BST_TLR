@@ -912,6 +912,41 @@
        ================================================================== */
     .print-only { display: none !important; }
 
+    .mobile-nav-toggle { display: none; }
+    #mobile-sidebar-overlay { display: none; }
+
+    @media (max-width: 767px) {
+      #sidebar {
+        transform: translateX(-100%);
+        transition: transform .22s ease;
+        box-shadow: var(--shadow-lg);
+      }
+      html[dir="rtl"] #sidebar { transform: translateX(100%); }
+      #sidebar.mobile-open { transform: translateX(0); }
+      #app-shell { margin-left: 0 !important; margin-right: 0 !important; min-width: 0; width: 100%; }
+      #app-shell > header { padding-left: 1rem; padding-right: 1rem; gap: .5rem; }
+      #spa-main { padding: 1rem !important; min-width: 0; overflow-x: hidden; }
+      .mobile-nav-toggle {
+        display: inline-flex;
+        width: 2.25rem;
+        height: 2.25rem;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
+        border-radius: .5rem;
+        color: var(--text-muted);
+      }
+      .mobile-nav-toggle:hover { background: var(--bg-muted); color: var(--text-strong); }
+      #mobile-sidebar-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 35;
+        background: rgba(15, 23, 42, .45);
+        backdrop-filter: blur(2px);
+      }
+      #mobile-sidebar-overlay.show { display: block; }
+    }
+
     @media print {
       @page { size: A4 portrait; margin: 12mm 10mm; }
 
@@ -1052,22 +1087,23 @@
 <body class="text-slate-800">
   <div id="app" class="flex min-h-screen">
     @include('cloth-store.layouts.sidebar')
+    <div id="mobile-sidebar-overlay" onclick="closeMobileSidebar()" aria-hidden="true"></div>
 
-    <div class="flex-1 ml-64 flex flex-col">
+    <div id="app-shell" class="flex-1 ml-64 flex flex-col">
       @include('cloth-store.layouts.header')
 
       <main class="p-8 flex-1 bg-slate-50" id="spa-main">
         @if(session('success'))
           <script>
             document.addEventListener('DOMContentLoaded', function() {
-              toast('{{ session('success') }}', 'success');
+              toast({{ Illuminate\Support\Js::from(session('success')) }}, 'success');
             });
           </script>
         @endif
         @if(session('error'))
           <script>
             document.addEventListener('DOMContentLoaded', function() {
-              toast('{{ session('error') }}', 'error');
+              toast({{ Illuminate\Support\Js::from(session('error')) }}, 'error');
             });
           </script>
         @endif
@@ -1075,6 +1111,24 @@
       </main>
     </div>
   </div>
+
+  <script>
+    window.openMobileSidebar = function () {
+      document.getElementById('sidebar')?.classList.add('mobile-open');
+      document.getElementById('mobile-sidebar-overlay')?.classList.add('show');
+      document.getElementById('mobile-nav-toggle')?.setAttribute('aria-expanded', 'true');
+    };
+    window.closeMobileSidebar = function () {
+      document.getElementById('sidebar')?.classList.remove('mobile-open');
+      document.getElementById('mobile-sidebar-overlay')?.classList.remove('show');
+      document.getElementById('mobile-nav-toggle')?.setAttribute('aria-expanded', 'false');
+    };
+    document.addEventListener('DOMContentLoaded', function () {
+      document.querySelectorAll('#sidebar a').forEach(function (link) {
+        link.addEventListener('click', closeMobileSidebar);
+      });
+    });
+  </script>
 
   <div class="drawer-overlay" id="drawer-overlay" onclick="closeDrawers()"></div>
 
@@ -1454,11 +1508,11 @@
        * Raw fetch with CSRF and JSON headers attached, returning the Response
        * untouched so callers can do `.then(res => res.json())`.
        *
-       * Several Cloth Store pages (expenses, payments, purchase orders,
-       * suppliers, settings) were already written against `Atelier.fetch`,
+       * Several Cloth Store pages (expenses, payments and settings) were
+       * already written against `Atelier.fetch`,
        * but it was never defined on this runtime — every one of those calls
        * threw "Atelier.fetch is not a function", which silently broke
-       * recording a payment, receiving a purchase order, saving an expense
+       * recording a payment or saving an expense
        * and saving settings.
        *
        * Prefer `Atelier.api.*` in new code: it parses JSON and throws typed
@@ -1946,15 +2000,8 @@
       }
 
       function bindPrefetch() {
-        // The sidebar is the main navigation surface — warm it immediately so
-        // the very first click is already instant.
-        if ('requestIdleCallback' in window) {
-          requestIdleCallback(() => {
-            document.querySelectorAll('aside a[href]').forEach(a => prefetch(a.href));
-          }, { timeout: 2000 });
-        }
-
-        // Hovering anything else warms it too.
+        // Warm only the destination the user signals. Fetching every sidebar
+        // report at idle caused a full burst of authenticated database work.
         document.addEventListener('mouseover', (e) => {
           const a = e.target.closest?.('a[href]');
           if (a && !a.target && !a.hasAttribute('download')) prefetch(a.href);

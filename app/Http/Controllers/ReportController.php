@@ -263,7 +263,7 @@ class ReportController extends Controller
         return Order::query()
             ->whereBetween('orders.created_at', [$start, $end])
             ->leftJoin('customers', 'orders.customer_id', '=', 'customers.id')
-            ->leftJoin('users as tailors', 'orders.tailor_id', '=', 'tailors.id')
+            ->leftJoin('staff as tailors', 'orders.staff_id', '=', 'tailors.id')
             ->when($term !== '', fn ($q) => $q->where(function ($sub) use ($term) {
                 $sub->where('orders.order_number', 'like', "%{$term}%")
                     ->orWhere('orders.invoice_number', 'like', "%{$term}%")
@@ -289,7 +289,7 @@ class ReportController extends Controller
 
     private function paymentsQuery(Carbon $start, Carbon $end, string $term)
     {
-        return Payment::query()
+        return Payment::query()->where('status','Completed')->whereNull('reverses_payment_id')
             ->whereBetween('payments.date', [$start, $end])
             ->leftJoin('customers', 'payments.customer_id', '=', 'customers.id')
             ->leftJoin('orders', 'payments.order_id', '=', 'orders.id')
@@ -407,7 +407,7 @@ class ReportController extends Controller
         $orders   = Order::whereBetween('created_at', [$start, $end]);
         $invoiced = (float) (clone $orders)->sum('total');
 
-        $collected = (float) Payment::whereBetween('date', [$start, $end])->sum('amount');
+        $collected = (float) Payment::where('status','Completed')->whereNull('reverses_payment_id')->whereBetween('date', [$start, $end])->sum('amount');
         $expenses  = (float) Expense::whereBetween('date', [$start, $end])->sum('amount');
 
         return [
@@ -425,7 +425,7 @@ class ReportController extends Controller
      */
     private function paymentMethods(Carbon $start, Carbon $end): array
     {
-        return Payment::query()
+        return Payment::query()->where('status','Completed')->whereNull('reverses_payment_id')
             ->whereBetween('date', [$start, $end])
             ->selectRaw("COALESCE(NULLIF(payment_method, ''), 'Unspecified') as method_label")
             ->selectRaw('COUNT(*) as entries, SUM(amount) as total')

@@ -39,6 +39,6 @@
   <h3 class="text-2xl font-bold text-slate-900 tracking-tight">{{ $value }}</h3>
 
   @if($sub)
-    <p class="text-[11px] text-slate-500 mt-1">{!! $sub !!}</p>
+    <p class="text-[11px] text-slate-500 mt-1">{{ $sub }}</p>
   @endif
 </div>

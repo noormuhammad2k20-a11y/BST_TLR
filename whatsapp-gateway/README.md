@@ -11,7 +11,7 @@ paid service like UltraMsg, but runs on this machine and costs nothing.
 
 1. Install [Node.js LTS](https://nodejs.org) — one time only
 2. Double-click **`install.bat`** — one time only
-3. Open **`config.json`** and change `token` to your own password
+3. Open **`config.json`** and set a unique random `token` of at least 32 characters
 4. Double-click **`start-gateway.bat`** and leave the window open
 5. In the panel: **Settings → WhatsApp & Alerts** → provider **Free Gateway**,
    paste the same token, Save, then scan the QR code that appears
@@ -24,6 +24,7 @@ paid service like UltraMsg, but runs on this machine and costs nothing.
 |---|---|
 | `port` | Port the gateway listens on. Change only if 3001 is taken. |
 | `token` | Shared password. Must match the panel exactly. |
+| `host` | Network binding. Defaults to `127.0.0.1`; expose only on a trusted private network. |
 | `minDelayMs` / `maxDelayMs` | Random gap between messages. Raising these is safer, not slower in any way that matters. |
 | `maxPerHour` | Hard ceiling per hour. Lower is safer. |
 
@@ -36,6 +37,9 @@ a specific reason.
 ## HTTP API
 
 Every route needs the `X-Gateway-Token` header.
+
+Query-string tokens are rejected. Set `GATEWAY_TOKEN` and `GATEWAY_HOST` as
+environment overrides when service management makes that safer than config.json.
 
 | Route | Purpose |
 |---|---|

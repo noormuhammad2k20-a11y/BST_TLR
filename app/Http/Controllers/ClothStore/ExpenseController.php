@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use App\Models\ClothStore\Expense;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class ExpenseController extends Controller
 {
@@ -113,15 +114,15 @@ class ExpenseController extends Controller
     {
         $data = $request->validate([
             'expense_date' => 'required|date',
-            'category' => 'required|string',
-            'description' => 'required|string',
-            'amount' => 'required|numeric|min:1',
-            'payment_method' => 'required|string',
-            'paid_by' => 'nullable|string',
-            'reference' => 'nullable|string',
-            'notes' => 'nullable|string',
-            'attachment' => 'nullable|string',
-            'status' => 'required|string',
+            'category' => 'required|string|max:100',
+            'description' => 'required|string|max:1000',
+            'amount' => 'required|numeric|min:0.01|decimal:0,2',
+            'payment_method' => ['required', Rule::in(Expense::METHODS)],
+            'paid_by' => 'nullable|string|max:255',
+            'reference' => 'nullable|string|max:100',
+            'notes' => 'nullable|string|max:2000',
+            'attachment' => 'nullable|string|max:500',
+            'status' => ['required', Rule::in(Expense::STATUSES)],
         ]);
         
         $data['created_by'] = auth()->user()->short_name ?? 'Admin';
@@ -134,15 +135,15 @@ class ExpenseController extends Controller
     {
         $data = $request->validate([
             'expense_date' => 'required|date',
-            'category' => 'required|string',
-            'description' => 'required|string',
-            'amount' => 'required|numeric|min:1',
-            'payment_method' => 'required|string',
-            'paid_by' => 'nullable|string',
-            'reference' => 'nullable|string',
-            'notes' => 'nullable|string',
-            'attachment' => 'nullable|string',
-            'status' => 'required|string',
+            'category' => 'required|string|max:100',
+            'description' => 'required|string|max:1000',
+            'amount' => 'required|numeric|min:0.01|decimal:0,2',
+            'payment_method' => ['required', Rule::in(Expense::METHODS)],
+            'paid_by' => 'nullable|string|max:255',
+            'reference' => 'nullable|string|max:100',
+            'notes' => 'nullable|string|max:2000',
+            'attachment' => 'nullable|string|max:500',
+            'status' => ['required', Rule::in(Expense::STATUSES)],
         ]);
 
         $expense->update($data);
@@ -157,7 +158,7 @@ class ExpenseController extends Controller
 
     public function updateStatus(Request $request, Expense $expense)
     {
-        $request->validate(['status' => 'required|in:Pending,Approved,Rejected']);
+        $request->validate(['status' => ['required', Rule::in(Expense::STATUSES)]]);
         $expense->update(['status' => $request->status]);
         return response()->json(['success' => true, 'message' => 'Status updated to ' . $request->status]);
     }

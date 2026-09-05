@@ -2,389 +2,321 @@
 
 namespace Database\Seeders;
 
-use App\Models\ActivityLog;
-use App\Models\Customer;
-use App\Models\Delivery;
-use App\Models\Expense;
-use App\Models\Measurement;
-use App\Models\Notification;
-use App\Models\Order;
-use App\Models\OrderStatusHistory;
-use App\Models\Payment;
-use App\Models\ProductService;
 use App\Models\Setting;
-use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use RuntimeException;
 
 class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
+        $owner = DB::table('users')->where('role', 'admin')->where('is_active', 1)->orderBy('id')->first()
+            ?? DB::table('users')->where('is_active', 1)->orderBy('id')->first();
+
+        if (!$owner) {
+            throw new RuntimeException('An existing active owner account is required; the seeder never publishes a default password.');
+        }
+
+        $this->keepOnlyOwner((int) $owner->id);
         $this->seedSettings();
-        $users     = $this->seedUsers();
-        $services  = $this->seedServices();
-        $customers = $this->seedCustomers();
-
-        $this->seedMeasurements($customers, $users);
-        $orders = $this->seedOrders($customers, $services, $users);
-
-        $this->seedExpenses($users['admin']);
-        $this->seedNotifications($orders);
-        $this->seedActivity($orders, $users['admin']);
-
+        $this->seedTailoring((int) $owner->id);
+        $this->seedClothStore((int) $owner->id, (string) $owner->name);
+        $this->call(ProductionPermissionsSeeder::class);
+        $ownerRole=DB::table('cs_roles')->where('name','Super Admin')->value('id');
+        DB::table('cs_user_roles')->updateOrInsert(['user_id'=>(int)$owner->id],['role_id'=>$ownerRole]);
         Setting::flushCache();
+    }
+
+    private function keepOnlyOwner(int $ownerId): void
+    {
+        DB::table('users')->where('id', $ownerId)->update([
+            'role' => 'admin', 'is_active' => 1, 'updated_at' => now(),
+        ]);
+
+        foreach ([
+            ['orders', 'created_by'], ['payments', 'recorded_by'], ['expenses', 'created_by'],
+            ['measurements', 'created_by'], ['activity_logs', 'user_id'], ['order_status_histories', 'user_id'],
+            ['staff_payments', 'recorded_by'], ['staff_payments', 'reversed_by'],
+            ['cs_stock_transactions', 'user_id'],
+        ] as [$table, $column]) {
+            if (Schema::hasTable($table) && Schema::hasColumn($table, $column)) {
+                DB::table($table)->whereNotNull($column)->where($column, '<>', $ownerId)->update([$column => $ownerId]);
+            }
+        }
+
+        if (Schema::hasColumn('orders', 'tailor_id')) DB::table('orders')->update(['tailor_id' => null]);
+        if (Schema::hasColumn('staff', 'user_id')) DB::table('staff')->update(['user_id' => null]);
+        if (Schema::hasTable('cs_user_roles')) DB::table('cs_user_roles')->where('user_id', '<>', $ownerId)->delete();
+        DB::table('users')->where('id', '<>', $ownerId)->delete();
+
+        if (Schema::hasTable('cs_user_roles') && Schema::hasTable('cs_roles')) {
+            $role = DB::table('cs_roles')->where('name', 'Super Admin')->value('id');
+            if ($role) DB::table('cs_user_roles')->updateOrInsert(['user_id' => $ownerId], ['role_id' => $role]);
+        }
     }
 
     private function seedSettings(): void
     {
-        $settings = [
-            'store_name'           => 'Atelier Tailor House',
-            'currency'             => '₹',
-            'tax_rate'             => '18',
-            'address'              => 'Shop #5, Main Market, Mumbai',
-            'phone'                => '+91 98765 43210',
-            'email'                => 'contact@atelier.com',
-            'website'              => 'www.atelier.com',
-            'receipt_footer'       => 'Thank you for choosing Atelier. Please bring this receipt for collection.',
-            'invoice_terms'        => '50% advance required for all custom tailoring. Full payment due upon collection.',
-            'whatsapp_enabled'     => '1',
-            'email_enabled'        => '1',
-            'sms_enabled'          => '0',
-            'order_prefix'         => 'ORD-',
-            'invoice_prefix'       => 'INV-',
-            'allow_partial'        => '1',
-            'low_stock_alert'      => '10',
-            'auto_delivery_update' => '1',
+        $values = [
+            'currency' => 'Rs', 'timezone' => 'Asia/Karachi', 'order_prefix' => 'ORD-',
+            'invoice_prefix' => 'INV-', 'allow_partial' => '1', 'low_stock_alert' => '10',
+            'receipt_footer' => 'Thank you for choosing us. Please bring this receipt when collecting your order.',
         ];
-
-        foreach ($settings as $key => $value) {
-            Setting::updateOrCreate(['key' => $key], ['group' => 'general', 'value' => $value]);
+        foreach ($values as $key => $value) {
+            DB::table('settings')->updateOrInsert(['key' => $key], [
+                'group' => 'general', 'value' => $value, 'updated_at' => now(), 'created_at' => now(),
+            ]);
         }
     }
 
-    /**
-     * @return array<string, User>
-     */
-    private function seedUsers(): array
+    private function seedTailoring(int $ownerId): void
     {
-        $admin = User::updateOrCreate(
-            ['email' => 'admin@ateliercraft.com'],
-            [
-                'name'         => 'Noor M Hingorjo',
-                'display_name' => 'Noor',
-                'password'     => Hash::make('password'),
-                'role'         => User::ROLE_ADMIN,
-                'title'        => 'Master Tailor · Administrator',
-                'phone'        => '+91 98765 43210',
-                'badge'        => 'Founder',
-                'is_active'    => true,
-            ]
-        );
-
-        $staff = User::updateOrCreate(
-            ['email' => 'staff@ateliercraft.com'],
-            [
-                'name'      => 'Priya Sharma',
-                'password'  => Hash::make('password'),
-                'role'      => User::ROLE_STAFF,
-                'title'     => 'Front Desk',
-                'is_active' => true,
-            ]
-        );
-
-        $tailors = [];
-        foreach ([['Ahmed', 'ahmed'], ['Bilal', 'bilal'], ['Sana', 'sana'], ['Vikram', 'vikram']] as [$name, $handle]) {
-            $tailors[] = User::updateOrCreate(
-                ['email' => "{$handle}@ateliercraft.com"],
-                [
-                    'name'      => $name,
-                    'password'  => Hash::make('password'),
-                    'role'      => User::ROLE_TAILOR,
-                    'title'     => 'Tailor',
-                    'is_active' => true,
-                ]
-            );
-        }
-
-        return ['admin' => $admin, 'staff' => $staff, 'tailors' => $tailors];
-    }
-
-    /**
-     * @return array<string, ProductService>
-     */
-    private function seedServices(): array
-    {
-        $definitions = [
-            ['name' => 'Shalwar Kameez Stitching', 'category' => 'Service', 'type' => 'Service', 'price' => 2500,  'duration_days' => 5,  'description' => 'Traditional shalwar kameez tailoring with standard finishing.'],
-            ['name' => 'Premium Suit Stitching',   'category' => 'Suit',    'type' => 'Service', 'price' => 12000, 'duration_days' => 12, 'description' => 'Fully canvassed bespoke suit with two fittings included.'],
-            ['name' => 'Sherwani Stitching',       'category' => 'Men',     'type' => 'Service', 'price' => 18000, 'duration_days' => 14, 'description' => 'Hand-finished sherwani with lining and detailing.'],
-            ['name' => 'Saree Blouse Stitching',   'category' => 'Ladies',  'type' => 'Service', 'price' => 4000,  'duration_days' => 6,  'description' => 'Fitted blouse with custom neckline and sleeve options.'],
-            ['name' => 'Italian Wool Navy',        'category' => 'Fabric',  'type' => 'Fabric',  'price' => 4500,  'sku' => 'FAB-001', 'stock_quantity' => 24, 'low_stock_threshold' => 10, 'unit' => 'metre', 'cost_price' => 3100, 'description' => 'Super 120s Italian wool, navy.'],
-            ['name' => 'Signature Buttons Set',    'category' => 'Other',   'type' => 'Product', 'price' => 850,   'sku' => 'ACC-042', 'stock_quantity' => 8,  'low_stock_threshold' => 10, 'unit' => 'set', 'cost_price' => 420, 'description' => 'Horn button set of twelve.'],
-        ];
-
-        $services = [];
-        foreach ($definitions as $definition) {
-            $service = ProductService::updateOrCreate(
-                ['name' => $definition['name']],
-                array_merge(['status' => 'Active'], $definition)
-            );
-            $services[$definition['name']] = $service;
-        }
-
-        return $services;
-    }
-
-    /**
-     * @return array<string, Customer>
-     */
-    private function seedCustomers(): array
-    {
-        $definitions = [
-            ['name' => 'Ahmad Ali',    'phone' => '0300-1234567',   'email' => 'ahmad@example.com', 'type' => 'Regular', 'city' => 'Mumbai'],
-            ['name' => 'Rahul Mehta',  'phone' => '+91 98765 43210', 'type' => 'VIP',     'city' => 'Delhi'],
-            ['name' => 'Zainab Abbas', 'phone' => '0300-9876543',   'type' => 'Regular', 'city' => 'Lahore'],
-            ['name' => 'Ananya Iyer',  'phone' => '+91 99887 76655', 'type' => 'Premium', 'city' => 'Chennai'],
-            ['name' => 'Rohan Gupta',  'phone' => '+91 90000 11122', 'type' => 'VIP',     'city' => 'Pune'],
-            ['name' => 'Sara Ali',     'phone' => '+91 90000 33344', 'type' => 'Premium', 'city' => 'Hyderabad'],
-        ];
-
-        $customers = [];
-        foreach ($definitions as $definition) {
-            $customer = Customer::updateOrCreate(
-                ['phone' => $definition['phone']],
-                array_merge($definition, ['last_visit_at' => now()->subDays(random_int(0, 20))])
-            );
-            $customers[$definition['name']] = $customer;
-        }
-
-        return $customers;
-    }
-
-    /**
-     * @param array<string, Customer> $customers
-     * @param array<string, mixed>    $users
-     */
-    private function seedMeasurements(array $customers, array $users): void
-    {
-        $samples = [
-            ['customer' => 'Ahmad Ali',   'garment_type' => 'Shalwar Kameez', 'length' => 42, 'shoulder_width' => 18, 'sleeve_length' => 24, 'chest' => 42, 'chest_losing' => 2, 'waist' => 40, 'waist_losing' => 2, 'hip' => 42, 'hip_losing' => 2, 'collar' => 16, 'ghera' => 24, 'salwar_length' => 40, 'pancho' => 14],
-            ['customer' => 'Rahul Mehta', 'garment_type' => 'Premium Suit',   'length' => 31, 'shoulder_width' => 18, 'sleeve_length' => 25, 'chest' => 44, 'chest_losing' => 3, 'waist' => 38, 'waist_losing' => 2, 'hip' => 41, 'hip_losing' => 2, 'collar' => 16.5, 'armhole' => 21, 'elbow' => 14],
-            ['customer' => 'Ananya Iyer', 'garment_type' => 'Saree Blouse',   'length' => 15, 'shoulder_width' => 14, 'sleeve_length' => 10, 'chest' => 36, 'chest_losing' => 1.5, 'waist' => 30, 'waist_losing' => 1.5, 'hip' => 38, 'hip_losing' => 1.5, 'collar' => 14],
-        ];
-
-        foreach ($samples as $index => $sample) {
-            $customer = $customers[$sample['customer']] ?? null;
-            if (!$customer) {
-                continue;
+        $tailors = DB::table('staff')->orderBy('id')->get();
+        if ($tailors->count() < 10) {
+            $names = ['Muhammad Aslam','Rashid Mehmood','Imran Qureshi','Nadeem Akhtar','Shahid Hussain',
+                'Adeel Ahmed','Waqas Ali','Tariq Bashir','Usman Raza','Kamran Yousaf'];
+            foreach ($names as $i => $name) {
+                if (DB::table('staff')->count() >= 10) break;
+                DB::table('staff')->insert([
+                    'name'=>$name,'phone'=>'0301'.str_pad((string)(4100000+$i),7,'0',STR_PAD_LEFT),
+                    'address'=>'Karachi','joining_date'=>now()->subMonths(18-$i)->toDateString(),
+                    'role'=>$i===0?'Master Tailor':'Tailor','salary_type'=>'Per Suit',
+                    'monthly_salary'=>0,'per_suit_rate'=>1200+($i*75),'is_active'=>1,
+                    'notes'=>'Experienced tailor','created_at'=>now(),'updated_at'=>now(),
+                ]);
             }
-
-            unset($sample['customer']);
-
-            Measurement::updateOrCreate(
-                ['customer_id' => $customer->id, 'garment_type' => $sample['garment_type']],
-                array_merge($sample, [
-                    'tailor'     => $users['tailors'][$index % count($users['tailors'])]->name,
-                    'unit'       => 'in',
-                    'created_by' => $users['admin']->id,
-                ])
-            );
+            $tailors = DB::table('staff')->orderBy('id')->get();
         }
-    }
+        DB::table('staff')->whereNotIn('role', ['Master Tailor','Tailor'])->update(['role'=>'Tailor']);
 
-    /**
-     * @param array<string, Customer>       $customers
-     * @param array<string, ProductService> $services
-     * @param array<string, mixed>          $users
-     * @return array<int, Order>
-     */
-    private function seedOrders(array $customers, array $services, array $users): array
-    {
-        $definitions = [
-            ['customer' => 'Ahmad Ali',    'service' => 'Premium Suit Stitching',   'garment' => '3-Piece Suit', 'fabric' => 'Italian Wool',  'total' => 18000, 'advance' => 5000,  'status' => 'In Progress', 'priority' => 'High',    'due' => 2],
-            ['customer' => 'Rahul Mehta',  'service' => 'Sherwani Stitching',       'garment' => 'Sherwani',     'fabric' => 'Raw Silk',      'total' => 45000, 'advance' => 20000, 'status' => 'Pending',     'priority' => 'Express', 'due' => 7],
-            ['customer' => 'Ananya Iyer',  'service' => 'Saree Blouse Stitching',   'garment' => 'Saree Blouse', 'fabric' => 'Silk',          'total' => 8000,  'advance' => 8000,  'status' => 'Delivered',   'priority' => 'Normal',  'due' => -1],
-            ['customer' => 'Zainab Abbas', 'service' => 'Shalwar Kameez Stitching', 'garment' => 'Shalwar Kameez', 'fabric' => 'Lawn',        'total' => 2500,  'advance' => 1000,  'status' => 'Ready',       'priority' => 'Normal',  'due' => 0],
-            ['customer' => 'Rohan Gupta',  'service' => 'Premium Suit Stitching',   'garment' => '2-Piece Suit', 'fabric' => 'Merino Wool',   'total' => 22000, 'advance' => 10000, 'status' => 'Ready for Verification', 'priority' => 'High', 'due' => 4],
-            ['customer' => 'Sara Ali',     'service' => 'Saree Blouse Stitching',   'garment' => 'Designer Blouse', 'fabric' => 'Georgette',  'total' => 6500,  'advance' => 2000,  'status' => 'In Progress', 'priority' => 'Normal',  'due' => 5],
+        // Older orders used login accounts as tailors. Keep every order and
+        // attach any unassigned row to the preserved tailor directory.
+        foreach (DB::table('orders')->whereNull('staff_id')->orderBy('id')->pluck('id') as $i => $orderId) {
+            DB::table('orders')->where('id',$orderId)->update(['staff_id'=>$tailors[$i % $tailors->count()]->id]);
+        }
+
+        $services = [
+            ['Shalwar Kameez Stitching','Men',2500],['Ladies Suit Stitching','Ladies',3200],
+            ['Waistcoat Stitching','Men',4500],['Kurta Pajama Stitching','Men',2800],
+            ['Three Piece Suit Stitching','Formal',15000],['Sherwani Stitching','Formal',18000],
+            ['Trouser Stitching','Men',1800],['School Uniform Stitching','Uniform',2200],
+            ['Bridal Dress Stitching','Ladies',22000],['Alteration and Fitting','Alteration',900],
         ];
+        foreach ($services as $i => [$name,$category,$price]) {
+            DB::table('product_services')->updateOrInsert(['sku'=>'TAIL-SVC-'.str_pad((string)($i+1),2,'0',STR_PAD_LEFT)], [
+                'name'=>$name,'category'=>$category,'type'=>'Service','price'=>$price,'cost_price'=>null,
+                'stock_quantity'=>null,'low_stock_threshold'=>0,'unit'=>'piece','duration_days'=>5+$i,
+                'status'=>'Active','description'=>'Professional '.$name,'created_at'=>now(),'updated_at'=>now(),
+            ]);
+        }
+        $serviceIds = DB::table('product_services')->where('sku','like','TAIL-SVC-%')->orderBy('sku')->pluck('id');
 
-        $orders = [];
+        $customers = [
+            ['Faisal Khan','03001234567','Gulshan-e-Iqbal'],['Saad Ahmed','03012345678','North Nazimabad'],
+            ['Hassan Raza','03023456789','Clifton'],['Bilal Siddiqui','03034567890','PECHS'],
+            ['Ayesha Malik','03045678901','DHA'],['Mariam Shah','03056789012','Bahadurabad'],
+            ['Omar Farooq','03067890123','Federal B Area'],['Zainab Ali','03078901234','Tariq Road'],
+            ['Hamza Iqbal','03089012345','Saddar'],['Sana Javed','03090123456','Korangi'],
+        ];
+        $customerIds=[];
+        foreach ($customers as $i => [$name,$phone,$city]) {
+            DB::table('customers')->updateOrInsert(['phone'=>$phone], [
+                'code'=>'CUS-'.str_pad((string)($i+1),4,'0',STR_PAD_LEFT),'name'=>$name,'city'=>$city,
+                'address'=>$city.', Karachi','type'=>$i%4===0?'VIP':'Regular','behavior'=>'Reliable',
+                'loyalty_score'=>4.5,'last_visit_at'=>now()->subDays($i),'is_active'=>1,
+                'created_at'=>now()->subMonths(6),'updated_at'=>now(),
+            ]);
+            $customerIds[] = DB::table('customers')->where('phone',$phone)->value('id');
+        }
 
-        foreach ($definitions as $index => $definition) {
-            $customer = $customers[$definition['customer']];
-            $service  = $services[$definition['service']] ?? null;
-            $tailor   = $users['tailors'][$index % count($users['tailors'])];
-
-            $order = Order::updateOrCreate(
-                ['order_number' => 'ORD-' . (1001 + $index)],
-                [
-                    'customer_id'        => $customer->id,
-                    'product_service_id' => $service?->id,
-                    'tailor_id'          => $tailor->id,
-                    'created_by'         => $users['admin']->id,
-                    'invoice_number'     => 'INV-' . (1001 + $index),
-                    'garment'            => $definition['garment'],
-                    'fabric'             => $definition['fabric'],
-                    'items'              => [[
-                        'name'   => $definition['garment'],
-                        'fabric' => $definition['fabric'],
-                        'qty'    => 1,
-                        'price'  => $definition['total'],
-                    ]],
-                    'total'         => $definition['total'],
-                    'advance'       => $definition['advance'],
-                    'balance'       => max($definition['total'] - $definition['advance'], 0),
-                    'status'        => $definition['status'],
-                    'priority'      => $definition['priority'],
-                    'progress'      => Order::progressFor($definition['status']),
-                    'delivery_date' => Carbon::now()->addDays($definition['due'])->setTime(16, 0),
-                    'time_slot'     => '3:00 PM - 4:00 PM',
-                    'delivered_at'  => $definition['status'] === 'Delivered' ? Carbon::now()->subDay() : null,
-                    'completed_at'  => in_array($definition['status'], ['Ready', 'Delivered'], true) ? Carbon::now()->subDays(2) : null,
-                    'created_at'    => Carbon::now()->subDays(10 - $index),
-                ]
-            );
-
-            if ($definition['advance'] > 0) {
-                Payment::updateOrCreate(
-                    ['order_id' => $order->id, 'type' => 'Advance'],
-                    [
-                        'invoice_id'     => $order->invoice_number,
-                        'customer_id'    => $customer->id,
-                        'amount'         => $definition['advance'],
-                        'status'         => 'Completed',
-                        'payment_method' => ['Cash', 'Card', 'UPI'][$index % 3],
-                        'date'           => $order->created_at,
-                        'recorded_by'    => $users['admin']->id,
-                    ]
-                );
+        $statuses=['Delivered','Delivered','Ready','Ready for Verification','In Progress','Delivered','Ready','Ready','Delivered','Ready'];
+        foreach (range(0,9) as $i) {
+            $number='SEED-ORD-'.str_pad((string)($i+1),3,'0',STR_PAD_LEFT);
+            $tailor=$tailors[$i % $tailors->count()];
+            $customerId=$customerIds[$i];
+            $total=(float) $services[$i][2] * (($i%3)+1);
+            $advance=round($total * ([0.5,0.75,1][$i%3]),2);
+            $created=now()->subDays(35-($i*3));
+            $completed=$i<5 ? now()->subDays(4-$i) : now()->subDays(22-($i*2));
+            DB::table('orders')->updateOrInsert(['order_number'=>$number], [
+                'customer_id'=>$customerId,'product_service_id'=>$serviceIds[$i],'tailor_id'=>null,'staff_id'=>$tailor->id,
+                'created_by'=>$ownerId,'invoice_number'=>'SEED-INV-'.str_pad((string)($i+1),3,'0',STR_PAD_LEFT),
+                'garment'=>$services[$i][0],'fabric'=>['Wash & Wear','Cotton','Lawn','Khaddar','Boski'][$i%5],
+                'items'=>json_encode([['name'=>$services[$i][0],'qty'=>($i%3)+1,'price'=>$services[$i][2]]]),
+                'total'=>$total,'advance'=>$advance,'balance'=>$total-$advance,'status'=>$statuses[$i],
+                'priority'=>$i%4===0?'High':'Normal','progress'=>in_array($statuses[$i],['Delivered','Ready'])?100:65,
+                'delivery_date'=>$created->copy()->addDays(10),'time_slot'=>'4:00 PM - 5:00 PM',
+                'completed_at'=>$completed,'delivered_at'=>$statuses[$i]==='Delivered'?$completed->copy()->addDay():null,
+                'created_at'=>$created,'updated_at'=>now(),
+            ]);
+            $order=DB::table('orders')->where('order_number',$number)->first();
+            DB::table('measurements')->updateOrInsert(['order_id'=>$order->id,'piece_no'=>1], [
+                'customer_id'=>$customerId,'created_by'=>$ownerId,'garment_type'=>$services[$i][0],
+                'tailor'=>$tailor->name,'unit'=>'in','length'=>40+$i%4,'shoulder_width'=>17+$i%3,
+                'sleeve_length'=>23+$i%3,'chest'=>38+$i,'waist'=>34+$i,'hip'=>39+$i,'collar'=>15+$i/4,
+                'details'=>json_encode(['fit'=>'Regular','cuff'=>'Button']), 'created_at'=>$created,'updated_at'=>now(),
+            ]);
+            $measurementId=DB::table('measurements')->where('order_id',$order->id)->value('id');
+            DB::table('orders')->where('id',$order->id)->update(['measurement_id'=>$measurementId]);
+            if ($statuses[$i] !== 'In Progress') {
+                DB::table('staff_work_logs')->updateOrInsert(['order_id'=>$order->id], [
+                    'staff_id'=>$tailor->id,'garment'=>$services[$i][0],'quantity'=>($i%3)+1,
+                    'rate'=>$tailor->per_suit_rate,'amount'=>$tailor->per_suit_rate*(($i%3)+1),
+                    'completed_on'=>$completed->toDateString(),'notes'=>'Completed against '.$number,
+                    'created_at'=>$completed,'updated_at'=>now(),
+                ]);
+            } else {
+                DB::table('staff_work_logs')->where('order_id',$order->id)->delete();
+                DB::table('orders')->where('id',$order->id)->update(['completed_at'=>null]);
             }
-
-            OrderStatusHistory::firstOrCreate(
-                ['order_id' => $order->id, 'to_status' => $definition['status']],
-                [
-                    'from_status' => null,
-                    'label'       => 'Order created',
-                    'actor_name'  => $users['admin']->name,
-                    'user_id'     => $users['admin']->id,
-                    'created_at'  => $order->created_at,
-                ]
-            );
-
-            Delivery::updateOrCreate(
-                ['order_id' => $order->id],
-                [
-                    'status' => match ($definition['status']) {
-                        'Ready'                  => 'Ready',
-                        'Delivered', 'Completed' => 'Delivered',
-                        default                  => 'Scheduled',
-                    },
-                    'address'        => $customer->city,
-                    'delivery_date'  => $order->delivery_date,
-                    'delivered_at'   => $definition['status'] === 'Delivered' ? Carbon::now()->subDay() : null,
-                    'recipient_name' => $customer->name,
-                    'courier_name'   => $index % 2 === 0 ? 'In-store Pickup' : null,
-                ]
-            );
-
-            $orders[] = $order;
+            DB::table('payments')->updateOrInsert(['operation_key'=>'seed-tail-payment-'.($i+1)], [
+                'invoice_id'=>$order->invoice_number,'order_id'=>$order->id,'customer_id'=>$customerId,
+                'amount'=>$advance,'type'=>'Advance','status'=>'Completed','payment_method'=>['Cash','Bank Transfer','Card'][$i%3],
+                'recorded_by'=>$ownerId,'date'=>$created,'created_at'=>$created,'updated_at'=>now(),
+            ]);
+            DB::table('deliveries')->updateOrInsert(['order_id'=>$order->id], [
+                'status'=>$statuses[$i]==='Delivered'?'Delivered':($statuses[$i]==='Ready'?'Ready':'Scheduled'),
+                'recipient_name'=>$customers[$i][0],'address'=>$customers[$i][2].', Karachi',
+                'delivery_date'=>$order->delivery_date,'delivered_at'=>$order->delivered_at,
+                'notes'=>'Collection from the shop','created_at'=>$created,'updated_at'=>now(),
+            ]);
         }
 
-        return $orders;
+        // Backfill a stitching entry for every preserved order whose garment
+        // was already finished, without altering existing work-log history.
+        $finished=DB::table('orders')->whereIn('status',['Ready','Ready for Verification','Delivered','Completed'])
+            ->whereNotNull('staff_id')->orderBy('id')->get();
+        foreach($finished as $order) {
+            if(DB::table('staff_work_logs')->where('order_id',$order->id)->exists()) continue;
+            $tailor=$tailors->firstWhere('id',$order->staff_id);
+            if(!$tailor) continue;
+            $done=Carbon::parse($order->completed_at ?? $order->updated_at ?? $order->created_at)->toDateString();
+            DB::table('staff_work_logs')->insert(['staff_id'=>$tailor->id,'order_id'=>$order->id,
+                'garment'=>$order->garment ?: 'Tailored garment','quantity'=>1,'rate'=>$tailor->per_suit_rate,
+                'amount'=>$tailor->per_suit_rate,'completed_on'=>$done,'notes'=>'Preserved completed-order history',
+                'created_at'=>now(),'updated_at'=>now()]);
+        }
+
+        $tailorExpenses=[
+            ['Shop Rent',65000,'Rent'],['Electricity Bill',18500,'Utilities'],['Tailor Wages',92000,'Salary'],
+            ['Sewing Machine Service',8500,'Maintenance'],['Threads and Buttons',12000,'Raw Material'],
+            ['Pressing Supplies',4500,'Supplies'],['Packaging Bags',6200,'Supplies'],['Internet Bill',4500,'Utilities'],
+            ['Shop Cleaning',7000,'Maintenance'],['Market Cloth Transport',5500,'Transport'],
+        ];
+        foreach($tailorExpenses as $i=>[$description,$amount,$category]) DB::table('expenses')->updateOrInsert(
+            ['reference'=>'SEED-EXP-'.($i+1)],['description'=>$description,'amount'=>$amount,'category'=>$category,
+            'payment_method'=>$i%3===0?'Bank':'Cash','created_by'=>$ownerId,'date'=>now()->subDays($i*3),
+            'created_at'=>now(),'updated_at'=>now()]);
     }
 
-    private function seedExpenses(User $admin): void
+    private function seedClothStore(int $ownerId, string $ownerName): void
     {
-        $definitions = [
-            ['description' => 'Fabric Purchase (Italian Wool)', 'amount' => 45000, 'category' => 'Raw Material', 'payment_method' => 'Bank', 'vendor' => 'Milano Textiles', 'days' => 2],
-            ['description' => 'Electricity Bill',               'amount' => 12500, 'category' => 'Utilities',    'payment_method' => 'Bank', 'days' => 5],
-            ['description' => 'Staff Salaries',                 'amount' => 85000, 'category' => 'Salary',       'payment_method' => 'Bank', 'days' => 30],
-            ['description' => 'Sewing Machine Service',         'amount' => 6500,  'category' => 'Maintenance',  'payment_method' => 'Cash', 'vendor' => 'Singh Repairs', 'days' => 9],
-            ['description' => 'Shop Rent',                      'amount' => 55000, 'category' => 'Rent',         'payment_method' => 'Bank', 'days' => 12],
+        $tables=['cs_adjustment_lines','cs_financial_adjustments','cs_payment_allocations','cs_inventory_allocations',
+            'cs_return_items','cs_returns','cs_customer_ledgers','cs_customer_payments','cs_loyalty_transactions',
+            'cs_order_items','cs_orders','cs_customers','cs_stock_transactions','cs_product_locations','cs_products','cs_categories',
+            'cs_expenses','cs_discounts','cs_activity_logs'];
+        Schema::disableForeignKeyConstraints();
+        foreach($tables as $table) if(Schema::hasTable($table)) DB::table($table)->truncate();
+        if(Schema::hasTable('cs_locations')) DB::table('cs_locations')->truncate();
+        Schema::enableForeignKeyConstraints();
+
+        $locationId=DB::table('cs_locations')->insertGetId(['name'=>'Main Store','type'=>'Store',
+            'address'=>'Main shop','is_active'=>1,'created_at'=>now(),'updated_at'=>now()]);
+        $categories=[
+            ['Wash & Wear','fa-shirt','#EEF2FF','#4338CA'],['Cotton','fa-seedling','#ECFDF5','#047857'],
+            ['Lawn','fa-leaf','#FDF2F8','#BE185D'],['Khaddar','fa-layer-group','#FFF7ED','#C2410C'],
+            ['Boski','fa-gem','#FEFCE8','#A16207'],
         ];
-
-        foreach ($definitions as $definition) {
-            $days = $definition['days'];
-            unset($definition['days']);
-
-            Expense::updateOrCreate(
-                ['description' => $definition['description']],
-                array_merge($definition, [
-                    'date'       => Carbon::now()->subDays($days),
-                    'created_by' => $admin->id,
-                ])
-            );
-        }
-    }
-
-    /**
-     * @param array<int, Order> $orders
-     */
-    private function seedNotifications(array $orders): void
-    {
-        if (empty($orders)) {
-            return;
-        }
-
-        $definitions = [
-            ['title' => 'New Order Created',      'category' => 'orders',   'color' => 'primary', 'icon' => 'fa-solid fa-box',                     'message' => 'Rahul Mehta placed an order for a Sherwani worth ₹45,000', 'read' => false, 'hours' => 1],
-            ['title' => 'Payment Received',       'category' => 'payments', 'color' => 'success', 'icon' => 'fa-solid fa-indian-rupee-sign',       'message' => 'Ananya Iyer paid ₹8,000 via UPI for INV-1003',            'read' => false, 'hours' => 4],
-            ['title' => 'Order Ready for Pickup', 'category' => 'orders',   'color' => 'info',    'icon' => 'fa-solid fa-arrows-rotate',           'message' => 'ORD-1004 for Zainab Abbas is ready for collection',        'read' => false, 'hours' => 9],
-            ['title' => 'Low Stock Alert',        'category' => 'stock',    'color' => 'warning', 'icon' => 'fa-solid fa-boxes-stacked',           'message' => 'Signature Buttons Set is running low — only 8 left',       'read' => true,  'hours' => 26],
-            ['title' => 'WhatsApp Notification Sent', 'category' => 'whatsapp', 'color' => 'success', 'icon' => 'fa-brands fa-whatsapp',           'message' => 'Pickup message sent to Zainab Abbas for ORD-1004',         'read' => true,  'hours' => 30],
+        $categoryIds=[];
+        foreach($categories as [$name,$icon,$bg,$text]) $categoryIds[]=DB::table('cs_categories')->insertGetId([
+            'name'=>$name,'icon'=>$icon,'color_bg'=>$bg,'color_text'=>$text,'description'=>$name.' fabrics',
+            'created_at'=>now(),'updated_at'=>now()]);
+        $products=[
+            ['Royal Blue Wash & Wear',1450,980,42,'metre'],['Charcoal Wash & Wear',1550,1050,36,'metre'],
+            ['Premium White Cotton',950,620,55,'metre'],['Sky Blue Cotton',1050,690,48,'metre'],
+            ['Summer Floral Lawn',1250,800,30,'metre'],['Embroidered Lawn',2100,1450,24,'metre'],
+            ['Brown Winter Khaddar',1750,1180,32,'metre'],['Olive Khaddar',1650,1120,28,'metre'],
+            ['Cream Boski',2600,1900,22,'metre'],['Golden Boski',2850,2050,18,'metre'],
         ];
-
-        foreach ($definitions as $index => $definition) {
-            Notification::updateOrCreate(
-                ['title' => $definition['title'], 'message' => $definition['message']],
-                [
-                    'type'        => ucfirst($definition['category']),
-                    'category'    => $definition['category'],
-                    'icon'        => $definition['icon'],
-                    'color'       => $definition['color'],
-                    'is_read'     => $definition['read'],
-                    'read_at'     => $definition['read'] ? now() : null,
-                    'order_id'    => $orders[$index % count($orders)]->id,
-                    'customer_id' => $orders[$index % count($orders)]->customer_id,
-                    'created_at'  => Carbon::now()->subHours($definition['hours']),
-                ]
-            );
+        $productIds=[];
+        foreach($products as $i=>[$name,$price,$cost,$opening,$unit]) {
+            $productIds[]=DB::table('cs_products')->insertGetId(['cs_category_id'=>$categoryIds[intdiv($i,2)],
+                'name'=>$name,'sku'=>'FAB-'.str_pad((string)($i+1),3,'0',STR_PAD_LEFT),'barcode'=>'220000000'.str_pad((string)($i+1),3,'0',STR_PAD_LEFT),
+                'price'=>$price,'cost_price'=>$cost,'stock_quantity'=>$opening,'reserved_quantity'=>0,'incoming_quantity'=>0,
+                'low_stock_threshold'=>10,'suggested_reorder_qty'=>30,'ignore_stock_alerts'=>0,'unit'=>$unit,
+                'status'=>'Active','description'=>'Quality fabric purchased directly from the market',
+                'created_at'=>now()->subMonths(2),'updated_at'=>now()]);
+            DB::table('cs_product_locations')->insert(['cs_product_id'=>$productIds[$i],'cs_location_id'=>$locationId,
+                'quantity'=>$opening,'created_at'=>now(),'updated_at'=>now()]);
+            DB::table('cs_stock_transactions')->insert(['cs_product_id'=>$productIds[$i],'type'=>'in','quantity'=>$opening,
+                'reason'=>'Market stock purchase','previous_qty'=>0,'new_qty'=>$opening,'reference'=>'MARKET-'.str_pad((string)($i+1),3,'0',STR_PAD_LEFT),
+                'notes'=>'Opening stock bought directly by owner','user_id'=>$ownerId,'to_location_id'=>$locationId,
+                'created_at'=>now()->subMonths(2),'updated_at'=>now()]);
         }
-    }
-
-    /**
-     * @param array<int, Order> $orders
-     */
-    private function seedActivity(array $orders, User $admin): void
-    {
-        if (empty($orders)) {
-            return;
-        }
-
-        $definitions = [
-            ['action' => 'Created Order',        'category' => 'orders',    'description' => 'ORD-1002 created for Rahul Mehta (₹45,000)', 'minutes' => 45],
-            ['action' => 'Payment recorded',     'category' => 'payments',  'description' => 'Ananya Iyer paid ₹8,000 via UPI',            'minutes' => 190],
-            ['action' => 'Order status changed', 'category' => 'orders',    'description' => 'ORD-1004 moved from In Progress to Ready',   'minutes' => 320],
-            ['action' => 'Created Customer',     'category' => 'customers', 'description' => 'Sara Ali added to the customer directory',   'minutes' => 640],
-            ['action' => 'Updated ProductService', 'category' => 'inventory', 'description' => 'Italian Wool Navy stock adjusted to 24 m', 'minutes' => 900],
+        $clothCustomers=[
+            ['Ali Raza','03111234567','Karachi'],['Noman Sheikh','03122345678','Karachi'],['Hina Ahmed','03133456789','Karachi'],
+            ['Sohail Khan','03144567890','Karachi'],['Rabia Noor','03155678901','Karachi'],['Danish Iqbal','03166789012','Karachi'],
+            ['Mehwish Tariq','03177890123','Karachi'],['Arsalan Baig','03188901234','Karachi'],['Saba Qureshi','03199012345','Karachi'],
+            ['Farhan Siddiqui','03210123456','Karachi'],
         ];
+        $clothCustomerIds=[];
+        foreach($clothCustomers as $i=>[$name,$phone,$city]) $clothCustomerIds[]=DB::table('cs_customers')->insertGetId([
+            'name'=>$name,'phone'=>$phone,'city'=>$city,'notes'=>'Regular shop customer','due_balance'=>0,'total_purchases'=>0,
+            'last_purchase_date'=>now()->subDays($i*2),'customer_level'=>$i<3?'Gold':'Regular','loyalty_points'=>20+$i*5,
+            'created_at'=>now()->subMonths(5),'updated_at'=>now()]);
 
-        foreach ($definitions as $definition) {
-            $minutes = $definition['minutes'];
-            unset($definition['minutes']);
-
-            ActivityLog::updateOrCreate(
-                ['action' => $definition['action'], 'description' => $definition['description']],
-                array_merge($definition, [
-                    'user_id'    => $admin->id,
-                    'actor_name' => $admin->name,
-                    'event'      => 'seeded',
-                    'created_at' => Carbon::now()->subMinutes($minutes),
-                ])
-            );
+        foreach(range(0,9) as $i) {
+            $qty=1.5+($i%3)*0.5; $product=$products[$i]; $subtotal=$qty*$product[1]; $paid=$i%4===0?$subtotal-500:$subtotal;
+            $orderId=DB::table('cs_orders')->insertGetId(['invoice_number'=>'CS-INV-'.str_pad((string)($i+1),4,'0',STR_PAD_LEFT),
+                'cs_customer_id'=>$clothCustomerIds[$i],'subtotal'=>$subtotal,'discount'=>0,'total_amount'=>$subtotal,
+                'gross_profit'=>($product[1]-$product[2])*$qty,'total_meters_sold'=>$qty,'paid_amount'=>$paid,
+                'payment_method'=>['Cash','Bank Transfer','Card'][$i%3],'status'=>'Completed','remaining_amount'=>$subtotal-$paid,
+                'refund_due'=>0,'payment_status'=>$paid==$subtotal?'Paid':'Partial',
+                'created_at'=>now()->subDays(28-$i*2),'updated_at'=>now()]);
+            $itemId=DB::table('cs_order_items')->insertGetId(['cs_order_id'=>$orderId,'cs_product_id'=>$productIds[$i],
+                'quantity'=>$qty,'unit_price'=>$product[1],'unit_cost'=>$product[2],'total'=>$subtotal,
+                'created_at'=>now(),'updated_at'=>now()]);
+            DB::table('cs_inventory_allocations')->insert(['order_item_id'=>$itemId,'location_id'=>$locationId,
+                'quantity'=>$qty,'restored_quantity'=>0,'created_at'=>now(),'updated_at'=>now()]);
+            $remaining=$product[3]-$qty;
+            DB::table('cs_product_locations')->where('cs_product_id',$productIds[$i])->update(['quantity'=>$remaining]);
+            DB::table('cs_products')->where('id',$productIds[$i])->update(['stock_quantity'=>$remaining]);
+            DB::table('cs_stock_transactions')->insert(['cs_product_id'=>$productIds[$i],'type'=>'out','quantity'=>$qty,
+                'reason'=>'Sale','previous_qty'=>$product[3],'new_qty'=>$remaining,'reference'=>'CS-INV-'.str_pad((string)($i+1),4,'0',STR_PAD_LEFT),
+                'user_id'=>$ownerId,'from_location_id'=>$locationId,'created_at'=>now()->subDays(28-$i*2),'updated_at'=>now()]);
+            $paymentId=DB::table('cs_customer_payments')->insertGetId(['cs_customer_id'=>$clothCustomerIds[$i],
+                'cs_order_id'=>$orderId,'amount'=>$paid,'payment_type'=>'Sale Payment','payment_method'=>['Cash','Bank Transfer','Card'][$i%3],
+                'reference'=>'CS-PAY-'.str_pad((string)($i+1),4,'0',STR_PAD_LEFT),'payment_date'=>now()->subDays(28-$i*2)->toDateString(),
+                'received_by'=>$ownerName,'status'=>'Completed','operation_key'=>'seed-cloth-payment-'.($i+1),
+                'created_at'=>now(),'updated_at'=>now()]);
+            DB::table('cs_payment_allocations')->insert(['payment_id'=>$paymentId,'order_id'=>$orderId,'amount'=>$paid,
+                'created_at'=>now(),'updated_at'=>now()]);
+            DB::table('cs_customer_ledgers')->insert(['cs_customer_id'=>$clothCustomerIds[$i],'type'=>'Sale',
+                'reference'=>'CS-INV-'.str_pad((string)($i+1),4,'0',STR_PAD_LEFT),'debit'=>$subtotal,'credit'=>$paid,
+                'balance'=>$subtotal-$paid,'description'=>'Fabric sale','date'=>now()->subDays(28-$i*2)->toDateString(),
+                'created_at'=>now(),'updated_at'=>now()]);
+            DB::table('cs_customers')->where('id',$clothCustomerIds[$i])->update([
+                'due_balance'=>$subtotal-$paid,'total_purchases'=>$subtotal]);
         }
+        $clothExpenses=[
+            ['Market Transport',3500,'Transport'],['Shopping Bags',4200,'Packaging'],['Counter Rolls',1800,'Supplies'],
+            ['Card Machine Charges',2600,'Bank Charges'],['Cloth Rack Repair',6500,'Maintenance'],['Shop Electricity',12500,'Utilities'],
+            ['Store Cleaning',5000,'Maintenance'],['Fabric Samples',8000,'Marketing'],['Local Delivery',3200,'Transport'],
+            ['Internet Service',4500,'Utilities'],
+        ];
+        foreach($clothExpenses as $i=>[$description,$amount,$category]) DB::table('cs_expenses')->insert([
+            'category'=>$category,'description'=>$description,'amount'=>$amount,'payment_method'=>$i%3===0?'Bank Transfer':'Cash',
+            'paid_by'=>$ownerName,'reference'=>'CS-EXP-'.str_pad((string)($i+1),3,'0',STR_PAD_LEFT),
+            'status'=>'Approved','created_by'=>$ownerName,'expense_date'=>now()->subDays($i*3)->toDateString(),
+            'created_at'=>now(),'updated_at'=>now()]);
+        foreach(range(1,10) as $i) DB::table('cs_discounts')->insert([
+            'name'=>$i<=5?'Seasonal Offer '.$i:'Loyal Customer '.$i,'code'=>'SAVE'.($i*5),
+            'type'=>$i%2?'Percentage':'Fixed','value'=>$i%2?5+$i:200+$i*25,
+            'start_date'=>now()->subDays(5),'end_date'=>now()->addMonths(2),'min_purchase'=>1000,
+            'max_discount'=>1000,'usage_limit'=>100,'customer_limit'=>2,'usage_count'=>$i-1,
+            'is_active'=>$i<=6,'created_at'=>now(),'updated_at'=>now()]);
     }
 }

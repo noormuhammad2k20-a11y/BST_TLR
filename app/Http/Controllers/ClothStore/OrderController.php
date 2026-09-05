@@ -13,9 +13,7 @@ use Illuminate\Validation\Rule;
 class OrderController extends Controller
 {
     /** Statuses an order may be moved to, whitelisted for validation. */
-    private const STATUSES = [
-        'Pending', 'Processing', 'Ready', 'Completed', 'Cancelled', 'Returned',
-    ];
+
 
     public function index(Request $request) 
     {
@@ -55,13 +53,13 @@ class OrderController extends Controller
 
         // Aggregated over the whole table rather than the current page, so the
         // headline numbers don't shrink when a filter is applied.
-        $sold = Order::where('status', '!=', 'Cancelled');
+        $sold = \App\Services\ClothStore\SalesAnalytics::orders();
 
         $stats = [
             'today_sales'  => (float) (clone $sold)->whereDate('created_at', today())->sum('total_amount'),
-            'today_count'  => (clone $sold)->whereDate('created_at', today())->count(),
+            'today_count'  => (clone $sold)->whereDate('created_at', today())->sum('sale_count'),
             'today_meters' => (float) (clone $sold)->whereDate('created_at', today())->sum('total_meters_sold'),
-            'outstanding'  => (float) (clone $sold)->selectRaw('COALESCE(SUM(total_amount - paid_amount), 0) AS d')->value('d'),
+            'outstanding'  => (float) Order::withTrashed()->sum('remaining_amount'),
             'total_orders' => Order::count(),
         ];
 
@@ -85,95 +83,17 @@ class OrderController extends Controller
      */
     public function updateStatus(Request $request, Order $order)
     {
-        $validated = $request->validate([
-            'status' => ['required', 'string', Rule::in(self::STATUSES)],
-        ]);
-
-        $oldStatus = $order->status;
-        $newStatus = $validated['status'];
-
-        if ($oldStatus === $newStatus) {
-            return response()->json([
-                'success' => true,
-                'status'  => $newStatus,
-                'message' => "Order {$order->invoice_number} is already {$newStatus}.",
-            ]);
-        }
-
-        $isCancelling  = $newStatus === 'Cancelled' && $oldStatus !== 'Cancelled';
-        $isRestoring   = $oldStatus === 'Cancelled' && $newStatus !== 'Cancelled';
-
-        DB::beginTransaction();
-        try {
-            $order->load('items');
-
-            if ($isCancelling || $isRestoring) {
-                foreach ($order->items as $item) {
-                    $product = Product::whereKey($item->cs_product_id)->lockForUpdate()->first();
-                    if (!$product) {
-                        continue;
-                    }
-
-                    $qty = round((float) $item->quantity, 2);
-                    $previousQty = round((float) $product->stock_quantity, 2);
-
-                    if ($isCancelling) {
-                        $newQty = round($previousQty + $qty, 2);
-                        $type = 'in';
-                        $reason = 'Sale Cancelled';
-                    } else {
-                        // Re-activating a cancelled order must not invent stock
-                        // that has since been sold to someone else.
-                        if ($previousQty < $qty) {
-                            throw new \Exception(
-                                "Cannot reinstate this order — only {$previousQty} {$product->unit} of {$product->name} remains, but the order needs {$qty}."
-                            );
-                        }
-
-                        $newQty = round($previousQty - $qty, 2);
-                        $type = 'out';
-                        $reason = 'Sale Reinstated';
-                    }
-
-                    $product->stock_quantity = $newQty;
-                    $product->save();
-
-                    StockTransaction::create([
-                        'cs_product_id' => $product->id,
-                        'user_id'       => auth()->id(),
-                        'type'          => $type,
-                        'quantity'      => $qty,
-                        'reason'        => $reason,
-                        'previous_qty'  => $previousQty,
-                        'new_qty'       => $newQty,
-                        'reference'     => $order->invoice_number,
-                        'notes'         => "Order status {$oldStatus} → {$newStatus}",
-                    ]);
-                }
-            }
-
-            $order->update(['status' => $newStatus]);
-
-            DB::commit();
-
-            return response()->json([
-                'success' => true,
-                'status'  => $newStatus,
-                'message' => "Order {$order->invoice_number} updated to {$newStatus}.",
-            ]);
-        } catch (\Exception $e) {
-            DB::rollBack();
-
-            return response()->json([
-                'success' => false,
-                'message' => $e->getMessage(),
-            ], 422);
-        }
+        $data=$request->validate(['status'=>['required', Rule::in(\App\Enums\ClothStoreOrderStatus::values())]]);
+        app(\App\Services\ClothStore\OrderWorkflow::class)->transition($order->id,$data['status']);
+        return response()->json(['success'=>true,'status'=>$data['status'],'message'=>'Order updated.']);
     }
 
     public function recordPayment(Request $request, Order $order)
     {
-        // Handled via Customer Ledger mostly, but stubbed if needed
-        return back()->with('info', 'Use the Customer Ledger to record post-sale payments.');
+        $data=$request->validate(['amount'=>'required|numeric|min:0.01|decimal:0,2',
+            'payment_method'=>['required',Rule::in(\App\Services\ClothStore\FinanceService::METHODS)],
+            'reference'=>'nullable|string|max:100','notes'=>'nullable|string|max:1000','operation_key'=>'nullable|string|max:100']);
+        app(\App\Services\ClothStore\FinanceService::class)->collect($order->cs_customer_id,$data,$order->id);
+        return response()->json(['success'=>true,'order'=>$order->fresh(),'message'=>'Payment recorded.']);
     }
 }

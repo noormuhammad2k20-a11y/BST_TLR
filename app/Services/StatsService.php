@@ -86,8 +86,8 @@ class StatsService
             $activeThisWeek   = Order::open()->where('created_at', '>=', $weekStart)->count();
             $activePrevWeek   = Order::open()->whereBetween('created_at', [$prevWeekStart, $weekStart])->count();
 
-            $revenueMonth     = (float) Payment::where('date', '>=', $monthStart)->sum('amount');
-            $revenuePrevMonth = (float) Payment::whereBetween('date', [$prevMonth, $monthStart])->sum('amount');
+            $revenueMonth     = (float) Payment::where('status','Completed')->whereNull('reverses_payment_id')->where('date', '>=', $monthStart)->sum('amount');
+            $revenuePrevMonth = (float) Payment::where('status','Completed')->whereNull('reverses_payment_id')->whereBetween('date', [$prevMonth, $monthStart])->sum('amount');
 
             $pendingDues     = (float) Order::open()->sum('balance');
             $pendingLastWeek = (float) Order::open()->where('created_at', '<', $weekStart)->sum('balance');
@@ -123,7 +123,7 @@ class StatsService
         return Cache::remember("stats.revenue_trend.{$days}", self::TTL, function () use ($days) {
             $start = now()->subDays($days - 1)->startOfDay();
 
-            $rows = Payment::query()
+            $rows = Payment::query()->where('status','Completed')->whereNull('reverses_payment_id')
                 ->selectRaw('DATE(`date`) as d, SUM(amount) as total')
                 ->where('date', '>=', $start)
                 ->groupBy('d')
@@ -180,7 +180,7 @@ class StatsService
     public static function finance(): array
     {
         return Cache::remember('stats.finance', self::TTL, function () {
-            $collected = (float) Payment::sum('amount');
+            $collected = (float) Payment::where('status','Completed')->whereNull('reverses_payment_id')->sum('amount');
             $invoiced  = (float) Order::sum('total');
 
             $totalInvoices = Order::count();
@@ -218,7 +218,7 @@ class StatsService
                 $end   = $month->copy()->endOfMonth();
 
                 $labels[] = $month->format('M');
-                $income[] = round((float) Payment::whereBetween('date', [$start, $end])->sum('amount'), 2);
+                $income[] = round((float) Payment::where('status','Completed')->whereNull('reverses_payment_id')->whereBetween('date', [$start, $end])->sum('amount'), 2);
                 $spend[]  = round((float) Expense::whereBetween('date', [$start, $end])->sum('amount'), 2);
             }
 
@@ -242,8 +242,8 @@ class StatsService
             [$start, $end]         = self::resolveRange($range, $from, $to);
             [$prevStart, $prevEnd] = self::previousRange($start, $end);
 
-            $revenue     = (float) Payment::whereBetween('date', [$start, $end])->sum('amount');
-            $prevRevenue = (float) Payment::whereBetween('date', [$prevStart, $prevEnd])->sum('amount');
+            $revenue     = (float) Payment::where('status','Completed')->whereNull('reverses_payment_id')->whereBetween('date', [$start, $end])->sum('amount');
+            $prevRevenue = (float) Payment::where('status','Completed')->whereNull('reverses_payment_id')->whereBetween('date', [$prevStart, $prevEnd])->sum('amount');
 
             $completed = Order::whereIn('status', ['Delivered', 'Completed'])
                 ->whereBetween('updated_at', [$start, $end])->count();
@@ -325,7 +325,7 @@ class StatsService
             $step   = null;
         }
 
-        $rows = Payment::query()
+        $rows = Payment::query()->where('status','Completed')->whereNull('reverses_payment_id')
             ->selectRaw("DATE_FORMAT(`date`, '{$format}') as bucket, SUM(amount) as total")
             ->whereBetween('date', [$start, $end])
             ->groupBy('bucket')
@@ -449,11 +449,11 @@ class StatsService
     public static function tailorPerformance(Carbon $start, Carbon $end, int $limit = 4): array
     {
         $rows = Order::query()
-            ->join('users', 'orders.tailor_id', '=', 'users.id')
+            ->join('staff', 'orders.staff_id', '=', 'staff.id')
             ->whereBetween('orders.created_at', [$start, $end])
-            ->selectRaw('users.id, users.name, COUNT(*) as total')
+            ->selectRaw('staff.id, staff.name, COUNT(*) as total')
             ->selectRaw("SUM(CASE WHEN orders.status IN ('Delivered','Completed') AND (orders.delivered_at IS NULL OR orders.delivery_date IS NULL OR orders.delivered_at <= orders.delivery_date) THEN 1 ELSE 0 END) as on_time")
-            ->groupBy('users.id', 'users.name')
+            ->groupBy('staff.id', 'staff.name')
             ->orderByDesc('total')
             ->limit($limit)
             ->get();

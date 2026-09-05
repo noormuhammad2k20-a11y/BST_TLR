@@ -8,12 +8,14 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Order extends Model
 {
+    use \Illuminate\Database\Eloquent\SoftDeletes;
+
     protected $table = 'cs_orders';
     protected $guarded = ['id'];
 
     public function customer(): BelongsTo
     {
-        return $this->belongsTo(Customer::class, 'cs_customer_id');
+        return $this->belongsTo(Customer::class, 'cs_customer_id')->withTrashed();
     }
 
     public function items(): HasMany

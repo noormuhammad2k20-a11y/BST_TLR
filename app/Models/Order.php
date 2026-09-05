@@ -10,6 +10,8 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Order extends Model
 {
+    use \Illuminate\Database\Eloquent\SoftDeletes;
+
     protected $guarded = ['id'];
 
     protected $casts = [
@@ -112,7 +114,7 @@ class Order extends Model
 
     public function payments(): HasMany
     {
-        return $this->hasMany(Payment::class);
+        return $this->hasMany(Payment::class)->where('status', 'Completed')->whereNull('reverses_payment_id');
     }
 
     public function delivery(): HasOne
@@ -300,12 +302,7 @@ class Order extends Model
      */
     public function paidTotalFor(?float $advance = null): float
     {
-        $advance = $advance ?? (float) $this->advance;
-
-        return round(
-            $this->paymentsTotal() + self::unrecordedAdvance($advance, $this->advancePaymentsTotal()),
-            2
-        );
+        return (float) app(\App\Services\TailoringFinanceService::class)->paid($this);
     }
 
     /**

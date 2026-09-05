@@ -4,6 +4,7 @@ namespace App\Http\Controllers\ClothStore;
 
 use App\Http\Controllers\Controller;
 use App\Services\PdfExporter;
+use App\Services\ClothStore\SalesAnalytics;
 use Illuminate\Http\Request;
 use App\Models\ClothStore\Order;
 use App\Models\ClothStore\OrderItem;
@@ -79,11 +80,11 @@ class ReportController extends Controller
         [$filter, $startDate, $endDate] = $this->resolveRange($request);
 
         // Top Level KPIs
-        $salesQuery = Order::whereBetween('created_at', [$startDate, $endDate])->where('status', 'Completed');
+        $salesQuery = SalesAnalytics::orders()->whereBetween('created_at', [$startDate, $endDate]);
 
         $totalSales = $salesQuery->sum('total_amount');
         $totalMetersSold = $salesQuery->sum('total_meters_sold');
-        $totalTransactions = $salesQuery->count();
+        $totalTransactions = (clone $salesQuery)->sum('sale_count');
         $grossProfit = $salesQuery->sum('gross_profit');
 
         $totalExpenses = Expense::whereBetween('expense_date', [$startDate, $endDate])->sum('amount');
@@ -108,11 +109,10 @@ class ReportController extends Controller
         ];
 
         // 2. Fabric Sales Report (Grouped by Product)
-        $fabricSales = OrderItem::join('cs_orders', 'cs_order_items.cs_order_id', '=', 'cs_orders.id')
+        $fabricSales = SalesAnalytics::lines()->join('cs_orders', 'cs_order_items.cs_order_id', '=', 'cs_orders.id')
             ->join('cs_products', 'cs_order_items.cs_product_id', '=', 'cs_products.id')
             ->join('cs_categories', 'cs_products.cs_category_id', '=', 'cs_categories.id')
-            ->where('cs_orders.status', 'Completed')
-            ->whereBetween('cs_orders.created_at', [$startDate, $endDate])
+            ->whereBetween('cs_order_items.created_at', [$startDate, $endDate])
             ->select(
                 'cs_products.name as product',
                 'cs_categories.name as category',
@@ -130,11 +130,10 @@ class ReportController extends Controller
             });
 
         // 3. Category Report
-        $categorySales = OrderItem::join('cs_orders', 'cs_order_items.cs_order_id', '=', 'cs_orders.id')
+        $categorySales = SalesAnalytics::lines()->join('cs_orders', 'cs_order_items.cs_order_id', '=', 'cs_orders.id')
             ->join('cs_products', 'cs_order_items.cs_product_id', '=', 'cs_products.id')
             ->join('cs_categories', 'cs_products.cs_category_id', '=', 'cs_categories.id')
-            ->where('cs_orders.status', 'Completed')
-            ->whereBetween('cs_orders.created_at', [$startDate, $endDate])
+            ->whereBetween('cs_order_items.created_at', [$startDate, $endDate])
             ->select(
                 'cs_categories.name as category',
                 DB::raw('SUM(cs_order_items.quantity) as meters_sold'),
@@ -160,13 +159,12 @@ class ReportController extends Controller
         });
 
         // 5. Customer Report
-        $customers = Order::join('cs_customers', 'cs_orders.cs_customer_id', '=', 'cs_customers.id')
-            ->where('cs_orders.status', 'Completed')
+        $customers = SalesAnalytics::orders()->join('cs_customers', 'cs_orders.cs_customer_id', '=', 'cs_customers.id')
             ->whereBetween('cs_orders.created_at', [$startDate, $endDate])
             ->select(
                 'cs_customers.name',
                 'cs_customers.due_balance',
-                DB::raw('COUNT(cs_orders.id) as visits'),
+                DB::raw('SUM(cs_orders.sale_count) as visits'),
                 DB::raw('SUM(cs_orders.total_meters_sold) as meters_purchased'),
                 DB::raw('SUM(cs_orders.total_amount) as total_spending')
             )
@@ -183,14 +181,14 @@ class ReportController extends Controller
             ->get();
 
         // 7. Payment Methods
-        $payments = Order::where('status', 'Completed')
+        $payments = SalesAnalytics::orders()
             ->whereBetween('created_at', [$startDate, $endDate])
             ->select('payment_method', DB::raw('SUM(total_amount) as total'))
             ->groupBy('payment_method')
             ->get();
 
         // Graph Data: Daily Sales
-        $dailySales = Order::where('status', 'Completed')
+        $dailySales = SalesAnalytics::orders()
             ->whereBetween('created_at', [$startDate, $endDate])
             ->select(DB::raw('DATE(created_at) as date'), DB::raw('SUM(total_amount) as revenue'), DB::raw('SUM(total_meters_sold) as meters'))
             ->groupBy(DB::raw('DATE(created_at)'))

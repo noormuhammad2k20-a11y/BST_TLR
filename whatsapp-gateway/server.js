@@ -73,7 +73,8 @@ function loadConfig() {
   }
 }
 
-const config = loadConfig();
+const { secureConfig, authorized } = require('./security');
+const config = secureConfig(loadConfig());
 
 /* ------------------------------------------------------------------ */
 /*  Logging                                                            */
@@ -480,11 +481,9 @@ function isLocal(req) {
  */
 app.use((req, res, next) => {
   if (req.path === '/') return next();
-  if (req.path === '/qr' && isLocal(req)) return next();
 
-  const supplied = req.get('X-Gateway-Token') || req.query.token;
 
-  if (supplied !== config.token) {
+  if (!authorized(req, config.token)) {
     return res.status(401).json({ ok: false, error: 'Invalid gateway token.' });
   }
 
@@ -604,7 +603,7 @@ app.get('/qr', (_req, res) => {
 /*  Start                                                              */
 /* ------------------------------------------------------------------ */
 
-const server = app.listen(config.port, () => {
+const server = app.listen(config.port, config.host, () => {
   console.log('');
   console.log('  Atelier WhatsApp Gateway');
   console.log(`  Listening on http://localhost:${config.port}`);

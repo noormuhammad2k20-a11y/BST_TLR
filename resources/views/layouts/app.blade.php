@@ -791,14 +791,14 @@
         @if(session('success'))
           <script>
             document.addEventListener('DOMContentLoaded', function() {
-              toast('{{ session('success') }}', 'success');
+              toast({{ Illuminate\Support\Js::from(session('success')) }}, 'success');
             });
           </script>
         @endif
         @if(session('error'))
           <script>
             document.addEventListener('DOMContentLoaded', function() {
-              toast('{{ session('error') }}', 'error');
+              toast({{ Illuminate\Support\Js::from(session('error')) }}, 'error');
             });
           </script>
         @endif

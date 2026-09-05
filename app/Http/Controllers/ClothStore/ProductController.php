@@ -113,28 +113,11 @@ class ProductController extends Controller
         $validated = $this->validated($request);
 
         $product = DB::transaction(function () use ($validated) {
-            $product = Product::create($validated);
-
-            // Opening stock is where the product's inventory history begins,
-            // so it gets a movement row like any other receipt. Without it,
-            // Stock History starts with an unexplained balance.
-            $opening = round((float) $product->stock_quantity, 2);
-
-            if ($opening >= 0.01) {
-                StockTransaction::create([
-                    'cs_product_id' => $product->id,
-                    'user_id'       => auth()->id(),
-                    'type'          => 'in',
-                    'quantity'      => $opening,
-                    'reason'        => 'Opening Stock',
-                    'previous_qty'  => 0,
-                    'new_qty'       => $opening,
-                    'reference'     => $product->sku ?: ('PROD-' . $product->id),
-                    'notes'         => 'Opening stock recorded when the product was created',
-                ]);
-            }
-
-            return $product;
+            $opening=(string)$validated['stock_quantity'];
+            $validated['stock_quantity']='0.00';
+            $product=Product::create($validated);
+            app(\App\Services\ClothStore\InventoryService::class)->move($product->id,$opening,'Opening Stock',$product->sku);
+            return $product->fresh();
         });
 
         return response()->json([
@@ -149,29 +132,13 @@ class ProductController extends Controller
 
         $validated = $this->validated($request, $product);
 
-        // Changing stock on this form is a real inventory movement. It used to
-        // write straight to the column, so Stock History had no record of it
-        // and the audit trail silently disagreed with the product's own count.
-        $previousQty = round((float) $product->stock_quantity, 2);
-        $newQty = round((float) $validated['stock_quantity'], 2);
-        $delta = round($newQty - $previousQty, 2);
-
-        DB::transaction(function () use ($product, $validated, $previousQty, $newQty, $delta) {
+        DB::transaction(function () use (&$product,$validated) {
+            $product=Product::whereKey($product->id)->lockForUpdate()->firstOrFail();
+            $delta=\App\Services\Decimal::sub((string)$validated['stock_quantity'],(string)$product->stock_quantity);
+            unset($validated['stock_quantity']);
             $product->update($validated);
-
-            if (abs($delta) >= 0.01) {
-                StockTransaction::create([
-                    'cs_product_id' => $product->id,
-                    'user_id'       => auth()->id(),
-                    'type'          => 'adjustment',
-                    'quantity'      => abs($delta),
-                    'reason'        => $delta > 0 ? 'Manual Correction (Increase)' : 'Manual Correction (Decrease)',
-                    'previous_qty'  => $previousQty,
-                    'new_qty'       => $newQty,
-                    'reference'     => $product->sku ?: ('PROD-' . $product->id),
-                    'notes'         => 'Stock edited directly on the product form',
-                ]);
-            }
+            app(\App\Services\ClothStore\InventoryService::class)->move($product->id,$delta,'Manual stock correction',$product->sku);
+            $product=$product->fresh();
         });
 
         return response()->json([

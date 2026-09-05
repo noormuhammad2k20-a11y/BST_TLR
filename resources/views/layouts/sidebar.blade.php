@@ -67,7 +67,7 @@
       <x-icon name="services" /> Products &amp; Services
     </a>
     <a href="{{ route('staff.index') }}" class="{{ $nav }} {{ request()->routeIs('staff.*') ? 'active text-slate-900' : 'text-slate-600' }}">
-      <x-icon name="team" /> Staff
+      <x-icon name="team" /> Tailors
     </a>
     <a href="{{ route('delivery.index') }}" class="{{ $nav }} {{ request()->routeIs('delivery.*') ? 'active text-slate-900' : 'text-slate-600' }}">
       <x-icon name="delivery" /> Delivery

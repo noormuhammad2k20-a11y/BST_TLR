@@ -4,6 +4,7 @@ namespace App\Http\Controllers\ClothStore;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use App\Services\ClothStore\SalesAnalytics;
 use App\Models\ClothStore\Order;
 use App\Models\ClothStore\Product;
 use App\Models\ClothStore\Customer;
@@ -51,10 +52,10 @@ class DashboardController extends Controller
          */
         $soldStatuses = fn ($q) => $q->whereNotIn('status', ['Cancelled']);
 
-        $ordersQuery = Order::whereBetween('created_at', [$startDate, $endDate])->where($soldStatuses);
+        $ordersQuery = SalesAnalytics::orders()->whereBetween('created_at', [$startDate, $endDate]);
         $expensesQuery = Expense::whereBetween('expense_date', [$startDate, $endDate]);
 
-        $transactions = (clone $ordersQuery)->count();
+        $transactions = (clone $ordersQuery)->sum('sale_count');
 
         // KPIs
         $kpis = [
@@ -76,12 +77,11 @@ class DashboardController extends Controller
             'avg_meters_per_trx' => $transactions > 0
                 ? round((float) (clone $ordersQuery)->sum('total_meters_sold') / $transactions, 2) : 0,
             'total_discounts' => (float) (clone $ordersQuery)->sum('discount'),
-            'total_returns' => (float) Order::whereBetween('created_at', [$startDate, $endDate])
-                ->where('status', 'Returned')->sum('total_amount'),
+            'total_returns' => (float) DB::table('cs_financial_adjustments')->whereBetween('created_at', [$startDate, $endDate])->where('kind','return')->sum('amount'),
         ];
 
         // 1 & 2: Daily Sales & Daily Meters (Last 30 Days)
-        $dailyRaw = Order::select(
+        $dailyRaw = SalesAnalytics::orders()->select(
             DB::raw('DATE(created_at) as date'),
             DB::raw('SUM(total_amount) as total_sales'),
             DB::raw('SUM(total_meters_sold) as total_meters')
@@ -99,7 +99,7 @@ class DashboardController extends Controller
         }
 
         // 3 & 4: Monthly Revenue & Monthly Profit (Last 12 Months)
-        $monthlyRaw = Order::select(
+        $monthlyRaw = SalesAnalytics::orders()->select(
             DB::raw('DATE_FORMAT(created_at, "%Y-%m") as month'),
             DB::raw('SUM(total_amount) as revenue'),
             DB::raw('SUM(gross_profit) as profit')
@@ -117,29 +117,32 @@ class DashboardController extends Controller
         }
 
         // 5. Sales by Category
-        $catSales = OrderItem::join('cs_products', 'cs_order_items.cs_product_id', '=', 'cs_products.id')
+        $catSales = SalesAnalytics::lines()->join('cs_products', 'cs_order_items.cs_product_id', '=', 'cs_products.id')
             ->join('cs_categories', 'cs_products.cs_category_id', '=', 'cs_categories.id')
             ->select('cs_categories.name', DB::raw('SUM(cs_order_items.total) as total'))
-            ->whereHas('order', fn($q) => $q->whereBetween('created_at', [$startDate, $endDate]))
+            ->whereBetween('cs_order_items.created_at', [$startDate, $endDate])
             ->groupBy('cs_categories.name')->get();
 
         // 6. Sales by Payment Method
-        $paymentSales = Order::select('payment_method', DB::raw('SUM(total_amount) as total'))
+        $paymentSales = SalesAnalytics::orders()->select('payment_method', DB::raw('SUM(total_amount) as total'))
             ->whereBetween('created_at', [$startDate, $endDate])
             ->groupBy('payment_method')->get();
 
         // 7 & 8: Top Selling Fabrics (Meters and Revenue)
-        $topRevenue = OrderItem::with('product.category')
-            ->select('cs_product_id', DB::raw('SUM(total) as revenue'), DB::raw('SUM(quantity) as meters'), DB::raw('SUM(total - (unit_cost * quantity)) as profit'))
-            ->whereHas('order', fn($q) => $q->whereBetween('created_at', [$startDate, $endDate]))
+        $topRevenue = SalesAnalytics::lines()
+            ->select('cs_product_id', DB::raw('SUM(cs_order_items.total) as revenue'), DB::raw('SUM(cs_order_items.quantity) as meters'), DB::raw('SUM(cs_order_items.total - (cs_order_items.unit_cost * cs_order_items.quantity)) as profit'))
+            ->whereBetween('cs_order_items.created_at', [$startDate, $endDate])
             ->groupBy('cs_product_id')->orderByDesc('revenue')->limit(5)->get();
             
-        $topMeters = OrderItem::with('product.category')
-            ->select('cs_product_id', DB::raw('SUM(total) as revenue'), DB::raw('SUM(quantity) as meters'), DB::raw('SUM(total - (unit_cost * quantity)) as profit'))
+        $topMeters = SalesAnalytics::lines()
+            ->select('cs_product_id', DB::raw('SUM(cs_order_items.total) as revenue'), DB::raw('SUM(cs_order_items.quantity) as meters'), DB::raw('SUM(cs_order_items.total - (cs_order_items.unit_cost * cs_order_items.quantity)) as profit'))
             ->join('cs_products', 'cs_order_items.cs_product_id', '=', 'cs_products.id')
             ->where('cs_products.unit', 'meter')
-            ->whereHas('order', fn($q) => $q->whereBetween('created_at', [$startDate, $endDate]))
+            ->whereBetween('cs_order_items.created_at', [$startDate, $endDate])
             ->groupBy('cs_product_id')->orderByDesc('meters')->limit(5)->get();
+
+        $productMap=Product::withTrashed()->with('category')->whereIn('id',$topRevenue->pluck('cs_product_id')->merge($topMeters->pluck('cs_product_id')))->get()->keyBy('id');
+        foreach ($topRevenue->merge($topMeters) as $row) $row->product=$productMap->get($row->cs_product_id);
 
         // Tables Data — every list is capped. These were unbounded ->get()
         // calls, so a shop with a few thousand low-stock lines would render

@@ -150,7 +150,6 @@
           <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="notif_low_stock" value="1" {{ $settings['notif_low_stock'] == '1' ? 'checked' : '' }} class="rounded text-indigo-600 focus:ring-indigo-500"> Low Stock Alerts</label>
           <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="notif_out_stock" value="1" {{ $settings['notif_out_stock'] == '1' ? 'checked' : '' }} class="rounded text-indigo-600 focus:ring-indigo-500"> Out of Stock Alerts</label>
           <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="notif_customer_due" value="1" {{ $settings['notif_customer_due'] == '1' ? 'checked' : '' }} class="rounded text-indigo-600 focus:ring-indigo-500"> Customer Due / Overdue Alerts</label>
-          <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="notif_supplier_due" value="1" {{ $settings['notif_supplier_due'] == '1' ? 'checked' : '' }} class="rounded text-indigo-600 focus:ring-indigo-500"> Supplier Due Alerts</label>
           <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="notif_expense_created" value="1" {{ $settings['notif_expense_created'] == '1' ? 'checked' : '' }} class="rounded text-indigo-600 focus:ring-indigo-500"> Notify Admin on Expense Creation</label>
         </div>
       </div>

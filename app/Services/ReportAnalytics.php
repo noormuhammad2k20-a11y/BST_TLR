@@ -97,7 +97,7 @@ class ReportAnalytics
      */
     private static function snapshot(Carbon $start, Carbon $end): array
     {
-        $revenue  = (float) Payment::whereBetween('date', [$start, $end])->sum('amount');
+        $revenue  = (float) Payment::where('status','Completed')->whereNull('reverses_payment_id')->whereBetween('date', [$start, $end])->sum('amount');
         $expenses = (float) Expense::whereBetween('date', [$start, $end])->sum('amount');
 
         $orderAgg = Order::whereBetween('created_at', [$start, $end])
@@ -141,7 +141,7 @@ class ReportAnalytics
         $inMonth = max($start->copy()->daysInMonth, 1);
 
         $scaled   = $monthly > 0 ? $monthly / $inMonth * $days : 0.0;
-        $achieved = (float) Payment::whereBetween('date', [$start, $end])->sum('amount');
+        $achieved = (float) Payment::where('status','Completed')->whereNull('reverses_payment_id')->whereBetween('date', [$start, $end])->sum('amount');
 
         // How far through the window we are — a month at 40% on day 12 is fine,
         // the same 40% on day 28 is not, and the report should say so.

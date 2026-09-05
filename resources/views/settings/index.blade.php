@@ -77,7 +77,6 @@
   var DB_SETTINGS       = @json($settings);
   var MEASUREMENT_FIELDS = @json($measurementFields);
   var TIMEZONES         = @json($timezones);
-  var TEAM              = @json($team);
   var DATA_COUNTS       = @json($dataCounts);
   var BACKUP_TYPES      = @json($backupTypes);
   var TEMPLATE_VARS     = @json($templateVariables);
@@ -104,7 +103,6 @@
     gateway:       @json(route('settings.whatsapp.gateway')),
     gatewayLogout: @json(route('settings.whatsapp.gateway.logout')),
     sendTest:      @json(route('settings.whatsapp.send-test')),
-    team:          @json(route('settings.team.index')),
     reportsExport: @json(route('reports.export')),
     testSms:       @json(route('settings.sms.test')),
     sendTestSms:   @json(route('settings.sms.send-test')),
@@ -362,7 +360,6 @@
     // has not switched the provider over yet still needs to see the QR.
     if (name === 'WhatsApp Gateway') startGatewayPolling();
     if (name === 'Thermal Printer') updateReceiptPreview();
-    if (name === 'Backup & Data')   renderTeam();
     if (name === 'SMS Settings')    renderSmsTemplates();
   }
 
@@ -1194,7 +1191,7 @@
     return `
       <div class="p-6">
         <h3 class="text-lg font-semibold text-slate-900 mb-1 tracking-tight">Backup &amp; Data</h3>
-        <p class="text-sm text-slate-500 mb-6">Export, restore, manage your team, and permanently remove records.</p>
+        <p class="text-sm text-slate-500 mb-6">Export, restore, and permanently remove records.</p>
 
         <div class="grid grid-cols-4 gap-3 mb-6" id="data-counts">
           ${Object.entries(BACKUP_TYPES).map(([key, t]) => `
@@ -1230,16 +1227,6 @@
             <input type="file" id="restore-file" accept=".json,application/json" class="hidden" onchange="inspectBackup(event)">
           </div>
           <div id="restore-details" class="hidden mt-4"></div>
-        </div>
-
-        <div class="set-card mb-6">
-          <div class="flex items-center justify-between mb-4">
-            <h4 class="set-legend" style="margin-bottom:0">Team Access</h4>
-            <button onclick="openTeamForm()" class="bg-slate-900 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-slate-800 flex items-center gap-2 transition-colors">
-              <i class="fa-solid fa-user-plus text-[10px]"></i> Add member
-            </button>
-          </div>
-          <div class="space-y-2" id="team-list"></div>
         </div>
 
         <div class="border-2 border-red-200 rounded-xl p-5 bg-red-50">
@@ -1494,177 +1481,6 @@
     });
   }
 
-  /* ------------------------- Team ---------------------------- */
-  function renderTeam() {
-    const host = document.getElementById('team-list');
-    if (!host) return;
-
-    if (!TEAM.length) {
-      host.innerHTML = '<div class="text-sm text-slate-400 py-4 text-center">No team members yet.</div>';
-      return;
-    }
-
-    host.innerHTML = TEAM.map(u => `
-      <div class="flex items-center justify-between bg-white p-3 rounded-lg border border-slate-100">
-        <div class="flex items-center gap-3 min-w-0">
-          <div class="avatar sm">${esc(u.initials || Atelier.initials(u.name))}</div>
-          <div class="min-w-0">
-            <div class="text-sm font-semibold text-slate-900 truncate">${esc(u.name)}</div>
-            <div class="text-xs text-slate-500 truncate">${esc(u.email)}</div>
-            ${u.last_login ? `<div class="text-[11px] text-slate-400">Last signed in ${esc(u.last_login)}</div>` : '<div class="text-[11px] text-slate-400">Never signed in</div>'}
-          </div>
-        </div>
-        <div class="flex items-center gap-3 flex-shrink-0">
-          <span class="text-xs font-semibold text-slate-600">${esc(u.title || u.role_label || u.role)}</span>
-          <span class="badge ${u.is_active ? 'badge-delivered' : 'badge-overdue'}">${u.is_active ? 'Active' : 'Disabled'}</span>
-          <div class="flex items-center gap-1">
-            <button onclick="openTeamForm(${u.id})" title="Edit" class="w-7 h-7 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"><i class="fa-solid fa-pen text-[11px]"></i></button>
-            <button onclick="toggleTeamActive(${u.id}, ${u.is_active ? 'false' : 'true'})" title="${u.is_active ? 'Disable' : 'Enable'}" class="w-7 h-7 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"><i class="fa-solid ${u.is_active ? 'fa-user-slash' : 'fa-user-check'} text-[11px]"></i></button>
-            <button onclick="resetTeamPassword(${u.id})" title="Reset password" class="w-7 h-7 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"><i class="fa-solid fa-key text-[11px]"></i></button>
-            <button onclick="removeTeamMember(${u.id})" title="Remove" class="w-7 h-7 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors"><i class="fa-solid fa-trash text-[11px]"></i></button>
-          </div>
-        </div>
-      </div>
-    `).join('');
-  }
-
-  window.openTeamForm = function (id = null) {
-    const u = id ? TEAM.find(m => m.id === id) : null;
-
-    openModal('team-member', u);
-  };
-
-  window.modals = window.modals || {};
-  window.modals['team-member'] = (u) => `
-    <div class="p-5 border-b border-slate-200 flex justify-between items-center">
-      <div>
-        <div class="text-lg font-bold text-slate-900 tracking-tight">${u ? 'Edit team member' : 'Add team member'}</div>
-        <div class="text-xs text-slate-500 mt-1">${u ? 'Update their details and role' : 'They will be able to sign in immediately'}</div>
-      </div>
-      <button class="w-8 h-8 rounded-lg text-slate-400 hover:bg-slate-100 flex items-center justify-center" onclick="closeModal()"><i class="fa-solid fa-xmark text-sm"></i></button>
-    </div>
-    <div class="p-6 space-y-4 overflow-y-auto">
-      <input type="hidden" id="tm-id" value="${u?.id ?? ''}">
-      <div class="grid grid-cols-2 gap-4">
-        <div><label class="set-label">Full Name</label><input id="tm-name" class="set-field pro-input" value="${esc(u?.name)}"></div>
-        <div><label class="set-label">Email</label><input id="tm-email" type="email" class="set-field pro-input" value="${esc(u?.email)}"></div>
-        <div>
-          <label class="set-label">Role</label>
-          <select id="tm-role" class="set-field pro-input">
-            ${[['admin','Administrator'],['staff','Staff'],['tailor','Tailor']].map(([v,l]) =>
-              `<option value="${v}" ${u?.role === v ? 'selected' : ''}>${l}</option>`).join('')}
-          </select>
-        </div>
-        <div><label class="set-label">Job Title</label><input id="tm-title" class="set-field pro-input" value="${esc(u?.title)}" placeholder="Optional"></div>
-        <div><label class="set-label">Phone</label><input id="tm-phone" class="set-field pro-input" value="${esc(u?.phone)}" placeholder="Optional"></div>
-        ${!u ? `
-        <div>
-          <label class="set-label">Password</label>
-          <input id="tm-password" type="text" class="set-field pro-input" placeholder="Leave blank to generate">
-          <p class="set-hint">A generated password is shown once, after saving.</p>
-        </div>` : ''}
-      </div>
-      ${u ? `
-        <div class="flex items-start gap-3 p-3 rounded-lg bg-indigo-50 border border-indigo-100">
-          <i class="fa-solid fa-circle-info text-indigo-600 text-xs mt-0.5"></i>
-          <p class="text-xs text-indigo-800 leading-relaxed flex-1">Use the key icon in the list to issue a new password. Changing a role takes effect on their next request.</p>
-        </div>` : ''}
-    </div>
-    <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-3">
-      <button class="bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-100" onclick="closeModal()">Cancel</button>
-      <button class="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-800 flex items-center gap-2" onclick="saveTeamMember(this)">
-        <i class="fa-solid fa-check text-xs"></i> ${u ? 'Save changes' : 'Add member'}
-      </button>
-    </div>`;
-
-  window.saveTeamMember = async function (btn) {
-    const id = document.getElementById('tm-id').value;
-
-    const body = {
-      name:  document.getElementById('tm-name').value.trim(),
-      email: document.getElementById('tm-email').value.trim(),
-      role:  document.getElementById('tm-role').value,
-      title: document.getElementById('tm-title').value.trim(),
-      phone: document.getElementById('tm-phone').value.trim(),
-    };
-
-    if (!id) body.password = document.getElementById('tm-password')?.value || '';
-
-    Atelier.setBusy(btn, true);
-    try {
-      const res = id
-        ? await Atelier.api.put(`/settings/team/${id}`, body)
-        : await Atelier.api.post(SETTINGS_ROUTES.team, body);
-
-      TEAM = res.team;
-      renderTeam();
-      closeModal();
-      toast(res.message, 'success');
-
-      if (res.password) showGeneratedPassword(body.name, res.password);
-    } catch (err) {
-      Atelier.reportError(err, 'Could not save that team member');
-    } finally {
-      Atelier.setBusy(btn, false);
-    }
-  };
-
-  /** Shows a one-time password in a dialog, since it can never be read back. */
-  function showGeneratedPassword(name, password) {
-    Atelier.confirm({
-      variant: 'approve',
-      title: 'Password for ' + name,
-      message: `${password}\n\nCopy it now — it cannot be shown again.`,
-      confirmLabel: 'Copy & close',
-      onConfirm: () => {
-        navigator.clipboard?.writeText(password);
-        toast('Password copied to clipboard', 'success');
-      },
-    });
-  }
-
-  window.toggleTeamActive = async function (id, active) {
-    try {
-      const res = await Atelier.api.patch(`/settings/team/${id}/active`, { is_active: active });
-      TEAM = res.team;
-      renderTeam();
-      toast(res.message, 'success');
-    } catch (err) {
-      Atelier.reportError(err, 'Could not change that account');
-    }
-  };
-
-  window.resetTeamPassword = function (id) {
-    const u = TEAM.find(m => m.id === id);
-
-    Atelier.confirm({
-      variant: 'info',
-      title: `Reset the password for ${u?.name}?`,
-      message: 'A new password will be generated and shown once. Any active sessions stay signed in until they log out.',
-      confirmLabel: 'Reset password',
-      onConfirm: async () => {
-        const res = await Atelier.api.post(`/settings/team/${id}/password`, {});
-        showGeneratedPassword(u?.name || 'this member', res.password);
-      },
-    });
-  };
-
-  window.removeTeamMember = function (id) {
-    const u = TEAM.find(m => m.id === id);
-
-    Atelier.confirm({
-      variant: 'delete',
-      title: `Remove ${u?.name}?`,
-      message: 'They lose access immediately. Orders they worked on are kept, but are no longer assigned to them.',
-      confirmLabel: 'Remove member',
-      onConfirm: async () => {
-        const res = await Atelier.api.delete(`/settings/team/${id}`);
-        TEAM = res.team;
-        renderTeam();
-        toast(res.message, 'success');
-      },
-    });
-  };
 
   /* ============================================================
      PANEL 8 — THEME & DISPLAY

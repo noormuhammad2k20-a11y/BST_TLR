@@ -8,6 +8,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Customer extends Model
 {
+    use \Illuminate\Database\Eloquent\SoftDeletes;
+
     protected $guarded = ['id'];
 
     protected $casts = [

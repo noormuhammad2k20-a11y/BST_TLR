@@ -15,6 +15,6 @@ class CustomerPayment extends Model
 
     public function customer()
     {
-        return $this->belongsTo(Customer::class, 'cs_customer_id');
+        return $this->belongsTo(Customer::class, 'cs_customer_id')->withTrashed();
     }
 }

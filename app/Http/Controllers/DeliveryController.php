@@ -62,6 +62,9 @@ class DeliveryController extends Controller
             'note'   => ['nullable', 'string', 'max:255'],
         ]);
 
+        \Illuminate\Support\Facades\DB::transaction(function () use (&$delivery,$validated) {
+            if ($delivery->order_id) \App\Models\Order::whereKey($delivery->order_id)->lockForUpdate()->firstOrFail();
+            $delivery=Delivery::whereKey($delivery->id)->lockForUpdate()->firstOrFail();
         $from = $delivery->status;
 
         $delivery->forceFill([
@@ -103,6 +106,8 @@ class DeliveryController extends Controller
         );
 
         StatsService::flush();
+
+        });
 
         $delivery->load('order.customer');
 

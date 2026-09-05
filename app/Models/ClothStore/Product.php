@@ -8,6 +8,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Product extends Model
 {
+    use \Illuminate\Database\Eloquent\SoftDeletes;
+
     protected $table = 'cs_products';
     protected $guarded = ['id'];
 
@@ -22,13 +24,13 @@ class Product extends Model
      * remain the source of truth for precision.
      */
     protected $casts = [
-        'price' => 'float',
-        'cost_price' => 'float',
-        'stock_quantity' => 'float',
-        'low_stock_threshold' => 'float',
-        'reserved_quantity' => 'float',
-        'incoming_quantity' => 'float',
-        'suggested_reorder_qty' => 'float',
+        'price' => 'decimal:2',
+        'cost_price' => 'decimal:2',
+        'stock_quantity' => 'decimal:2',
+        'low_stock_threshold' => 'decimal:2',
+        'reserved_quantity' => 'decimal:2',
+        'incoming_quantity' => 'decimal:2',
+        'suggested_reorder_qty' => 'decimal:2',
         'ignore_stock_alerts' => 'boolean',
     ];
 

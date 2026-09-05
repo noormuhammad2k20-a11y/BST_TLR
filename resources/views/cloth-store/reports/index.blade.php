@@ -326,8 +326,8 @@
   // Initialize Chart.js
   document.addEventListener('DOMContentLoaded', function() {
     const ctx = document.getElementById('salesChart').getContext('2d');
-    const chartDates = {!! json_encode($chartDates) !!};
-    const chartRevenues = {!! json_encode($chartRevenues) !!};
+    const chartDates = {{ Illuminate\Support\Js::from($chartDates) }};
+    const chartRevenues = {{ Illuminate\Support\Js::from($chartRevenues) }};
     
     if(chartDates.length === 0) {
        document.getElementById('salesChart').parentElement.innerHTML = '<div class="h-full flex items-center justify-center text-slate-400 text-sm">No sales data to graph for this period.</div>';

@@ -31,7 +31,8 @@ class PaymentController extends Controller
         $orders = Order::query()
             ->with([
                 'customer:id,name,phone,code',
-                'payments' => fn ($q) => $q->select('id', 'order_id', 'amount', 'type', 'payment_method', 'date')->orderBy('date'),
+                'payments' => fn ($q) => $q->select('id', 'order_id', 'amount', 'type', 'payment_method', 'date')
+                    ->where('status', 'Completed')->whereNull('reverses_payment_id')->orderBy('date'),
             ])
             ->withPaymentTotals()
             ->latest()
@@ -59,45 +60,14 @@ class PaymentController extends Controller
      */
     public function record(Request $request, Order $order): JsonResponse
     {
-        $order->loadPaymentTotals();
-        $outstanding = round((float) $order->total - $order->paid_amount, 2);
-
         $validated = $request->validate([
-            'amount'         => ['required', 'numeric', 'min:0.01', 'max:' . max($outstanding, 0.01)],
-            'payment_method' => ['required', Rule::in(Payment::METHODS)],
-            'reference'      => ['nullable', 'string', 'max:100'],
-            'notes'          => ['nullable', 'string', 'max:1000'],
-            'date'           => ['nullable', 'date'],
-        ], [
-            'amount.max' => 'That is more than the outstanding balance of ' . Money::format($outstanding, true) . '.',
+            'amount'=>['required','numeric','min:0.01','decimal:0,2'],
+            'payment_method'=>['required',Rule::in(Payment::METHODS)],
+            'reference'=>'nullable|string|max:100','notes'=>'nullable|string|max:1000','date'=>'nullable|date',
+            'operation_key'=>'nullable|string|max:100',
         ]);
 
-        if (!Settings::bool('allow_partial') && (float) $validated['amount'] < $outstanding) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Partial payments are disabled in Settings. Collect the full balance.',
-            ], 422);
-        }
-
-        $payment = DB::transaction(function () use ($order, $validated) {
-            $payment = Payment::create([
-                'invoice_id'     => $order->display_invoice,
-                'order_id'       => $order->id,
-                'customer_id'    => $order->customer_id,
-                'amount'         => $validated['amount'],
-                'type'           => 'Receipt',
-                'status'         => 'Completed',
-                'payment_method' => $validated['payment_method'],
-                'reference'      => $validated['reference'] ?? null,
-                'notes'          => $validated['notes'] ?? null,
-                'date'           => $validated['date'] ?? now(),
-                'recorded_by'    => Auth::id(),
-            ]);
-
-            $this->orders->recalculateBalance($order->fresh());
-
-            return $payment;
-        });
+        $payment = app(\App\Services\TailoringFinanceService::class)->record($order->id, $validated);
 
         NotificationService::paymentReceived($order, (float) $validated['amount'], $validated['payment_method']);
         ActivityLogger::log(
@@ -217,11 +187,7 @@ class PaymentController extends Controller
         $order   = $payment->order;
         $amount  = (float) $payment->amount;
 
-        $payment->delete();
-
-        if ($order) {
-            $this->orders->recalculateBalance($order->fresh());
-        }
+        app(\App\Services\TailoringFinanceService::class)->reverse($payment->id);
 
         ActivityLogger::log(
             'Payment reversed',

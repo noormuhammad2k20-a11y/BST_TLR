@@ -7,7 +7,6 @@ use App\Models\Measurement;
 use App\Models\Notification;
 use App\Models\Order;
 use App\Models\Setting;
-use App\Models\User;
 use App\Services\ActivityLogger;
 use App\Services\BackupService;
 use App\Services\Settings;
@@ -24,11 +23,6 @@ class SettingController extends Controller
     {
         $settings = Settings::forClient();
 
-        $team = User::query()
-            ->orderByRaw("FIELD(role, 'admin', 'staff', 'tailor')")
-            ->orderBy('name')
-            ->get(['id', 'name', 'email', 'role', 'title', 'is_active', 'last_login_at']);
-
         $dataCounts = BackupService::counts();
 
         $measurementFields = Measurement::FIELDS;
@@ -43,7 +37,6 @@ class SettingController extends Controller
 
         return view('settings.index', [
             'settings'          => $settings,
-            'team'              => $team,
             'dataCounts'        => $dataCounts,
             'measurementFields' => $measurementFields,
             'timezones'         => $timezones,

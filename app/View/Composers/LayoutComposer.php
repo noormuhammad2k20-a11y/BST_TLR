@@ -21,11 +21,11 @@ class LayoutComposer
     public function compose(View $view): void
     {
         $view->with([
-            'layoutCounters'      => $this->counters(),
-            'layoutNotifications' => $this->recentNotifications(),
+            'layoutCounters'      => auth()->user()?->role==='tailor' ? ['customers'=>0,'pending_orders'=>0,'unread_notifications'=>0] : $this->counters(),
+            'layoutNotifications' => auth()->user()?->role==='tailor' ? collect() : $this->recentNotifications(),
 
             // The raw key/value map, kept for views that still read it directly.
-            'shopSettings'        => Setting::map(),
+            'shopSettings'        => Settings::forClient(),
 
             // Everything resolved against defaults and typed, which is what the
             // layout and the client runtime should be using.

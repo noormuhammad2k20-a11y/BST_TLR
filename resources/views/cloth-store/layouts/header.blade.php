@@ -2,6 +2,9 @@
   $counters = $layoutCounters ?? ['unread_notifications' => 0];
 @endphp
 <header class="bg-white/70 backdrop-blur-xl border-b border-slate-200 px-8 h-16 flex items-center gap-4 sticky top-0 z-30">
+  <button id="mobile-nav-toggle" type="button" class="mobile-nav-toggle" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false" onclick="openMobileSidebar()">
+    <i class="fa-solid fa-bars"></i>
+  </button>
   <div class="flex items-center gap-2 text-sm">
     <span class="text-slate-400 font-medium" data-shop-name>{{ $appSettings['store_name'] ?: 'Atelier' }}</span>
     <i class="fa-solid fa-chevron-right text-[9px] text-slate-300"></i>

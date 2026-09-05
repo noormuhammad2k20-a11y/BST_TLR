@@ -11,7 +11,7 @@ class ProductLocation extends Model
 
     /** Per-location stock is fractional (metres of fabric on that shelf). */
     protected $casts = [
-        'quantity' => 'float',
+        'quantity' => 'decimal:2',
     ];
 
     public function product()

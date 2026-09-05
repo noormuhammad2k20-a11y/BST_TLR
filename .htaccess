@@ -1,0 +1,7 @@
+# Defense in depth for XAMPP installs. Production DocumentRoot must still be /public.
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule (^|/)\. - [F,L]
+    RewriteRule ^(app|bootstrap|config|database|resources|routes|storage|vendor|node_modules|dev|tests|whatsapp-gateway)(/|$) - [F,L,NC]
+    RewriteRule ^[^/]+\.(php|sql|gz|json|lock|md|py|js|xml|txt)$ - [F,L,NC]
+</IfModule>

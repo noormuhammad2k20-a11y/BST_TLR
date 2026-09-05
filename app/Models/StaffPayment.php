@@ -18,11 +18,12 @@ class StaffPayment extends Model
     protected $casts = [
         'amount'  => 'decimal:2',
         'paid_on' => 'date',
+        'reversed_at' => 'datetime',
     ];
 
     public const METHODS = ['Cash', 'Bank Transfer', 'Easypaisa', 'JazzCash', 'Cheque'];
 
-    public const STATUSES = ['Paid', 'Partial', 'Pending'];
+    public const STATUSES = ['Paid', 'Partial', 'Pending', 'Reversal'];
 
     public function staff(): BelongsTo
     {

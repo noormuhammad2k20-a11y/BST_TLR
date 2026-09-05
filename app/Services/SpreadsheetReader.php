@@ -20,6 +20,7 @@ use XMLReader;
 class SpreadsheetReader
 {
     public const SUPPORTED = ['csv', 'txt', 'tsv', 'xlsx', 'xlsm', 'xls'];
+    private const MAX_UNCOMPRESSED_BYTES = 64 * 1024 * 1024;
 
     /** Date number-format ids Excel ships with. */
     private const BUILTIN_DATE_FORMATS = [14, 15, 16, 17, 18, 19, 20, 21, 22, 45, 46, 47];
@@ -164,6 +165,14 @@ class SpreadsheetReader
         }
 
         try {
+            $expanded = 0;
+            for ($i = 0; $i < $zip->numFiles; $i++) {
+                $stat = $zip->statIndex($i);
+                $expanded += (int) ($stat['size'] ?? 0);
+                if ($expanded > self::MAX_UNCOMPRESSED_BYTES) {
+                    throw new RuntimeException('That workbook expands beyond the safe import limit.');
+                }
+            }
             $sheetPath = self::firstSheetPath($zip);
             $strings   = self::sharedStrings($zip);
             $dateStyle = self::dateStyles($zip);

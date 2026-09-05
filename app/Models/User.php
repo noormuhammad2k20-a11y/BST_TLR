@@ -48,6 +48,16 @@ class User extends Authenticatable
         ];
     }
 
+    protected static function booted(): void
+    {
+        static::updating(function (User $user) {
+            if ($user->isDirty('password') || ($user->isDirty('is_active') && !$user->is_active)) {
+                $user->session_version = (int)$user->getOriginal('session_version') + 1;
+                $user->remember_token = null;
+            }
+        });
+    }
+
     /* ------------------------------------------------------------------ */
     /* Relationships                                                       */
     /* ------------------------------------------------------------------ */
@@ -75,12 +85,7 @@ class User extends Authenticatable
 
     public function hasCsPermission($permissionName): bool
     {
-        foreach ($this->csRoles as $role) {
-            if ($role->permissions->contains('name', $permissionName)) {
-                return true;
-            }
-        }
-        return false;
+        return $this->isAdmin() || $this->csRoles()->whereHas('permissions', fn ($q) => $q->where('name', $permissionName))->exists();
     }
 
     /* ------------------------------------------------------------------ */

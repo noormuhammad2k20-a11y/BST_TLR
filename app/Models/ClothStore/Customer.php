@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class Customer extends Model
 {
+    use \Illuminate\Database\Eloquent\SoftDeletes;
+
     protected $table = 'cs_customers';
     protected $guarded = ['id'];
 
@@ -14,8 +16,8 @@ class Customer extends Model
      * strings and every comparison in PHP/JS becomes a string comparison.
      */
     protected $casts = [
-        'due_balance'        => 'float',
-        'total_purchases'    => 'float',
+        'due_balance'        => 'decimal:2',
+        'total_purchases'    => 'decimal:2',
         'loyalty_points'     => 'float',
         'last_purchase_date' => 'datetime',
     ];

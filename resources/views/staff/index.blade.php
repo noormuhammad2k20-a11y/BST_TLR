@@ -1,6 +1,6 @@
 @extends('layouts.app')
 @section('spaPage', 'staff')
-@section('title', 'Staff')
+@section('title', 'Tailors')
 
 @push('styles')
 <style>
@@ -22,11 +22,11 @@
 @section('content')
 <div class="page flex justify-between items-center mb-6">
   <div>
-    <h1 class="text-xl font-bold text-slate-900 tracking-tight">Staff</h1>
-    <p class="text-sm text-slate-500 mt-0.5" id="subheader">Loading team…</p>
+    <h1 class="text-xl font-bold text-slate-900 tracking-tight">Tailors</h1>
+    <p class="text-sm text-slate-500 mt-0.5" id="subheader">Loading stitching history…</p>
   </div>
   <div class="flex gap-2">
-    <button class="bg-slate-900 text-white px-3.5 py-2 rounded-lg text-xs font-medium hover:bg-slate-800 flex items-center gap-2 transition-colors shadow-sm" onclick="openStaffForm()"><i class="fa-solid fa-plus text-[10px]"></i> Add Staff</button>
+    <button class="bg-slate-900 text-white px-3.5 py-2 rounded-lg text-xs font-medium hover:bg-slate-800 flex items-center gap-2 transition-colors shadow-sm" onclick="openStaffForm()"><i class="fa-solid fa-plus text-[10px]"></i> Add Tailor</button>
   </div>
 </div>
 
@@ -34,7 +34,7 @@
 <div class="page grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
   <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5">
     <div class="flex items-center justify-between mb-3">
-      <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Total Staff</span>
+      <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Tailors</span>
       <div class="w-7 h-7 rounded-md bg-slate-100 text-slate-600 flex items-center justify-center"><i class="fa-solid fa-users text-[11px]"></i></div>
     </div>
     <h3 class="text-2xl font-bold text-slate-900 tracking-tight" id="stat-total">0</h3>
@@ -42,27 +42,27 @@
   </div>
   <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5">
     <div class="flex items-center justify-between mb-3">
-      <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Monthly Salaries</span>
+      <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">This Week</span>
       <div class="w-7 h-7 rounded-md bg-indigo-50 text-indigo-600 flex items-center justify-center"><i class="fa-solid fa-wallet text-[11px]"></i></div>
     </div>
-    <h3 class="text-2xl font-bold text-slate-900 tracking-tight" id="stat-bill">—</h3>
-    <p class="text-[11px] text-slate-400 font-medium mt-1">Fixed monthly commitment</p>
+    <h3 class="text-2xl font-bold text-slate-900 tracking-tight" id="stat-week">0</h3>
+    <p class="text-[11px] text-slate-400 font-medium mt-1">clothes stitched</p>
   </div>
   <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5">
     <div class="flex items-center justify-between mb-3">
-      <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Pending Salary</span>
+      <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">This Month</span>
       <div class="w-7 h-7 rounded-md bg-red-50 text-red-600 flex items-center justify-center"><i class="fa-solid fa-clock text-[11px]"></i></div>
     </div>
-    <h3 class="text-2xl font-bold text-slate-900 tracking-tight" id="stat-pending">—</h3>
-    <p class="text-[11px] text-red-500 font-medium mt-1">Owed this month</p>
+    <h3 class="text-2xl font-bold text-slate-900 tracking-tight" id="stat-month">0</h3>
+    <p class="text-[11px] text-slate-400 font-medium mt-1">clothes stitched</p>
   </div>
   <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5">
     <div class="flex items-center justify-between mb-3">
-      <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Stitching Work</span>
+      <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">All Time</span>
       <div class="w-7 h-7 rounded-md bg-emerald-50 text-emerald-600 flex items-center justify-center"><i class="fa-solid fa-scissors text-[11px]"></i></div>
     </div>
     <h3 class="text-2xl font-bold text-slate-900 tracking-tight" id="stat-pieces">0</h3>
-    <p class="text-[11px] text-slate-400 font-medium mt-1">pieces · <span id="stat-workamt">—</span> earned</p>
+    <p class="text-[11px] text-slate-400 font-medium mt-1">clothes stitched</p>
   </div>
 </div>
 
@@ -89,9 +89,9 @@
           <th class="px-5 py-3 text-left font-bold">Name</th>
           <th class="px-5 py-3 text-left font-bold">Role</th>
           <th class="px-5 py-3 text-left font-bold">Phone</th>
-          <th class="px-5 py-3 text-left font-bold">Salary</th>
-          <th class="px-5 py-3 text-left font-bold">Work</th>
+          <th class="px-5 py-3 text-left font-bold">This Week</th>
           <th class="px-5 py-3 text-left font-bold">This Month</th>
+          <th class="px-5 py-3 text-left font-bold">Overall</th>
           <th class="px-5 py-3 text-left font-bold">Status</th>
           <th class="px-5 py-3 text-right font-bold">Actions</th>
         </tr>
@@ -197,9 +197,9 @@
     if (page.length === 0) {
       body.innerHTML = Atelier.emptyRow(8, {
         icon: 'fa-users',
-        title: staffList.length === 0 ? 'No staff yet' : 'No matching staff',
+        title: staffList.length === 0 ? 'No tailors yet' : 'No matching tailors',
         message: staffList.length === 0
-          ? 'Add the tailors and helpers who work in the shop.'
+          ? 'Add the tailors who stitch clothes in the shop.'
           : 'Try a different filter or search.'
       });
       foot.innerHTML = '';
@@ -228,18 +228,11 @@
           </td>
           <td class="px-5 py-3 text-slate-600">${Atelier.escapeHtml(s.role)}</td>
           <td class="px-5 py-3 text-slate-500">${Atelier.escapeHtml(s.phone || '—')}</td>
-          <td class="px-5 py-3 text-slate-600 whitespace-nowrap">${salaryLine}</td>
-          <td class="px-5 py-3 text-slate-600 whitespace-nowrap">
-            <span class="font-semibold text-slate-900">${s.pieces}</span> pcs
-            <span class="text-slate-400">· ${Atelier.money(s.work_amount)}</span>
-          </td>
-          <td class="px-5 py-3 whitespace-nowrap">
-            <div class="text-slate-900 font-semibold">${Atelier.money(s.due.remaining)}</div>
-            <div class="text-[11px] text-slate-400">of ${Atelier.money(s.due.earned)}</div>
-          </td>
+          <td class="px-5 py-3 font-semibold text-slate-900">${s.week_pieces} pcs</td>
+          <td class="px-5 py-3 font-semibold text-slate-900">${s.month_pieces} pcs</td>
+          <td class="px-5 py-3 font-semibold text-slate-900">${s.pieces} pcs</td>
           <td class="px-5 py-3 whitespace-nowrap">
             <span class="badge ${s.is_active ? 'badge-active' : 'badge-inactive'}">${s.is_active ? 'Active' : 'Inactive'}</span>
-            <span class="badge ${statusBadge[s.due.status]} ml-1">${s.due.status}</span>
           </td>
           <td class="px-5 py-3 text-right whitespace-nowrap">
             <button class="w-8 h-8 rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-900 inline-flex items-center justify-center mr-1 transition-colors" title="Profile" onclick="openProfile(${s.db_id})"><i class="fa-regular fa-eye text-xs"></i></button>
@@ -271,11 +264,10 @@
     set('stat-total', s.total);
     set('stat-active', s.active);
     set('stat-inactive', s.inactive);
-    set('stat-bill', Atelier.money(s.monthly_bill));
-    set('stat-pending', Atelier.money(s.pending));
+    set('stat-week', s.week_pieces);
+    set('stat-month', s.month_pieces);
     set('stat-pieces', s.pieces);
-    set('stat-workamt', Atelier.money(s.work_amount));
-    set('subheader', `${s.active} active of ${s.total} · ${Atelier.money(s.pending)} salary pending this month`);
+    set('subheader', `${s.active} active tailors · ${s.month_pieces} clothes stitched this month`);
   }
 
   /** Pulls fresh rows and stats without a page reload. */
@@ -348,7 +340,7 @@
     Atelier.confirm({
       variant: 'delete',
       title: `Delete ${s.name}?`,
-      message: 'Staff with salary payments or completed work cannot be deleted — deactivate them instead so the history stays intact.',
+      message: 'Tailors with salary payments or completed work cannot be deleted — deactivate them instead so the history stays intact.',
       confirmLabel: 'Delete',
       onConfirm: async () => {
         try {
@@ -428,7 +420,7 @@
             </div>
           </div>
           <div class="md:col-span-2 grid grid-cols-2 sm:grid-cols-4 gap-3">
-            ${[['Pieces done', s.pieces], ['Stitching earned', money(s.work_amount)], ['Open orders', s.assigned], ['Completed orders', s.completed]]
+            ${[['This week', s.week_pieces + ' pcs'], ['This month', s.month_pieces + ' pcs'], ['All time', s.pieces + ' pcs'], ['Completed orders', s.completed]]
               .map(([k, v]) => `<div class="bg-slate-50 p-3 rounded-lg border border-slate-100 text-center">
                 <div class="text-lg font-bold text-slate-900">${v}</div>
                 <div class="text-[10px] text-slate-500 uppercase tracking-widest mt-0.5">${k}</div></div>`).join('')}
@@ -532,6 +524,7 @@
       period:  document.getElementById('pay-period').value || null,
       paid_on: document.getElementById('pay-date').value || null,
       notes:   document.getElementById('pay-notes').value.trim() || null,
+      operation_key: window.crypto?.randomUUID?.() || `staff-payment-${Date.now()}-${Math.random().toString(16).slice(2)}`,
     };
 
     if (!payload.amount || payload.amount <= 0) { toast('Enter the amount paid', 'error'); return; }
@@ -634,7 +627,7 @@
       return `
         <div class="p-5 border-b border-slate-200 flex justify-between items-center">
           <div>
-            <div class="text-lg font-bold text-slate-900 tracking-tight">${editing ? 'Edit Staff' : 'Add Staff'}</div>
+            <div class="text-lg font-bold text-slate-900 tracking-tight">${editing ? 'Edit Tailor' : 'Add Tailor'}</div>
             <div class="text-xs text-slate-500 mt-1">${editing ? Atelier.escapeHtml(v.name) : 'A tailor, cutter or helper working in the shop'}</div>
           </div>
           <button class="w-8 h-8 rounded-lg text-slate-400 hover:bg-slate-100 flex items-center justify-center" onclick="closeModal()"><i class="fa-solid fa-xmark text-sm"></i></button>
@@ -667,7 +660,7 @@
         </div>
         <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">
           <button class="bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-100 transition-colors" onclick="closeModal()">Cancel</button>
-          <button class="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors shadow-sm" onclick="saveStaff(${editing ? v.db_id : 'null'}, this)"><i class="fa-solid fa-check text-xs mr-1"></i> ${editing ? 'Save Changes' : 'Add Staff'}</button>
+          <button class="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors shadow-sm" onclick="saveStaff(${editing ? v.db_id : 'null'}, this)"><i class="fa-solid fa-check text-xs mr-1"></i> ${editing ? 'Save Changes' : 'Add Tailor'}</button>
         </div>`;
     },
 
@@ -687,7 +680,7 @@
           ${field('Paid On', input('pay-date', { type: 'date', value: new Date().toISOString().slice(0, 10) }))}
           <div class="col-span-2">${field('Notes', input('pay-notes', { placeholder: 'Optional' }))}</div>
         </div>
-        <p class="text-xs text-slate-500 mt-4">Staff wages are kept entirely separate from customer payments — this never appears in sales or revenue.</p>
+        <p class="text-xs text-slate-500 mt-4">Tailor wages are kept entirely separate from customer payments and never appear in sales or revenue.</p>
       </div>
       <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">
         <button class="bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-100 transition-colors" onclick="closeModal()">Cancel</button>
@@ -730,7 +723,7 @@
           <div class="flex items-center gap-3">
             <div class="avatar bg-slate-900">${s ? s.initials : '?'}</div>
             <div>
-              <div class="text-lg font-bold text-slate-900 tracking-tight">${s ? Atelier.escapeHtml(s.name) : 'Staff'}</div>
+              <div class="text-lg font-bold text-slate-900 tracking-tight">${s ? Atelier.escapeHtml(s.name) : 'Tailor'}</div>
               <div class="text-xs text-slate-500 mt-0.5">${s ? Atelier.escapeHtml(s.role) : ''} · ${s ? Atelier.escapeHtml(s.phone || 'no phone') : ''}</div>
             </div>
           </div>

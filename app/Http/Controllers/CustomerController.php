@@ -94,17 +94,6 @@ class CustomerController extends Controller
 
     public function destroy(Request $request, Customer $customer)
     {
-        // Refuse to silently cascade away order history.
-        if ($customer->orders()->exists()) {
-            $message = 'This customer has orders on record and cannot be deleted. Archive them instead.';
-
-            if ($request->expectsJson()) {
-                return response()->json(['success' => false, 'message' => $message], 422);
-            }
-
-            return back()->with('error', $message);
-        }
-
         $name = $customer->name;
         $customer->delete();
 
@@ -112,10 +101,10 @@ class CustomerController extends Controller
         $this->flush();
 
         if ($request->expectsJson()) {
-            return response()->json(['success' => true, 'message' => 'Customer deleted successfully!']);
+            return response()->json(['success' => true, 'message' => 'Customer archived; history retained.']);
         }
 
-        return redirect()->route('customers.index')->with('success', 'Customer deleted successfully!');
+        return redirect()->route('customers.index')->with('success', 'Customer archived; history retained.');
     }
 
     /**

@@ -283,7 +283,7 @@
                         <div class="pos-cust-chip pos-cust-chip-lg">
                             <div class="pos-cust-avatar" id="pay-cust-initials">?</div>
                             <div class="pos-cust-meta">
-                                <span class="pos-cust-name" id="pay-cust-name">Walk-in Customer</span>
+                                <span class="pos-cust-name" id="pay-cust-name">No Customer Selected</span>
                                 <span class="pos-cust-phone" id="pay-cust-phone">No phone</span>
                             </div>
                         </div>
@@ -299,11 +299,11 @@
                         <div class="pos-pay-field">
                             <i class="fa-solid fa-user pos-pay-field-icon"></i>
                             <select id="pos-customer" class="pos-pay-input pos-pay-select">
+                                <option value="" selected disabled>— No customer selected —</option>
                                 @foreach($customers as $c)
                                 <option value="{{ $c->id }}"
                                         data-due="{{ $c->due_balance }}"
-                                        data-phone="{{ $c->phone }}"
-                                        @selected(in_array(strtolower($c->name), ['walk-in', 'walkin'], true))>
+                                        data-phone="{{ $c->phone }}">
                                     {{ $c->name }}{{ $c->phone ? ' (' . $c->phone . ')' : '' }}
                                 </option>
                                 @endforeach
@@ -320,21 +320,21 @@
                 {{-- RIGHT: quick add. Fields match cs_customers columns. --}}
                 <div class="pos-pay-card">
                     <div class="pos-pay-card-head">
-                        <span>+ Add New Customer</span>
+                        <span>+ Add / Find Customer</span>
                     </div>
                     <div class="pos-pay-card-body">
                         <form id="inline-customer-form" onsubmit="submitInlineCustomer(event)">
                             @csrf
-                            <label class="pos-modal-label">Customer Name *</label>
+                            <label class="pos-modal-label">Phone Number *</label>
+                            <div class="pos-pay-field">
+                                <i class="fa-solid fa-phone pos-pay-field-icon"></i>
+                                <input type="text" id="ic-phone" class="pos-pay-input" placeholder="0300-1234567" required>
+                            </div>
+
+                            <label class="pos-modal-label mt-3">Customer Name *</label>
                             <div class="pos-pay-field">
                                 <i class="fa-solid fa-user pos-pay-field-icon"></i>
                                 <input type="text" id="ic-name" class="pos-pay-input" placeholder="e.g. Ahmed Ali" required>
-                            </div>
-
-                            <label class="pos-modal-label mt-3">Phone Number</label>
-                            <div class="pos-pay-field">
-                                <i class="fa-solid fa-phone pos-pay-field-icon"></i>
-                                <input type="text" id="ic-phone" class="pos-pay-input" placeholder="0300-1234567">
                             </div>
 
                             <label class="pos-modal-label mt-3">Address</label>
@@ -347,7 +347,7 @@
                                 <i class="fa-solid fa-user-plus text-[10px]"></i> Save &amp; Select Customer
                             </button>
                             <p class="pos-inline-hint">
-                                Saved customers are added to the database and selected automatically — no page reload.
+                                If the phone number already exists, the existing customer is loaded automatically — no duplicate is created.
                             </p>
                         </form>
                     </div>
@@ -1692,14 +1692,14 @@
 
     // In-memory catalogue that the cart reads from. Seeded with the first
     // page of products; topped up as the search endpoint returns more.
-    let products = {!! json_encode($products->map(function($p) {
+    let products = {{ Illuminate\Support\Js::from($products->map(function($p) {
         return [
             'id' => $p->id, 'name' => $p->name,
             'price' => (float) $p->price,
             'stock' => (float) $p->stock_quantity,
             'unit' => $p->unit, 'sku' => $p->sku,
         ];
-    })->keyBy('id')) !!};
+    })->keyBy('id')) }};
 
     let cart = [];
     let currentStep = 1;
@@ -1901,8 +1901,16 @@
                 return;
             }
 
-            customerSelect.innerHTML = list.map(c => `<option value="${c.id}" data-due="${c.due}" data-phone="${Atelier.escapeHtml(c.phone || '')}">${Atelier.escapeHtml(c.name)}${c.phone ? ' (' + Atelier.escapeHtml(c.phone) + ')' : ''}</option>`).join('');
-            if (list.some(c => String(c.id) === String(previous))) customerSelect.value = previous;
+            // Always include the empty placeholder so the first result is
+            // not auto-selected — the user must explicitly choose.
+            const placeholder = '<option value="" disabled selected>— Select a customer —</option>';
+            customerSelect.innerHTML = placeholder + list.map(c => `<option value="${c.id}" data-due="${c.due}" data-phone="${Atelier.escapeHtml(c.phone || '')}">${Atelier.escapeHtml(c.name)}${c.phone ? ' (' + Atelier.escapeHtml(c.phone) + ')' : ''}</option>`).join('');
+
+            // Re-select the previously chosen customer only if they are
+            // still in the new result set — otherwise the placeholder stays.
+            if (previous && list.some(c => String(c.id) === String(previous))) {
+                customerSelect.value = previous;
+            }
             customerSelect.dispatchEvent(new Event('change'));
         } catch (err) {
             Atelier.reportError(err, 'Could not search customers');
@@ -1947,11 +1955,13 @@
        name; nothing else in the app needs to know they are duplicated. */
     function renderPaymentCustomer() {
         const selected = customerSelect.options[customerSelect.selectedIndex];
+        const hasSelection = selected && selected.value !== '';
 
-        const name = selected ? (selected.text.split('(')[0].trim() || 'Walk-in Customer') : 'Walk-in Customer';
-        const phone = selected ? (selected.dataset.phone || '') : '';
-        const initials = name.split(/\s+/).filter(Boolean)
-            .slice(0, 2).map(w => w[0].toUpperCase()).join('') || '?';
+        const name = hasSelection ? (selected.text.split('(')[0].trim() || 'Walk-in Customer') : 'No Customer Selected';
+        const phone = hasSelection ? (selected.dataset.phone || '') : '';
+        const initials = hasSelection
+            ? (name.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('') || '?')
+            : '?';
 
         ['', '-2'].forEach(suffix => {
             const nameEl = document.getElementById('pay-cust-name' + suffix);
@@ -2497,6 +2507,12 @@
         submitBtn.disabled = false;
         submitBtn.innerHTML = '<i class="fa-solid fa-circle-check"></i> Complete Sale';
 
+        // Reset customer selection — no customer pre-selected for the new sale.
+        customerSelect.value = '';
+        customerSearch.value = '';
+        customerSelect.dispatchEvent(new Event('change'));
+        document.getElementById('inline-customer-form')?.reset();
+
         updateCartBadge();
         renderCartAll();
         highlightCartProducts();
@@ -2541,7 +2557,14 @@
                 toast(body.message || 'Could not add customer', 'error');
                 return;
             }
-            toast('Customer added', 'success');
+
+            // Show the right toast depending on whether the customer was
+            // looked up or freshly created.
+            if (body.existing) {
+                toast(body.message || 'Existing customer selected', 'info');
+            } else {
+                toast('Customer added', 'success');
+            }
 
             // Raw fetch again, so drop the cache — otherwise the Customers page
             // can still be served from a copy prefetched before this insert.
@@ -2549,13 +2572,25 @@
             // re-fetched, so the cashier never loses their place in the sale.
             Atelier.clearPageCache();
 
-            const opt = document.createElement('option');
-            opt.value = body.customer.id;
-            opt.dataset.due = body.customer.due_balance || 0;
-            opt.dataset.phone = body.customer.phone || '';
-            opt.text = body.customer.name + (body.customer.phone ? ' (' + body.customer.phone + ')' : '');
-            customerSelect.appendChild(opt);
-            customerSelect.value = body.customer.id;
+            // If the customer is already in the dropdown, just select them.
+            const existingOpt = Array.from(customerSelect.options).find(
+                o => String(o.value) === String(body.customer.id)
+            );
+            if (existingOpt) {
+                // Update the option's data attributes in case they changed
+                existingOpt.dataset.due = body.customer.due_balance || 0;
+                existingOpt.dataset.phone = body.customer.phone || '';
+                existingOpt.text = body.customer.name + (body.customer.phone ? ' (' + body.customer.phone + ')' : '');
+                customerSelect.value = body.customer.id;
+            } else {
+                const opt = document.createElement('option');
+                opt.value = body.customer.id;
+                opt.dataset.due = body.customer.due_balance || 0;
+                opt.dataset.phone = body.customer.phone || '';
+                opt.text = body.customer.name + (body.customer.phone ? ' (' + body.customer.phone + ')' : '');
+                customerSelect.appendChild(opt);
+                customerSelect.value = body.customer.id;
+            }
             customerSelect.dispatchEvent(new Event('change'));
 
             if (close) close();
@@ -2589,7 +2624,7 @@
             payload: {
                 name: document.getElementById('ic-name').value,
                 phone: document.getElementById('ic-phone').value,
-                address: document.getElementById('ic-address').value,
+                city: document.getElementById('ic-address').value,
             },
             button: document.getElementById('btn-inline-customer'),
             form: document.getElementById('inline-customer-form'),

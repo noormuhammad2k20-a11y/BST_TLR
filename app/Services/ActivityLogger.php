@@ -31,7 +31,7 @@ class ActivityLogger
             'event'        => $event,
             'subject_type' => $subject ? $subject::class : null,
             'subject_id'   => $subject?->getKey(),
-            'properties'   => $properties ?: null,
+            'properties'   => $properties ? SecretSettings::redact($properties) : null,
             'user_id'      => $user?->id,
             'actor_name'   => $user?->name ?? 'System',
             'ip_address'   => Request::ip(),

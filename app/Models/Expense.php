@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Expense extends Model
 {
+    use \Illuminate\Database\Eloquent\SoftDeletes;
     protected $guarded = ['id'];
 
     protected $casts = [

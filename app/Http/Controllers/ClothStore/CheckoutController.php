@@ -15,6 +15,9 @@ use App\Models\ClothStore\StockTransaction;
 use App\Models\ClothStore\ProductLocation;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use App\Services\Decimal as D;
+use App\Services\ClothStore\InventoryService;
+use App\Services\ClothStore\FinanceService;
 
 class CheckoutController extends Controller
 {
@@ -25,9 +28,7 @@ class CheckoutController extends Controller
      * Accepted tender types. Whitelisted so a crafted request cannot invent a
      * payment method that then breaks the Payments page filters and reports.
      */
-    private const PAYMENT_METHODS = [
-        'Cash', 'Card', 'Bank Transfer', 'EasyPaisa', 'JazzCash', 'Cheque',
-    ];
+    private const PAYMENT_METHODS = FinanceService::METHODS;
 
     public function index()
     {
@@ -171,7 +172,7 @@ class CheckoutController extends Controller
      */
     private function productQuery()
     {
-        return Product::with('category')
+        return Product::with('category')->where('status', 'Active')->whereColumn('stock_quantity','>','reserved_quantity')
             ->orderBy('name');
     }
 
@@ -190,11 +191,11 @@ class CheckoutController extends Controller
 
         DB::beginTransaction();
         try {
-            $customer = Customer::findOrFail($validated['cs_customer_id']);
+            $customer = Customer::whereKey($validated['cs_customer_id'])->lockForUpdate()->firstOrFail();
 
-            $totalMeters = 0;
-            $grossProfit = 0;
-            $subtotal = 0;
+            $totalMeters = '0.00';
+            $grossProfit = '0.00';
+            $subtotal = '0.00';
 
             /*
              * Money is computed here, never accepted from the browser.
@@ -206,8 +207,14 @@ class CheckoutController extends Controller
              * row and the totals are derived from them.
              */
             $lines = [];
-
+            $aggregated=[];
             foreach ($validated['items'] as $item) {
+                $id=$item['cs_product_id'];
+                $aggregated[$id]=['cs_product_id'=>$id,'quantity'=>D::add($aggregated[$id]['quantity']??'0.00',(string)$item['quantity'])];
+            }
+            $validated['items']=array_values($aggregated);
+
+            foreach (collect($validated['items'])->sortBy('cs_product_id') as $item) {
                 $product = Product::lockForUpdate()->findOrFail($item['cs_product_id']);
 
                 if ($product->status !== 'Active') {
@@ -217,33 +224,33 @@ class CheckoutController extends Controller
                 // round() at every step: these are metres, and un-rounded
                 // float drift would otherwise leave 0.0000001 m ghosts in
                 // stock that make a product look permanently in-stock.
-                $qty = round((float) $item['quantity'], 2);
-                $unitPrice = round((float) $product->price, 2);
-                $unitCost = round((float) $product->cost_price, 2);
+                $qty = D::value((string)$item['quantity']);
+                $unitPrice = D::value((string)$product->price);
+                $unitCost = D::value((string)($product->cost_price ?? '0'));
 
-                $previousQty = round((float) $product->stock_quantity, 2);
+                $previousQty = D::value((string)$product->stock_quantity);
 
-                if ($previousQty < $qty) {
+                if (D::cmp(D::sub($previousQty,(string)$product->reserved_quantity),$qty)<0) {
                     throw new \Exception("Insufficient stock for {$product->name}. Only {$previousQty} {$product->unit} available.");
                 }
 
-                $itemTotal = round($qty * $unitPrice, 2);
-                $itemCost = round($qty * $unitCost, 2);
-                $itemProfit = $itemTotal - $itemCost;
+                $itemTotal = D::mul($qty,$unitPrice);
+                $itemCost = D::mul($qty,$unitCost);
+                $itemProfit = D::sub($itemTotal,$itemCost);
 
-                $subtotal += $itemTotal;
+                $subtotal = D::add($subtotal,$itemTotal);
                 $lines[] = [$product, $qty, $unitPrice, $unitCost, $itemTotal, $previousQty];
             }
 
-            $subtotal = round($subtotal, 2);
+            $subtotal = D::value($subtotal);
 
             // A discount can never exceed the sale, or the total goes negative
             // and the customer ends up with a credit they never paid for.
-            $discount = min(round((float) ($validated['discount'] ?? 0), 2), $subtotal);
-            $totalAmount = round($subtotal - $discount, 2);
+            $discount = D::min(D::value((string)($validated['discount'] ?? '0')),$subtotal);
+            $totalAmount = D::sub($subtotal,$discount);
 
             // Overpayment is change, not a credit — cap what is recorded.
-            $paidAmount = min(round((float) $validated['paid_amount'], 2), $totalAmount);
+            $paidAmount = D::min(D::value((string)$validated['paid_amount']),$totalAmount);
 
             $order = Order::create([
                 // Placeholder — replaced with a readable sequential number
@@ -258,6 +265,8 @@ class CheckoutController extends Controller
                 'gross_profit' => 0,
                 'total_meters_sold' => 0,
                 'paid_amount' => $paidAmount,
+                'remaining_amount' => D::sub($totalAmount,$paidAmount),
+                'payment_status' => D::cmp($paidAmount,$totalAmount)===0?'Paid':(D::cmp($paidAmount,'0')>0?'Partial':'Unpaid'),
                 'payment_method' => $validated['payment_method'],
                 'status' => 'Completed',
             ]);
@@ -268,9 +277,9 @@ class CheckoutController extends Controller
             $order->save();
 
             foreach ($lines as [$product, $qty, $unitPrice, $unitCost, $itemTotal, $previousQty]) {
-                $itemProfit = $itemTotal - round($qty * $unitCost, 2);
+                $itemProfit = D::sub($itemTotal,D::mul($qty,$unitCost));
 
-                OrderItem::create([
+                $orderItem = OrderItem::create([
                     'cs_order_id' => $order->id,
                     'cs_product_id' => $product->id,
                     'quantity' => $qty,
@@ -279,46 +288,16 @@ class CheckoutController extends Controller
                     'total' => $itemTotal
                 ]);
 
-                // Deduct stock
-                $newQty = round($previousQty - $qty, 2);
-                $product->stock_quantity = $newQty;
-                $product->save();
+                app(InventoryService::class)->move($product->id,D::sub('0',$qty),'Sale',$order->invoice_number,null,$orderItem->id);
 
-                // Record the movement. Without this row the sale silently
-                // changed stock_quantity with nothing in the audit trail, so
-                // Stock History could never explain where the metres went.
-                StockTransaction::create([
-                    'cs_product_id' => $product->id,
-                    'user_id'       => auth()->id(),
-                    'type'          => 'out',
-                    'quantity'      => $qty,
-                    'reason'        => 'Sale',
-                    'previous_qty'  => $previousQty,
-                    'new_qty'       => $newQty,
-                    'reference'     => $order->invoice_number,
-                    'notes'         => 'Sold via Smart Checkout',
-                ]);
-
-                // Keep the per-location ledger in step with the product total,
-                // otherwise Stock Transfer sees stock that is no longer there.
-                $location = ProductLocation::where('cs_product_id', $product->id)
-                    ->orderByDesc('quantity')
-                    ->lockForUpdate()
-                    ->first();
-
-                if ($location) {
-                    $location->quantity = round(max(0, (float) $location->quantity - $qty), 2);
-                    $location->save();
-                }
-
-                $totalMeters += $qty;
-                $grossProfit += $itemProfit;
+                $totalMeters = D::add($totalMeters,$qty);
+                $grossProfit = D::add($grossProfit,$itemProfit);
             }
 
-            $totalMeters = round($totalMeters, 2);
+            $totalMeters = D::value($totalMeters);
 
             // The discount comes off the shop's margin, not the customer's.
-            $grossProfit = round($grossProfit - $discount, 2);
+            $grossProfit = D::sub($grossProfit,$discount);
 
             $order->update([
                 'total_meters_sold' => $totalMeters,
@@ -330,12 +309,12 @@ class CheckoutController extends Controller
              *
              * NOTE: the column is `reference`, not `reference_number` —
              * cs_customer_ledgers and cs_customer_payments both define
-             * `reference` (only cs_supplier_payments uses reference_number).
+             * `reference` is the canonical customer-payment reference field.
              * Writing the wrong name meant these inserts referenced a column
              * that does not exist in the migrations at all.
              */
             // 1. Debit the customer for the total sale amount
-            $customer->due_balance = round((float) $customer->due_balance + $totalAmount, 2);
+            $customer->due_balance = D::add((string)$customer->due_balance,$totalAmount);
             CustomerLedger::create([
                 'cs_customer_id' => $customer->id,
                 'date' => now(),
@@ -364,7 +343,7 @@ class CheckoutController extends Controller
                     'notes' => 'Payment taken at checkout',
                 ]);
 
-                $customer->due_balance = round($customer->due_balance - $paidAmount, 2);
+                $customer->due_balance = D::sub((string)$customer->due_balance,$paidAmount);
                 CustomerLedger::create([
                     'cs_customer_id' => $customer->id,
                     'date' => now(),
@@ -378,7 +357,7 @@ class CheckoutController extends Controller
             }
 
             // Lifetime figures the Customers page and reports read from.
-            $customer->total_purchases = round((float) $customer->total_purchases + $totalAmount, 2);
+            $customer->total_purchases = D::add((string)$customer->total_purchases,$totalAmount);
             $customer->last_purchase_date = now();
             $customer->save();
 

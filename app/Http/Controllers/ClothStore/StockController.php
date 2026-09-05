@@ -106,115 +106,28 @@ class StockController extends Controller
     {
         $request->validate([
             'cs_product_id' => 'required|exists:cs_products,id',
-            'operation' => 'required|in:in,out,adjustment,transfer',
+            'operation' => 'required|in:in,out,adjustment',
             // Fabric moves in fractional metres — receiving 65.5 m of a 100 m
             // purchase order is routine, so an 'integer|min:1' rule here made
             // partial goods-receipt impossible.
             'quantity' => 'required|numeric|min:0.01|decimal:0,2',
-            'location_id' => 'required_unless:operation,transfer|exists:cs_locations,id',
-            'from_location_id' => 'required_if:operation,transfer|exists:cs_locations,id',
-            'to_location_id' => 'required_if:operation,transfer|exists:cs_locations,id',
+            'location_id' => 'required|exists:cs_locations,id',
             'reason' => 'nullable|string',
             'reference' => 'nullable|string',
             'notes' => 'nullable|string',
         ]);
 
-        DB::beginTransaction();
-        try {
-            $product = Product::findOrFail($request->cs_product_id);
-            $qty = round((float) $request->quantity, 2);
-            $operation = $request->operation;
-
-            $tx = new StockTransaction([
-                'cs_product_id' => $product->id,
-                'type' => $operation,
-                'quantity' => $qty,
-                'reference' => $request->reference,
-                'notes' => $request->notes,
-                'reason' => $request->reason,
-                'user_id' => auth()->id() ?? 1, // Fallback if no auth
-            ]);
-
-            if ($operation === 'transfer') {
-                if ($request->from_location_id == $request->to_location_id) {
-                    throw new \Exception("Cannot transfer to the same location.");
-                }
-                
-                $fromPL = ProductLocation::firstOrCreate(
-                    ['cs_product_id' => $product->id, 'cs_location_id' => $request->from_location_id],
-                    ['quantity' => 0]
-                );
-                
-                $toPL = ProductLocation::firstOrCreate(
-                    ['cs_product_id' => $product->id, 'cs_location_id' => $request->to_location_id],
-                    ['quantity' => 0]
-                );
-
-                if ($fromPL->quantity < $qty) {
-                    throw new \Exception("Insufficient stock in source location.");
-                }
-
-                $fromPL->decrement('quantity', $qty);
-                $toPL->increment('quantity', $qty);
-
-                $tx->from_location_id = $request->from_location_id;
-                $tx->to_location_id = $request->to_location_id;
-                $tx->previous_qty = $product->stock_quantity;
-                $tx->new_qty = $product->stock_quantity; // Overall stock doesn't change
-            } else {
-                $location_id = $request->location_id;
-                $pl = ProductLocation::firstOrCreate(
-                    ['cs_product_id' => $product->id, 'cs_location_id' => $location_id],
-                    ['quantity' => 0]
-                );
-
-                $tx->previous_qty = $product->stock_quantity;
-
-                if ($operation === 'in') {
-                    $pl->increment('quantity', $qty);
-                    $product->increment('stock_quantity', $qty);
-                    $tx->to_location_id = $location_id;
-                } elseif ($operation === 'out') {
-                    if ($pl->quantity < $qty) throw new \Exception("Insufficient stock in location.");
-                    $pl->decrement('quantity', $qty);
-                    $product->decrement('stock_quantity', $qty);
-                    $tx->from_location_id = $location_id;
-                } elseif ($operation === 'adjustment') {
-                    // For adjustment, we assume $qty is the exact difference to add/subtract, 
-                    // or maybe the form passes a signed quantity. Let's assume the form passes 
-                    // the *absolute difference* and the reason determines if it's + or -
-                    // Wait, standard adjustment usually specifies "add" or "subtract" implicitly by a separate field,
-                    // or negative quantity. Our validator requires min:1, so we need an adjustment_type (+/-)
-                    // Let's modify the logic: if operation is adjustment, require adjustment_type
-                }
-
-                $tx->new_qty = $product->fresh()->stock_quantity;
-            }
-
-            // Let's refine Adjustment logic
-            if ($operation === 'adjustment') {
-                $adjType = $request->get('adjustment_type', 'add'); // add or subtract
-                if ($adjType === 'subtract') {
-                    if ($pl->quantity < $qty) throw new \Exception("Insufficient stock in location for adjustment.");
-                    $pl->decrement('quantity', $qty);
-                    $product->decrement('stock_quantity', $qty);
-                    $tx->from_location_id = $location_id;
-                } else {
-                    $pl->increment('quantity', $qty);
-                    $product->increment('stock_quantity', $qty);
-                    $tx->to_location_id = $location_id;
-                }
-                $tx->new_qty = $product->fresh()->stock_quantity;
-            }
-
-            $tx->save();
-            DB::commit();
-
-            return response()->json(['success' => true, 'message' => 'Stock operation recorded successfully.']);
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json(['success' => false, 'message' => $e->getMessage()], 400);
-        }
+        $request->validate(['adjustment_type'=>'nullable|in:add,subtract']);
+        DB::transaction(function () use ($request) {
+            $stock=app(\App\Services\ClothStore\InventoryService::class);
+            $qty=\App\Services\Decimal::value((string)$request->quantity);
+            $reference=$request->reference ?? 'STOCK-'.\Illuminate\Support\Str::uuid();
+            $subtract=$request->operation==='out' || ($request->operation==='adjustment' && $request->adjustment_type==='subtract');
+            $reason=$request->reason ?? ($request->operation === 'in' ? 'Market stock purchase' : $request->operation);
+            $stock->move((int)$request->cs_product_id,$subtract?\App\Services\Decimal::sub('0',$qty):$qty,
+                $reason,$reference,(int)$request->location_id);
+        },3);
+        return response()->json(['success'=>true,'message'=>'Stock operation recorded successfully.']);
     }
 
     public function alerts()

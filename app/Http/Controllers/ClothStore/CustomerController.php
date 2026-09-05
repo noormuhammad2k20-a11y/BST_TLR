@@ -143,15 +143,6 @@ class CustomerController extends Controller
 
     public function destroy(Customer $customer)
     {
-        // Deleting a customer with history would cascade away their orders,
-        // payments and ledger, silently rewriting past revenue.
-        if ($customer->orders()->exists() || $customer->payments()->exists()) {
-            return response()->json([
-                'success' => false,
-                'message' => "{$customer->name} has sales or payment history and cannot be deleted.",
-            ], 422);
-        }
-
         if ((float) $customer->due_balance > 0) {
             return response()->json([
                 'success' => false,
@@ -163,13 +154,36 @@ class CustomerController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Customer deleted successfully.',
+            'message' => 'Customer archived; financial history retained.',
         ]);
     }
 
-    /** Quick-add from the till — same rules, fewer fields on screen. */
+    /**
+     * Quick-add from the till — with duplicate-prevention.
+     *
+     * If the phone number already belongs to an existing customer, that
+     * customer is returned and selected for the order — no duplicate is
+     * created.  If no match is found, a new customer is created as before.
+     */
     public function storeQuick(Request $request)
     {
+        // When a phone number is supplied, check for an existing customer
+        // BEFORE running validation (which would reject the duplicate phone).
+        $phone = trim((string) $request->input('phone'));
+
+        if ($phone !== '') {
+            $existing = Customer::where('phone', $phone)->first();
+
+            if ($existing) {
+                return response()->json([
+                    'success'  => true,
+                    'existing' => true,
+                    'customer' => $existing,
+                    'message'  => "Customer \"{$existing->name}\" already exists with this phone number — selected automatically.",
+                ]);
+            }
+        }
+
         $validated = $request->validate(
             $this->rules(),
             ['phone.unique' => 'A customer with this phone number already exists.']
@@ -179,6 +193,7 @@ class CustomerController extends Controller
 
         return response()->json([
             'success'  => true,
+            'existing' => false,
             'customer' => $customer,
             'message'  => 'Customer created successfully.',
         ]);
