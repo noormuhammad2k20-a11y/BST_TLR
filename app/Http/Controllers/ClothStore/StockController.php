@@ -6,8 +6,6 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\ClothStore\Product;
 use App\Models\ClothStore\StockTransaction;
-use App\Models\ClothStore\Location;
-use App\Models\ClothStore\ProductLocation;
 use Illuminate\Support\Facades\DB;
 
 class StockController extends Controller
@@ -84,12 +82,11 @@ class StockController extends Controller
 
         $inventory = $inventoryQuery->orderBy('name')->paginate(50)->withQueryString();
 
-        $locations = Location::where('is_active', true)->get();
         $categories = \App\Models\ClothStore\Category::orderBy('name')->get();
 
         return view('cloth-store.stock.index', compact(
             'totalStock', 'stockValue', 'lowStockCount', 'outOfStockCount', 
-            'reservedStock', 'incomingStock', 'inventory', 'locations', 'categories', 'products'
+            'reservedStock', 'incomingStock', 'inventory', 'categories', 'products'
         ));
     }
 
@@ -107,11 +104,9 @@ class StockController extends Controller
         $request->validate([
             'cs_product_id' => 'required|exists:cs_products,id',
             'operation' => 'required|in:in,out,adjustment',
-            // Fabric moves in fractional metres — receiving 65.5 m of a 100 m
-            // purchase order is routine, so an 'integer|min:1' rule here made
-            // partial goods-receipt impossible.
+            // Fabric is bought in fractional metres, so quantities retain two
+            // decimal places for direct market stock intake.
             'quantity' => 'required|numeric|min:0.01|decimal:0,2',
-            'location_id' => 'required|exists:cs_locations,id',
             'reason' => 'nullable|string',
             'reference' => 'nullable|string',
             'notes' => 'nullable|string',
@@ -125,7 +120,7 @@ class StockController extends Controller
             $subtract=$request->operation==='out' || ($request->operation==='adjustment' && $request->adjustment_type==='subtract');
             $reason=$request->reason ?? ($request->operation === 'in' ? 'Market stock purchase' : $request->operation);
             $stock->move((int)$request->cs_product_id,$subtract?\App\Services\Decimal::sub('0',$qty):$qty,
-                $reason,$reference,(int)$request->location_id);
+                $reason,$reference);
         },3);
         return response()->json(['success'=>true,'message'=>'Stock operation recorded successfully.']);
     }

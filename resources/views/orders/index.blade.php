@@ -635,10 +635,8 @@
       const res = await Atelier.api.post(ROUTES.notify(dbId), { mark_ready: true });
       upsertOrder(res.order);
 
-      // Manual mode returns a link to open; UltraMsg has already sent it.
-      if (res.whatsapp_url) window.open(res.whatsapp_url, '_blank', 'noopener');
 
-      toast(res.message, res.whatsapp?.sent === false ? 'warning' : 'success');
+      toast(res.message, res.notification?.sent === false ? 'warning' : 'success');
       renderPage();
       Atelier.refreshCounters();
     } catch (err) {
@@ -899,9 +897,6 @@
 
       // Open each prefilled WhatsApp thread; browsers allow this right after a
       // user-initiated action, and we cap it so nothing floods the screen.
-      (res.links || []).slice(0, 5).forEach((link, i) => {
-        if (link.url) setTimeout(() => window.open(link.url, '_blank'), i * 250);
-      });
 
       await refreshOrders();
 

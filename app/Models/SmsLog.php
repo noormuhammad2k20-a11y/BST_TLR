@@ -32,6 +32,7 @@ class SmsLog extends Model
             'message'     => $data['message'] ?? '',
             'template_id' => $data['template_id'] ?? null,
             'provider'    => $data['provider'] ?? 'sendpk',
+            'provider_message_id' => $data['provider_message_id'] ?? null,
             'status'      => $data['status'] ?? 'sent',
             'error'       => $data['error'] ?? null,
             'order_id'    => $data['order_id'] ?? null,

@@ -591,7 +591,6 @@
     try {
       const res = await Atelier.api.post(`/orders/${orderId}/notify`);
       toast(res.message || 'Reminder sent', 'success');
-      if (res.whatsapp_url) window.open(res.whatsapp_url, '_blank');
       Atelier.refreshCounters();
     } catch (err) {
       Atelier.reportError(err, 'Could not send the reminder');

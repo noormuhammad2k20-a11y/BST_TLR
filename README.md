@@ -78,28 +78,15 @@ automatically elevated. Assign and review their grants in user management after
 running `ProductionPermissionsSeeder`. Newly created default roles receive
 conservative grants.
 
-## WhatsApp gateway
+## Customer notifications
 
-The optional Node gateway lives in `whatsapp-gateway/`. Install it there with
-`npm ci`. Configure a unique token of at least 32 characters in an untracked
-`config.json` or `GATEWAY_TOKEN`, and use the same token in application Settings.
-The gateway accepts authentication only through `X-Gateway-Token`.
-
-It binds to `127.0.0.1` by default. Set `GATEWAY_HOST` only when Laravel runs on
-another trusted machine, then restrict the port with a firewall or private
-network. The QR/session endpoints carry account authority; never expose the
-gateway directly to the internet. Rotate any token or copied `session/` data
-that has appeared in exports, logs, screenshots, or version control.
-
-The gateway is an unofficial WhatsApp Web integration. The application retains
-its manual WhatsApp fallback when the gateway is unavailable.
+Automated WhatsApp uses Meta WhatsApp Cloud API directly. SMS supports Veevo Tech / SPEXT (recommended) and SendPK. See [Notification setup](NOTIFICATION-SETUP.md) for credentials, approved templates, upgrade steps, and provider limitations.
 
 ## Testing
 
 ```text
 php artisan test
 npm run build
-node --test whatsapp-gateway/security.test.js
 ```
 
 Business tests use the fixed, isolated `atelier_integrity_test` database:
@@ -120,7 +107,7 @@ to target the configured working database.
 ## Backups and deployment
 
 - Back up the database and `storage/app/public`; encrypt backups at rest.
-- Exclude `.env`, SQL dumps, gateway configuration/session files, and logs from
+- Exclude `.env`, SQL dumps, credentials and logs from
   source control. Never place backups under the public web root.
 - Put the app into maintenance mode, deploy, migrate, build assets, rebuild
   caches, restart queue workers, run reconciliation in dry-run mode, then restore
@@ -128,7 +115,7 @@ to target the configured working database.
 - Set `APP_ENV=production`, `APP_DEBUG=false`, secure cookies under HTTPS, and a
   production log level such as `warning`.
 - Test login, POS stock movement, payments/refunds, printing, queue processing,
-  scheduling, backups, and gateway connectivity on staging before cutover.
+  scheduling, backups, and notification provider connectivity on staging before cutover.
 
 The repository-root `.htaccess` blocks sensitive source and development paths
 for accidental XAMPP root deployments, but it is defense in depth. The correct

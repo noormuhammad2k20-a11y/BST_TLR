@@ -312,12 +312,7 @@
         delivery_ids: Array.from(selectedIds),
       });
 
-      /* Manual mode returns one prefilled WhatsApp thread per customer.
-         Browsers only allow this burst right after a click, and it is capped so
-         the screen is not buried in tabs. */
-      (res.links || []).slice(0, 5).forEach((link, i) => {
-        if (link.url) setTimeout(() => window.open(link.url, '_blank'), i * 250);
-      });
+
 
       selectedIds.clear();
       await refreshFromServer();

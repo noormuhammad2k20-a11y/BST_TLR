@@ -5,24 +5,9 @@ namespace App\Services;
 use App\Models\Order;
 use App\Models\SmsLog;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
 
-/**
- * Provider-based SMS delivery, architecturally mirroring WhatsAppService.
- *
- * Reuses the existing template variable system (WhatsAppService::variablesForOrder,
- * WhatsAppService::render) instead of duplicating it. SMS templates are stored
- * separately because they are shorter than WhatsApp messages.
- *
- * Adding a second SMS provider later is one new private method + one settings
- * key — no rewriting needed.
- */
 class SmsService
 {
-    /* ------------------------------------------------------------------ */
-    /*  Configuration                                                      */
-    /* ------------------------------------------------------------------ */
-
     public static function enabled(): bool
     {
         return Settings::bool('sms_enabled');
@@ -30,330 +15,167 @@ class SmsService
 
     public static function provider(): string
     {
-        $provider = Settings::str('sms_provider');
-
-        return in_array($provider, ['sendpk'], true) ? $provider : 'sendpk';
+        return Settings::str('sms_provider');
     }
 
     public static function providerLabel(): string
     {
-        return match (self::provider()) {
-            'sendpk' => 'SendPK',
-            default  => 'SMS',
-        };
+        return self::provider() === 'veevo' ? 'Veevo Tech / SPEXT' : 'SendPK';
     }
 
-    /**
-     * Whether the currently selected SMS provider has valid credentials.
-     */
     public static function configured(): bool
     {
         return match (self::provider()) {
-            'sendpk' => filled(self::sendPkCredentials()['api_key']),
-            default  => false,
+            'veevo' => filled(Settings::str('veevo_api_key')),
+            'sendpk' => filled(Settings::str('sendpk_api_key')) && filled(Settings::str('sendpk_sender_id')),
+            default => false,
         };
     }
 
-    /**
-     * @return array{api_key: string, sender_id: string, sms_type: string}
-     */
-    public static function sendPkCredentials(): array
+    public static function renderTemplate(string $id, array $variables): ?string
     {
-        return [
-            'api_key'   => trim(Settings::str('sendpk_api_key')),
-            'sender_id' => trim(Settings::str('sendpk_sender_id')),
-            'sms_type'  => Settings::str('sendpk_sms_type') ?: 'semi_branded',
-        ];
+        $template = Settings::activeSmsTemplate($id);
+
+        return $template ? NotificationVariables::render($template['text'] ?? '', $variables) : null;
     }
 
-    /** Digits only, normalised for SMS APIs. */
-    public static function normalisePhone(?string $phone): ?string
+    private static function request()
     {
-        $digits = preg_replace('/\D+/', '', (string) $phone);
-
-        return blank($digits) ? null : $digits;
+        return Http::connectTimeout(config('messaging.connect_timeout'))->timeout(config('messaging.timeout'));
     }
 
-    /* ------------------------------------------------------------------ */
-    /*  Template rendering (reuses WhatsAppService)                        */
-    /* ------------------------------------------------------------------ */
-
-    /**
-     * Renders a saved SMS template by id. Returns null when the shop has
-     * switched that template off, so callers can skip sending entirely.
-     *
-     * @param array<string, string> $variables
-     */
-    public static function renderTemplate(string $templateId, array $variables): ?string
-    {
-        $template = Settings::activeSmsTemplate($templateId);
-
-        return $template ? WhatsAppService::render($template['text'] ?? '', $variables) : null;
-    }
-
-    /* ------------------------------------------------------------------ */
-    /*  Delivery                                                           */
-    /* ------------------------------------------------------------------ */
-
-    /**
-     * Delivers one SMS message using the configured provider.
-     *
-     * Always returns a structured result rather than throwing, because a
-     * messaging failure must never roll back the order or payment that
-     * triggered it.
-     *
-     * @return array{sent: bool, provider: string, message: string, error: ?string}
-     */
     public static function send(?string $phone, string $message, ?int $orderId = null, ?int $customerId = null, ?string $templateId = null): array
     {
-        $result = [
-            'sent'     => false,
-            'provider' => self::provider(),
-            'message'  => $message,
-            'error'    => null,
-        ];
-
-        if (!self::enabled()) {
-            $result['error'] = 'SMS delivery is switched off in Settings.';
-
-            return $result;
+        $provider = 'sms';
+        $log = false;
+        $result = DeliveryResult::make($provider);
+        try {
+            $provider = self::provider();
+            if (! self::enabled()) {
+                return $result = DeliveryResult::make($provider, error: 'SMS delivery is switched off.');
+            }
+            $log = true;
+            $phone = NotificationPhone::normalize($phone, $provider === 'veevo');
+            if (! $phone) {
+                return $result = DeliveryResult::make($provider, error: 'Enter a valid Pakistani mobile number.');
+            }
+            if (! self::configured()) {
+                return $result = DeliveryResult::make($provider, error: 'Configure the selected SMS provider first.');
+            }
+            if (trim($message) === '') {
+                return $result = DeliveryResult::make($provider, error: 'The SMS message is empty.');
+            }
+            $result = match ($provider) {
+                'veevo' => self::veevo($phone, $message),
+                'sendpk' => self::sendpk($phone, $message),
+                default => DeliveryResult::make($provider, error: 'Unknown SMS provider.'),
+            };
+        } catch (\Throwable) {
+            $result = DeliveryResult::make($provider, error: 'SMS request could not complete. Delivery may be unknown; check before resending.');
+        } finally {
+            if ($log) {
+                DeliveryResult::log(SmsLog::class, ['phone' => mb_substr(DeliveryResult::safeText($phone), 0, 50), 'message' => DeliveryResult::safeText($message, 2000), 'template_id' => $templateId, 'order_id' => $orderId, 'customer_id' => $customerId], $result);
+            }
         }
-
-        $phone = self::normalisePhone($phone);
-
-        if (!$phone) {
-            $result['error'] = 'This customer has no usable phone number.';
-
-            return $result;
-        }
-
-        if (!self::configured()) {
-            $result['error'] = 'SMS provider credentials are not configured in Settings.';
-
-            return $result;
-        }
-
-        $api = match (self::provider()) {
-            'sendpk' => self::sendPkCall($phone, $message),
-            default  => ['ok' => false, 'error' => 'Unknown SMS provider.', 'body' => ''],
-        };
-
-        if ($api['ok']) {
-            $result['sent'] = true;
-
-            SmsLog::record([
-                'phone'        => $phone,
-                'message'      => $message,
-                'template_id'  => $templateId,
-                'provider'     => self::provider(),
-                'status'       => 'sent',
-                'order_id'     => $orderId,
-                'customer_id'  => $customerId,
-                'api_response' => is_string($api['body']) ? $api['body'] : json_encode($api['body']),
-            ]);
-
-            return $result;
-        }
-
-        $result['error'] = $api['error'];
-
-        SmsLog::record([
-            'phone'        => $phone,
-            'message'      => $message,
-            'template_id'  => $templateId,
-            'provider'     => self::provider(),
-            'status'       => 'failed',
-            'error'        => $api['error'],
-            'order_id'     => $orderId,
-            'customer_id'  => $customerId,
-            'api_response' => is_string($api['body']) ? $api['body'] : json_encode($api['body']),
-        ]);
 
         return $result;
     }
 
-    /**
-     * Sends the SMS template registered for an order event, if it is switched on.
-     *
-     * @param array<string, string> $extra
-     * @return array{sent: bool, provider: string, message: string, error: ?string}|null
-     */
-    public static function sendTemplate(string $templateId, Order $order, array $extra = []): ?array
+    public static function sendTemplate(string $id, Order $order, array $extra = []): ?array
     {
-        $message = self::renderTemplate($templateId, WhatsAppService::variablesForOrder($order, $extra));
-
-        if ($message === null) {
-            return null;
-        }
-
-        return self::send(
-            $order->customer?->phone,
-            $message,
-            $order->id,
-            $order->customer_id,
-            $templateId
-        );
-    }
-
-    /* ------------------------------------------------------------------ */
-    /*  SendPK provider                                                    */
-    /* ------------------------------------------------------------------ */
-
-    /**
-     * One HTTP call to the SendPK API.
-     *
-     * @return array{ok: bool, body: string, error: ?string}
-     */
-    private static function sendPkCall(string $phone, string $message): array
-    {
-        $creds = self::sendPkCredentials();
-
-        if (!filled($creds['api_key'])) {
-            return ['ok' => false, 'body' => '', 'error' => 'SendPK API key is missing in Settings.'];
-        }
-
         try {
-            $response = Http::timeout(15)->get('https://sendpk.com/api/sms.api.php', [
-                'api_key'   => $creds['api_key'],
-                'sender'    => $creds['sender_id'],
-                'mobile'    => $phone,
-                'message'   => $message,
-                'format'    => 'json',
-            ]);
-
-            $body = $response->body();
-
-            if (!$response->successful()) {
-                return [
-                    'ok'    => false,
-                    'body'  => $body,
-                    'error' => 'SendPK returned HTTP ' . $response->status() . '.',
-                ];
+            if (! self::enabled()) {
+                return DeliveryResult::make(self::provider(), error: 'SMS delivery is switched off.');
             }
+            $message = self::renderTemplate($id, NotificationVariables::variablesForOrder($order, $extra));
 
-            // SendPK returns various success indicators in its response.
-            // A successful send typically contains "ok" or a message ID.
-            $decoded = $response->json();
-            $bodyLower = strtolower($body);
-
-            // Check for explicit error messages
-            if (is_array($decoded) && isset($decoded['error'])) {
-                return [
-                    'ok'    => false,
-                    'body'  => $body,
-                    'error' => 'SendPK: ' . (is_string($decoded['error']) ? $decoded['error'] : json_encode($decoded['error'])),
-                ];
-            }
-
-            // If response contains known error strings
-            if (str_contains($bodyLower, 'invalid') || str_contains($bodyLower, 'error') || str_contains($bodyLower, 'fail')) {
-                // But not if it's actually a success response containing 'message_id'
-                if (!str_contains($bodyLower, 'message_id') && !str_contains($bodyLower, 'ok')) {
-                    return [
-                        'ok'    => false,
-                        'body'  => $body,
-                        'error' => 'SendPK rejected the request: ' . substr($body, 0, 200),
-                    ];
-                }
-            }
-
-            return ['ok' => true, 'body' => $body, 'error' => null];
-        } catch (\Throwable $e) {
-            Log::warning('SendPK SMS request failed', ['phone' => $phone, 'error' => $e->getMessage()]);
-
-            return [
-                'ok'    => false,
-                'body'  => '',
-                'error' => 'Could not reach SendPK: ' . $e->getMessage(),
-            ];
+            return $message === null ? null : self::send($order->customer?->phone, $message, $order->id, $order->customer_id, $id);
+        } catch (\Throwable) {
+            return DeliveryResult::make('sms', error: 'SMS notification could not be prepared.');
         }
     }
 
-    /* ------------------------------------------------------------------ */
-    /*  Diagnostics                                                        */
-    /* ------------------------------------------------------------------ */
+    private static function veevo(string $phone, string $message): array
+    {
+        $payload = ['apikey' => Settings::str('veevo_api_key'), 'receivernum' => $phone, 'textmessage' => $message];
+        if (filled(Settings::str('veevo_sender_id'))) {
+            $payload['sendernum'] = Settings::str('veevo_sender_id');
+        }
+        $response = self::request()->post('https://api.veevotech.com/v3/sendsms', $payload);
+        $data = $response->json();
+        $data = is_array($data) ? $data : [];
+        $ok = $response->successful() && ($data['STATUS'] ?? '') === 'SUCCESSFUL' && ! empty($data['MESSAGE_ID']);
+        $metadata = ['http_status' => $response->status()];
+        foreach (['STATUS', 'MESSAGE_ID', 'ERROR_CODE', 'ERROR_DESCRIPTION', 'NETWORK_NAME', 'RECEIVER_NUMBER', 'COUNTRY_CODE'] as $key) {
+            if (isset($data[$key])) {
+                $metadata[$key] = DeliveryResult::safeText($data[$key]);
+            }
+        }
 
-    /**
-     * Confirms the SendPK API key is valid without sending anything.
-     *
-     * @return array{ok: bool, status: ?string, error: ?string}
-     */
+        return DeliveryResult::make('veevo', $ok, $ok ? null : 'Veevo: '.DeliveryResult::safeText(($data['ERROR_DESCRIPTION'] ?? '') ?: 'SMS was not accepted. Check the provider error code and account credit.'),
+            $ok ? DeliveryResult::safeText($data['MESSAGE_ID']) : null, $metadata);
+    }
+
+    private static function sendpk(string $phone, string $message): array
+    {
+        $payload = ['api_key' => Settings::str('sendpk_api_key'), 'sender' => Settings::str('sendpk_sender_id'),
+            'mobile' => $phone, 'message' => $message, 'format' => 'plain'];
+        if (preg_match('/[^\x00-\x7F]/', $message)) {
+            $payload['type'] = 'unicode';
+        }
+        $response = self::request()->asForm()->post('https://sendpk.com/api/sms.php', $payload);
+        $ok = $response->successful() && preg_match('/^OK\s+ID:([a-zA-Z0-9_-]+)\s*$/D', trim($response->body()), $matches);
+
+        return DeliveryResult::make('sendpk', (bool) $ok, $ok ? null : self::sendpkError(trim($response->body())), $ok ? $matches[1] : null,
+            ['http_status' => $response->status(), 'response' => DeliveryResult::safeText($response->body())]);
+    }
+
+    private static function sendpkError(string $code): string
+    {
+        return 'SendPK: '.match ($code) {
+            '1' => 'API key invalid, expired, or account disabled.', '2' => 'API key is empty.',
+            '4' => 'Sender ID is empty.', '5' => 'Recipient is empty.', '6' => 'Message is empty.',
+            '7' => 'Invalid recipient number.', '8' => 'Insufficient credit.', '9' => 'SMS rejected.',
+            default => 'The API did not return a recognized success response.',
+        };
+    }
+
     public static function testConnection(): array
     {
-        if (!self::configured()) {
-            return ['ok' => false, 'status' => null, 'error' => 'Enter your SendPK API key first.'];
+        try {
+            if (! self::configured()) {
+                return ['ok' => false, 'message' => 'Save the selected provider credentials first.'];
+            }
+            if (self::provider() === 'veevo') {
+                return ['ok' => true, 'verified' => false, 'message' => 'Configuration present. Veevo credentials can only be checked by an explicit test SMS.'];
+            }
+
+            return self::balance();
+        } catch (\Throwable) {
+            return ['ok' => false, 'message' => 'SMS configuration could not be read.'];
         }
-
-        // Use the balance endpoint as a connectivity/credential check.
-        $balance = self::balance();
-
-        if ($balance['ok']) {
-            return [
-                'ok'     => true,
-                'status' => 'Connected — ' . ($balance['data']['balance'] ?? 'Balance available'),
-                'error'  => null,
-            ];
-        }
-
-        return ['ok' => false, 'status' => null, 'error' => $balance['error']];
     }
 
-    /**
-     * Fetches SMS balance / package information from SendPK.
-     *
-     * @return array{ok: bool, data: array, error: ?string}
-     */
     public static function balance(): array
     {
-        $creds = self::sendPkCredentials();
-
-        if (!filled($creds['api_key'])) {
-            return ['ok' => false, 'data' => [], 'error' => 'SendPK API key is missing.'];
-        }
-
         try {
-            $response = Http::timeout(10)->get('https://sendpk.com/api/sms.api.php', [
-                'api_key' => $creds['api_key'],
-                'action'  => 'balance',
-                'format'  => 'json',
-            ]);
-
-            if (!$response->successful()) {
-                return [
-                    'ok'    => false,
-                    'data'  => [],
-                    'error' => 'SendPK returned HTTP ' . $response->status(),
-                ];
+            if (self::provider() !== 'sendpk') {
+                return ['ok' => false, 'message' => 'Balance checking is not available for this provider.'];
+            }
+            if (! filled(Settings::str('sendpk_api_key'))) {
+                return ['ok' => false, 'message' => 'Save the SendPK API key first.'];
+            }
+            $response = self::request()->asForm()->post('https://sendpk.com/api/balance.php', ['api_key' => Settings::str('sendpk_api_key')]);
+            $body = trim($response->body());
+            // The documented plain response overloads numeric error codes and balance.
+            // Never claim credentials verified for an ambiguous error-code value.
+            if (! $response->successful() || in_array($body, ['1', '2', '3', '4', '5', '6', '7', '8', '9'], true) || ! preg_match('/^\d+(\.\d+)?$/D', $body)) {
+                return ['ok' => false, 'message' => 'SendPK returned an error or ambiguous balance. Verify credit in the provider dashboard.'];
             }
 
-            $body = $response->body();
-            $decoded = $response->json();
-
-            // Parse the balance response
-            if (is_array($decoded)) {
-                return [
-                    'ok'   => true,
-                    'data' => [
-                        'balance' => $decoded['balance'] ?? $decoded['remaining_sms'] ?? $body,
-                        'raw'     => $decoded,
-                    ],
-                    'error' => null,
-                ];
-            }
-
-            return [
-                'ok'   => true,
-                'data' => ['balance' => trim($body), 'raw' => $body],
-                'error' => null,
-            ];
-        } catch (\Throwable $e) {
-            Log::warning('SendPK balance check failed', ['error' => $e->getMessage()]);
-
-            return [
-                'ok'    => false,
-                'data'  => [],
-                'error' => 'Could not reach SendPK: ' . $e->getMessage(),
-            ];
+            return ['ok' => true, 'verified' => true, 'balance' => $body, 'message' => 'SendPK balance: '.$body];
+        } catch (\Throwable) {
+            return ['ok' => false, 'message' => 'SendPK balance request could not complete.'];
         }
     }
 }

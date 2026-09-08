@@ -83,8 +83,6 @@
   var DEFAULT_TEMPLATES = @json($defaultTemplates);
   var PREVIEW_VARS      = @json($previewVariables);
   var HAS_PREVIEW_ORDER = @json((bool) $previewOrder);
-  var WHATSAPP_READY    = @json($whatsappReady);
-  var SMS_READY          = @json($smsReady);
   var DEFAULT_SMS_TEMPLATES = @json($defaultSmsTemplates);
 
   var SETTINGS_ROUTES = {
@@ -100,8 +98,6 @@
     clearNotifs:   @json(route('settings.clear-notifications')),
     testWhatsapp:  @json(route('settings.whatsapp.test')),
     testTemplate:  @json(route('settings.whatsapp.test-template')),
-    gateway:       @json(route('settings.whatsapp.gateway')),
-    gatewayLogout: @json(route('settings.whatsapp.gateway.logout')),
     sendTest:      @json(route('settings.whatsapp.send-test')),
     reportsExport: @json(route('reports.export')),
     testSms:       @json(route('settings.sms.test')),
@@ -130,7 +126,7 @@
     { name: 'Backup & Data',     icon: 'fa-solid fa-database',             group: null,           render: panelBackup },
     { name: 'Theme & Display',   icon: 'fa-solid fa-palette',              group: 'theme',        render: panelTheme },
     { name: 'WhatsApp & Alerts', icon: 'fa-brands fa-whatsapp',            group: 'whatsapp',     render: panelWhatsApp },
-    { name: 'WhatsApp Gateway',  icon: 'fa-solid fa-qrcode',               group: 'whatsapp',     render: panelGateway },
+    { name: 'WhatsApp Business API', icon: 'fa-brands fa-whatsapp', group: 'meta', render: panelMeta },
     { name: 'SMS Settings',      icon: 'fa-solid fa-comment-sms',           group: 'sms',          render: panelSms },
   ];
 
@@ -150,6 +146,7 @@
     'Measurements':      () => ({ measurement_required: collectRequiredFields() }),
     'WhatsApp & Alerts': () => ({ message_templates: messageTemplates }),
     'SMS Settings':      () => ({ sms_templates: smsTemplates }),
+    'WhatsApp Business API': () => ({ meta_templates: collectMetaMappings() }),
   };
 
   /* ============================================================
@@ -161,6 +158,7 @@
     const payload = {};
 
     document.querySelectorAll('#settings-panel [data-setting]').forEach(el => {
+      if (el.disabled) return;
       const key = el.dataset.setting;
 
       if (el.classList.contains('toggle')) {
@@ -192,6 +190,7 @@
     try {
       const res = await Atelier.api.put(SETTINGS_ROUTES.update, payload);
       Object.assign(DB_SETTINGS, res.settings);
+      document.querySelectorAll('#settings-panel input[type=password][data-setting]').forEach(input => { input.value = DB_SETTINGS[input.dataset.setting] || ''; });
       SAVED_SETTINGS = JSON.parse(JSON.stringify(DB_SETTINGS));
 
       markClean(currentPanel);
@@ -274,6 +273,8 @@
      ============================================================ */
   function markDirty() {
     dirtyPanels.add(currentPanel);
+    const status = document.getElementById('meta-status');
+    if (status) status.textContent = 'Configuration changed. Save and verify again.';
     renderTabs();
     document.getElementById('dirty-flag')?.classList.remove('hidden');
   }
@@ -342,23 +343,14 @@
     const host = document.getElementById('settings-panel');
     if (!host) return;
 
-    host.addEventListener('input',  markDirty);
-    host.addEventListener('change', markDirty);
+    const trackSetting = event => { if (event.target.closest('[data-setting], [data-meta-event]')) markDirty(); };
+    host.addEventListener('input', trackSetting);
+    host.addEventListener('change', trackSetting);
     host.querySelectorAll('.toggle').forEach(t => t.addEventListener('click', markDirty));
   }
 
   function afterRender(name) {
-    // Polling is scoped to the panel that needs it, so leaving the tab stops
-    // the requests rather than leaving them running in the background.
-    stopGatewayPolling();
-
-    if (name === 'WhatsApp & Alerts') {
-      renderTemplates();
-      if (val('whatsapp_provider') === 'gateway') startGatewayPolling();
-    }
-    // The gateway panel is *about* the link, so it always polls — a shop that
-    // has not switched the provider over yet still needs to see the QR.
-    if (name === 'WhatsApp Gateway') startGatewayPolling();
+    if (name === 'WhatsApp & Alerts') renderTemplates();
     if (name === 'Thermal Printer') updateReceiptPreview();
     if (name === 'SMS Settings')    renderSmsTemplates();
   }
@@ -1627,152 +1619,13 @@
      PANEL 9 — WHATSAPP & ALERTS
      ============================================================ */
   function panelWhatsApp() {
-    // Read from the live control first, so switching provider reveals the
-    // credential fields without needing a save.
-    const provider = document.querySelector('[data-setting="whatsapp_provider"]')?.value
-      || val('whatsapp_provider', 'manual');
-
-    return `
-      <div class="p-6">
-        <div class="flex justify-between items-start mb-6">
-          <div>
-            <h3 class="text-lg font-semibold text-slate-900 mb-1 tracking-tight">WhatsApp &amp; Alerts</h3>
-            <p class="text-sm text-slate-500">The exact messages your customers receive, and how they are sent.</p>
-          </div>
-          <span class="badge ${isOn('whatsapp_enabled') ? 'badge-delivered' : 'badge-overdue'}">${isOn('whatsapp_enabled') ? 'Enabled' : 'Disabled'}</span>
-        </div>
-
-        ${!isOn('whatsapp_enabled') ? `
-          <div class="flex items-start gap-3 p-3 rounded-lg bg-amber-50 border border-amber-100 mb-6">
-            <i class="fa-solid fa-triangle-exclamation text-amber-600 text-xs mt-0.5"></i>
-            <p class="text-xs text-amber-800 leading-relaxed flex-1">
-              WhatsApp delivery is switched off under <span class="font-semibold">Notifications → Delivery Channels</span>.
-              Templates can still be edited, but nothing will be sent.
-            </p>
-          </div>` : ''}
-
-        <div class="set-card mb-6">
-          <h4 class="set-legend">Sending Method</h4>
-          <div class="grid grid-cols-2 gap-4 mb-4">
-            <div>
-              <label class="set-label">Provider</label>
-              <select data-setting="whatsapp_provider" class="set-field pro-input" onchange="switchProvider(this.value)">
-                <option value="gateway" ${provider === 'gateway' ? 'selected' : ''}>Free Gateway — send automatically (recommended)</option>
-                <option value="manual" ${provider === 'manual' ? 'selected' : ''}>Manual — open WhatsApp Web</option>
-                <option value="ultramsg" ${provider === 'ultramsg' ? 'selected' : ''}>UltraMsg API — paid service</option>
-              </select>
-            </div>
-            <div>
-              <label class="set-label">Shop WhatsApp Number</label>
-              <input data-setting="whatsapp_number" class="set-field pro-input" value="${esc(val('whatsapp_number'))}">
-            </div>
-          </div>
-
-          <div id="provider-fields">${providerFields(provider)}</div>
-        </div>
-
-        <div class="flex items-center justify-between mb-3">
-          <h4 class="set-legend" style="margin-bottom:0">Message Templates</h4>
-          <span class="text-xs text-slate-500">${messageTemplates.filter(t => t.active).length} of ${messageTemplates.length} active</span>
-        </div>
-
-        <div class="set-card mb-4" style="padding:12px">
-          <div class="flex flex-wrap gap-1.5 items-center">
-            <span class="text-xs text-slate-500 mr-1">Insert a variable:</span>
-            ${Object.entries(TEMPLATE_VARS).map(([name, desc]) => `
-              <button onclick="insertVariable('${name}')" title="${esc(desc)}"
-                      class="bg-white border border-slate-200 px-2 py-0.5 rounded text-[11px] hover:bg-slate-100 hover:border-slate-300 transition-colors font-mono text-slate-600">
-                {${name}}
-              </button>`).join('')}
-          </div>
-          <p class="set-hint mt-2">Click a variable to insert it at the cursor. Previews use ${HAS_PREVIEW_ORDER ? 'your most recent real order' : 'your shop details'}.</p>
-        </div>
-
-        <div id="templates-container" class="space-y-6"></div>
-
-        ${panelFooter()}
-      </div>`;
+    return `<div class="p-6">
+      <h3 class="text-lg font-semibold text-slate-900 mb-1 tracking-tight">WhatsApp & Alerts</h3>
+      <p class="text-sm text-slate-500 mb-6">Local message previews. Automated sending uses approved templates configured under WhatsApp Business API.</p>
+      <div class="set-card mb-4"><p class="set-hint">Editing these previews does not create or change an approved Meta template. SMS has its own editor.</p>
+      <div class="flex flex-wrap gap-1.5 mt-3">${Object.entries(TEMPLATE_VARS).map(([name, desc]) => `<button onclick="insertVariable('${name}')" title="${esc(desc)}" class="bg-white border border-slate-200 px-2 py-0.5 rounded text-[11px] text-slate-600">{${name}}</button>`).join('')}</div></div>
+      <div id="templates-container" class="space-y-6"></div>${panelFooter()}</div>`;
   }
-
-  function providerFields(provider) {
-    if (provider === 'gateway') {
-      return `
-        <div class="grid grid-cols-2 gap-4">
-          <div>
-            <label class="set-label">Gateway Address</label>
-            <input data-setting="gateway_url" class="set-field pro-input" value="${esc(val('gateway_url'))}" placeholder="http://localhost:3001">
-            <p class="set-hint">Leave as-is if the gateway runs on this computer.</p>
-          </div>
-          <div>
-            <label class="set-label">Gateway Token</label>
-            <input type="password" data-setting="gateway_token" class="set-field pro-input" value="${esc(val('gateway_token'))}" placeholder="Copy from config.json">
-            <p class="set-hint">Must match the <code class="bg-slate-100 px-1 rounded">token</code> in config.json.</p>
-          </div>
-        </div>
-
-        <div class="set-row mt-4">
-          <div>
-            <div class="text-sm font-semibold text-slate-800">Fall back to manual if the gateway is off</div>
-            <div class="text-xs text-slate-500">Opens WhatsApp Web instead of failing, so a message is never lost</div>
-          </div>
-          <div data-setting="gateway_fallback_manual" class="toggle ${isOn('gateway_fallback_manual') ? 'on' : ''}" onclick="this.classList.toggle('on')"></div>
-        </div>
-
-        <div id="gateway-status" class="mt-4"></div>
-
-        <div class="flex items-center gap-3 mt-4">
-          <button onclick="testWhatsappConnection(this)" class="bg-white border border-slate-200 text-slate-600 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-slate-50 flex items-center gap-2 transition-colors">
-            <i class="fa-solid fa-plug"></i> Test connection
-          </button>
-          <span class="text-xs text-slate-500">Save first, then test. Setup steps are in WHATSAPP-AUTO-SETUP.md.</span>
-        </div>`;
-    }
-
-    if (provider === 'ultramsg') {
-      return `
-        <div class="grid grid-cols-2 gap-4">
-          <div>
-            <label class="set-label">UltraMsg Instance ID</label>
-            <input data-setting="ultramsg_instance" class="set-field pro-input" value="${esc(val('ultramsg_instance'))}" placeholder="instance12345">
-          </div>
-          <div>
-            <label class="set-label">API Token</label>
-            <input type="password" data-setting="ultramsg_token" class="set-field pro-input" value="${esc(val('ultramsg_token'))}" placeholder="Paste your token">
-            <p class="set-hint">${WHATSAPP_READY ? 'A token is saved. Leave the dots untouched to keep it.' : 'No token saved yet.'}</p>
-          </div>
-        </div>
-        <div class="flex items-center gap-3 mt-4">
-          <button onclick="testWhatsappConnection(this)" class="bg-white border border-slate-200 text-slate-600 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-slate-50 flex items-center gap-2 transition-colors">
-            <i class="fa-solid fa-plug"></i> Test connection
-          </button>
-          <span class="text-xs text-slate-500">Save your credentials first, then test.</span>
-        </div>`;
-    }
-
-    return `
-      <div class="flex items-start gap-3 p-3 rounded-lg bg-indigo-50 border border-indigo-100">
-        <i class="fa-solid fa-circle-info text-indigo-600 text-xs mt-0.5"></i>
-        <p class="text-xs text-indigo-800 leading-relaxed flex-1">
-          Manual mode opens WhatsApp Web with the message already written — no API account or credentials needed.
-          Switch to UltraMsg to have the app send messages by itself.
-        </p>
-      </div>`;
-  }
-
-  /**
-   * Swaps only the credential block, so the rest of the panel — including any
-   * unsaved template edits — is left exactly as it was.
-   */
-  window.switchProvider = function (provider) {
-    const host = document.getElementById('provider-fields');
-    if (host) host.innerHTML = providerFields(provider);
-
-    stopGatewayPolling();
-    if (provider === 'gateway') startGatewayPolling();
-
-    markDirty();
-  };
-
 
   /* ================================================================
      PANEL — SMS SETTINGS
@@ -1782,7 +1635,7 @@
      system. Nothing here touches any WhatsApp code.
      ================================================================ */
   function panelSms() {
-    const provider = val('sms_provider', 'sendpk');
+    const provider = val('sms_provider', 'veevo');
 
     return `
       <div class="p-6">
@@ -1805,45 +1658,26 @@
 
         <div class="set-card mb-6">
           <h4 class="set-legend">SMS Provider</h4>
-          <div class="grid grid-cols-2 gap-4 mb-4">
-            <div>
-              <label class="set-label">Provider</label>
-              <select data-setting="sms_provider" class="set-field pro-input">
-                <option value="sendpk" ${provider === 'sendpk' ? 'selected' : ''}>SendPK — Pakistani SMS gateway</option>
-              </select>
+          <label class="set-label">Provider</label>
+          <select data-setting="sms_provider" class="set-field pro-input mb-4" onchange="switchSmsProvider(this.value)">
+            <option value="veevo" ${provider === 'veevo' ? 'selected' : ''}>Veevo Tech / SPEXT — Recommended</option>
+            <option value="sendpk" ${provider === 'sendpk' ? 'selected' : ''}>SendPK</option>
+          </select>
+          ${['veevo', 'sendpk'].map(p => `<div data-sms-provider="${p}" ${provider !== p ? 'hidden' : ''}>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div><label class="set-label">${p === 'veevo' ? 'Veevo / SPEXT' : 'SendPK'} API Key</label>
+                <input type="password" autocomplete="new-password" data-setting="${p}_api_key" class="set-field pro-input" value="${esc(val(p+'_api_key'))}" ${provider !== p ? 'disabled' : ''}>
+                <p class="set-hint">Obtain this key from your provider account. Saved dots mean unchanged.</p></div>
+              <div><label class="set-label">Sender ID / Masking ${p === 'veevo' ? '(optional)' : ''}</label>
+                <input data-setting="${p}_sender_id" class="set-field pro-input" value="${esc(val(p+'_sender_id'))}" ${provider !== p ? 'disabled' : ''}>
+                <p class="set-hint">${p === 'veevo' ? 'Leave empty to use the account default sender.' : 'Use the sender approved for your SendPK account.'}</p></div>
             </div>
-            <div>
-              <label class="set-label">SMS Type</label>
-              <select data-setting="sendpk_sms_type" class="set-field pro-input">
-                <option value="semi_branded" ${val('sendpk_sms_type', 'semi_branded') === 'semi_branded' ? 'selected' : ''}>Semi-Branded</option>
-                <option value="branded" ${val('sendpk_sms_type') === 'branded' ? 'selected' : ''}>Branded</option>
-              </select>
-              <p class="set-hint">Branded SMS shows your sender name; semi-branded uses a shared number.</p>
+            <div class="flex flex-wrap items-center gap-3 mt-4">
+              <button onclick="testSmsConnection(this)" class="bg-white border border-slate-200 text-slate-600 px-3 py-1.5 rounded-lg text-xs font-medium">${p === 'veevo' ? 'Validate configuration' : 'Test connection'}</button>
+              ${p === 'sendpk' ? '<button onclick="checkSmsBalance(this)" class="bg-white border border-slate-200 text-slate-600 px-3 py-1.5 rounded-lg text-xs font-medium">Check balance</button>' : '<span class="set-hint">No balance or no-send credential check is available. Use an explicit test SMS to verify delivery.</span>'}
             </div>
-          </div>
-
-          <div class="grid grid-cols-2 gap-4">
-            <div>
-              <label class="set-label">API Key</label>
-              <input type="password" data-setting="sendpk_api_key" class="set-field pro-input" value="${esc(val('sendpk_api_key'))}" placeholder="Paste your SendPK API key">
-              <p class="set-hint">${SMS_READY ? 'An API key is saved. Leave the dots untouched to keep it.' : 'No API key saved yet. Get one from sendpk.com.'}</p>
-            </div>
-            <div>
-              <label class="set-label">Sender ID / Name</label>
-              <input data-setting="sendpk_sender_id" class="set-field pro-input" value="${esc(val('sendpk_sender_id'))}" placeholder="YourBrandName">
-              <p class="set-hint">The name shown as the sender. Must be approved by SendPK for branded SMS.</p>
-            </div>
-          </div>
-
-          <div class="flex items-center gap-3 mt-4">
-            <button onclick="testSmsConnection(this)" class="bg-white border border-slate-200 text-slate-600 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-slate-50 flex items-center gap-2 transition-colors">
-              <i class="fa-solid fa-plug"></i> Test connection
-            </button>
-            <button onclick="checkSmsBalance(this)" class="bg-white border border-slate-200 text-slate-600 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-slate-50 flex items-center gap-2 transition-colors">
-              <i class="fa-solid fa-coins"></i> Check balance
-            </button>
-            <span class="text-xs text-slate-500">Save first, then test.</span>
-          </div>
+          </div>`).join('')}
+          <p class="set-hint mt-3">Save first, then test. Only the selected provider sends.</p>
           <div id="sms-balance-info" class="mt-3"></div>
         </div>
 
@@ -2007,6 +1841,7 @@
   };
 
   window.testSendSmsTemplate = async function (id, btn) {
+    if (!requireSavedMessaging()) return;
     const tpl = smsTemplates.find(t => t.id === id);
     if (!tpl) return;
 
@@ -2041,6 +1876,7 @@
 
   /* ---------------------- SMS Diagnostics ---------------------- */
   window.testSmsConnection = async function (btn) {
+    if (!requireSavedMessaging()) return;
     Atelier.setBusy(btn, true);
     try {
       const res = await Atelier.api.post(SETTINGS_ROUTES.testSms, {});
@@ -2053,6 +1889,7 @@
   };
 
   window.sendSmsTest = async function (btn) {
+    if (!requireSavedMessaging()) return;
     const phone = document.getElementById('sms-test-phone')?.value.trim();
     const text  = document.getElementById('sms-test-text')?.value.trim();
 
@@ -2071,6 +1908,7 @@
   };
 
   window.checkSmsBalance = async function (btn) {
+    if (!requireSavedMessaging()) return;
     Atelier.setBusy(btn, true);
     const host = document.getElementById('sms-balance-info');
 
@@ -2108,344 +1946,86 @@
   };
 
 
-  /* ================================================================
-     PANEL — WHATSAPP GATEWAY
-     ================================================================
-     Everything needed to get messages sending automatically, in one
-     place: pairing QR, live health, the setup checks that usually fail,
-     a real test send, and the gateway's own log. Nothing here should
-     require opening localhost:3001, a terminal, or a text editor.
-     ================================================================ */
-  function panelGateway() {
-    return `
-      <div class="p-6">
-        <div class="flex justify-between items-start mb-6">
-          <div>
-            <h3 class="text-lg font-semibold text-slate-900 mb-1 tracking-tight">WhatsApp Gateway</h3>
-            <p class="text-sm text-slate-500">Link your phone once, and every message goes out on its own.</p>
-          </div>
-          <span class="badge" id="gw-badge">Checking…</span>
-        </div>
-
-        <div class="set-card mb-6">
-          <h4 class="set-legend">Connection</h4>
-          <div id="gateway-status"><div class="text-xs text-slate-400">Checking the gateway…</div></div>
-          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4" id="gw-stats"></div>
-        </div>
-
-        <div class="set-card mb-6">
-          <h4 class="set-legend">Setup checks</h4>
-          <div id="gw-checks"><div class="text-xs text-slate-400">Checking…</div></div>
-        </div>
-
-        <div class="set-card mb-6">
-          <h4 class="set-legend">Gateway Settings</h4>
-          <div class="space-y-4">
-            <div>
-              <label class="set-label">Provider</label>
-              <select data-setting="whatsapp_provider" class="set-field pro-input">
-                <option value="manual"   ${val('whatsapp_provider') === 'manual'   ? 'selected' : ''}>Manual — open WhatsApp Web and press send</option>
-                <option value="gateway"  ${val('whatsapp_provider') === 'gateway'  ? 'selected' : ''}>Free Gateway — send automatically (recommended)</option>
-                <option value="ultramsg" ${val('whatsapp_provider') === 'ultramsg' ? 'selected' : ''}>UltraMsg — paid cloud service</option>
-              </select>
-              <p class="set-hint">Pick <b>Free Gateway</b> and press Save to switch automatic sending on.</p>
-            </div>
-            <div class="grid grid-cols-2 gap-4">
-              <div>
-                <label class="set-label">Gateway Address</label>
-                <input data-setting="gateway_url" class="set-field pro-input" value="${esc(val('gateway_url'))}" placeholder="http://localhost:3001">
-                <p class="set-hint">Leave as-is if the gateway runs on this computer.</p>
-              </div>
-              <div>
-                <label class="set-label">Gateway Token</label>
-                <input type="password" data-setting="gateway_token" class="set-field pro-input" value="${esc(val('gateway_token'))}" placeholder="Copy from config.json">
-                <p class="set-hint">Must match <code class="bg-slate-100 px-1 rounded">token</code> in config.json.</p>
-              </div>
-            </div>
-            <div class="set-row">
-              <div>
-                <div class="text-sm font-semibold text-slate-800">Fall back to manual if the gateway is off</div>
-                <div class="text-xs text-slate-500">A message is never lost — WhatsApp Web opens instead</div>
-              </div>
-              <div data-setting="gateway_fallback_manual" class="toggle ${isOn('gateway_fallback_manual') ? 'on' : ''}" onclick="this.classList.toggle('on')"></div>
-            </div>
-          </div>
-        </div>
-
-        <div class="set-card mb-6">
-          <h4 class="set-legend">Send a test message</h4>
-          <div class="grid grid-cols-2 gap-4">
-            <div>
-              <label class="set-label">To this number</label>
-              <input id="gw-test-phone" class="set-field pro-input" value="${esc(val('whatsapp_number') || val('phone'))}" placeholder="03001234567">
-            </div>
-            <div>
-              <label class="set-label">Message</label>
-              <input id="gw-test-text" class="set-field pro-input" value="Test from ${esc(val('store_name') || 'Atelier')} — the gateway is working.">
-            </div>
-          </div>
-          <button onclick="sendGatewayTest(this)" class="mt-3 bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-600 flex items-center gap-2 transition-colors shadow-sm shadow-emerald-500/30">
-            <i class="fa-brands fa-whatsapp text-xs"></i> Send test
-          </button>
-          <p class="set-hint mt-2">Save first if you have just changed the provider or token — the test uses the saved settings.</p>
-        </div>
-
-        <div class="set-card">
-          <div class="flex items-center justify-between">
-            <h4 class="set-legend mb-0">Gateway log</h4>
-            <button onclick="refreshGateway()" class="text-[11px] text-slate-500 hover:text-slate-900 flex items-center gap-1.5">
-              <i class="fa-solid fa-rotate text-[10px]"></i> Refresh now
-            </button>
-          </div>
-          <pre id="gw-log" class="mt-3 bg-slate-900 text-slate-200 text-[11px] leading-relaxed rounded-lg p-3 overflow-auto max-h-64 whitespace-pre-wrap break-words">Loading…</pre>
-          <p class="set-hint mt-2">The gateway's own log, read straight off disk. The newest line is at the bottom.</p>
-        </div>
-
-        ${panelFooter()}
-      </div>`;
+  function requireSavedMessaging() {
+    if (dirtyPanels.size) { toast('Save your changes before testing the saved configuration.', 'warning'); return false; }
+    return true;
   }
-
-  /** Seconds as "3d 4h", "2h 10m", "45s" — for uptime and how long a link has held. */
-  function gwDuration(seconds) {
-    seconds = Math.max(parseInt(seconds, 10) || 0, 0);
-    if (seconds < 60) return seconds + 's';
-    const m = Math.floor(seconds / 60);
-    if (m < 60) return m + 'm';
-    const h = Math.floor(m / 60);
-    if (h < 24) return (m % 60) ? `${h}h ${m % 60}m` : `${h}h`;
-    const d = Math.floor(h / 24);
-    return (h % 24) ? `${d}d ${h % 24}h` : `${d}d`;
-  }
-
-  function gwTile(label, value, tone = 'slate') {
-    const colour = { slate: 'text-slate-900', green: 'text-emerald-600', red: 'text-red-600', amber: 'text-amber-600' }[tone];
-    return `
-      <div class="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
-        <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">${label}</div>
-        <div class="text-base font-semibold ${colour} mt-0.5">${value}</div>
-      </div>`;
-  }
-
-  /**
-   * The checks that actually explain a dead gateway, in the order they fail.
-   * Each row says what to do about it, so nobody has to read a guide.
-   */
-  function gwChecks(g) {
-    const rows = [
-      { ok: g.folder_present, label: 'Gateway folder present',
-        fix: 'The whatsapp-gateway folder is missing from your project.' },
-      { ok: g.installed, label: 'Gateway installed',
-        fix: 'Double-click <b>install.bat</b> inside the whatsapp-gateway folder, then wait for "Done".' },
-      { ok: g.has_config, label: 'config.json found',
-        fix: 'config.json is missing — reinstall the gateway.' },
-      { ok: g.token_matches === null ? null : g.token_matches, label: 'Token matches config.json',
-        fix: 'The token saved here is not the one in config.json. Copy the value of <code>token</code> from that file into the box above and Save.' },
-      { ok: g.provider === 'gateway', label: 'Provider set to Free Gateway',
-        fix: 'Set Provider to <b>Free Gateway</b> above and press Save, or messages will keep opening WhatsApp Web by hand.' },
-      { ok: g.running, label: 'Gateway is running',
-        fix: 'Double-click <b>start-gateway.bat</b> and leave that window open. Run <b>install-autostart.bat</b> as administrator to never do this again.' },
-      { ok: g.connected, label: 'Phone linked',
-        fix: 'Scan the QR code above with WhatsApp on your phone.' },
-    ];
-
-    return rows.map(r => {
-      // null = cannot be judged yet (usually the token box is still empty).
-      const icon = r.ok === null
-        ? '<i class="fa-solid fa-circle-question text-slate-300 text-xs mt-0.5"></i>'
-        : r.ok
-          ? '<i class="fa-solid fa-circle-check text-emerald-500 text-xs mt-0.5"></i>'
-          : '<i class="fa-solid fa-circle-xmark text-red-500 text-xs mt-0.5"></i>';
-
-      return `
-        <div class="flex items-start gap-2.5 py-1.5 ${r.ok === true ? '' : 'border-b border-slate-100 last:border-0'}">
-          ${icon}
-          <div class="flex-1 min-w-0">
-            <div class="text-xs font-medium ${r.ok === true ? 'text-slate-500' : 'text-slate-800'}">${r.label}</div>
-            ${r.ok === true ? '' : `<div class="text-[11px] text-slate-500 mt-0.5 leading-relaxed">${r.fix}</div>`}
-          </div>
-        </div>`;
-    }).join('');
-  }
-
-  /** Everything on the gateway panel that is not the status card itself. */
-  function renderGatewayExtras(g, log) {
-    const badge = document.getElementById('gw-badge');
-    if (badge) {
-      const state = !g.running ? ['badge-overdue', 'Not running']
-        : g.connected ? ['badge-delivered', 'Connected']
-        : ['badge-pending', 'Waiting to pair'];
-      badge.className = 'badge ' + state[0];
-      badge.textContent = state[1];
-    }
-
-    const stats = document.getElementById('gw-stats');
-    if (stats) {
-      stats.innerHTML = [
-        gwTile('Sent', g.sent || 0, 'green'),
-        gwTile('Failed', g.failed || 0, (g.failed || 0) > 0 ? 'red' : 'slate'),
-        gwTile('Queued', g.queued || 0, (g.queued || 0) > 0 ? 'amber' : 'slate'),
-        // Reconnects is the honest health signal: a link that keeps dropping
-        // looks identical to a healthy one until you count them.
-        gwTile('Reconnects', g.reconnects || 0, (g.reconnects || 0) > 3 ? 'amber' : 'slate'),
-        gwTile('Gateway up', gwDuration(g.uptime), 'slate'),
-        gwTile('Linked for', g.connected ? gwDuration(g.linked_for) : '—', 'slate'),
-      ].join('');
-    }
-
-    const checks = document.getElementById('gw-checks');
-    if (checks) checks.innerHTML = gwChecks(g);
-
-    const logHost = document.getElementById('gw-log');
-    if (logHost) {
-      const wasAtBottom = logHost.scrollTop + logHost.clientHeight >= logHost.scrollHeight - 20;
-      logHost.textContent = (log && log.length)
-        ? log.join('\n')
-        : 'No log yet. It appears once the gateway has run at least once.';
-      // Follow the tail, but never yank the view away from someone reading up.
-      if (wasAtBottom) logHost.scrollTop = logHost.scrollHeight;
-    }
-  }
-
-  window.sendGatewayTest = async function(btn) {
-    const phone = document.getElementById('gw-test-phone')?.value.trim();
-    const text  = document.getElementById('gw-test-text')?.value.trim();
-
-    if (!phone) { toast('Number likhein', 'error'); return; }
-    if (!text)  { toast('Message likhein', 'error'); return; }
-
-    Atelier.setBusy(btn, true);
-    try {
-      const res = await Atelier.api.post(SETTINGS_ROUTES.sendTest, { phone, message: text });
-      toast(res.message, 'success');
-      // Manual mode hands back a link instead of sending; opening it is the
-      // whole point of that mode.
-      if (res.url) window.open(res.url, '_blank');
-      refreshGateway();
-    } catch (err) {
-      Atelier.reportError(err, 'Could not send the test message');
-    } finally {
-      Atelier.setBusy(btn, false);
-    }
-  };
-
-  /* ------------------- Free gateway: live status ------------------- */
-  /**
-   * The gateway is polled while its panel is open so the QR code appears the
-   * moment it is offered and disappears as soon as the phone is linked —
-   * without the user having to refresh anything.
-   */
-  var gatewayTimer = null;
-
-  function stopGatewayPolling() {
-    if (gatewayTimer) { clearInterval(gatewayTimer); gatewayTimer = null; }
-  }
-
-  function startGatewayPolling() {
-    refreshGateway();
-    // The pairing QR is only valid for a short while and the gateway rotates
-    // it, so the panel checks often enough to always show a scannable one.
-    gatewayTimer = setInterval(refreshGateway, 3000);
-  }
-
-  async function refreshGateway() {
-    const host = document.getElementById('gateway-status');
-
-    // The panel was navigated away from; stop knocking on the gateway.
-    if (!host) { stopGatewayPolling(); return; }
-
-    try {
-      const res = await Atelier.api.get(SETTINGS_ROUTES.gateway);
-      host.innerHTML = renderGateway(res.gateway);
-      renderGatewayExtras(res.gateway, res.log);
-    } catch (err) {
-      host.innerHTML = gatewayCard('slate', 'fa-plug-circle-xmark',
-        'Could not check the gateway',
-        'Save your settings first, then this will start reporting.');
-    }
-  }
-
-  function gatewayCard(tone, icon, title, body, extra = '') {
-    const tones = {
-      green: ['bg-emerald-50', 'border-emerald-100', 'text-emerald-600', 'text-emerald-800'],
-      amber: ['bg-amber-50',   'border-amber-100',   'text-amber-600',   'text-amber-800'],
-      red:   ['bg-red-50',     'border-red-200',     'text-red-600',     'text-red-800'],
-      slate: ['bg-slate-50',   'border-slate-200',   'text-slate-500',   'text-slate-700'],
-    }[tone];
-
-    return `
-      <div class="flex items-start gap-3 p-3 rounded-lg ${tones[0]} border ${tones[1]}">
-        <i class="fa-solid ${icon} ${tones[2]} text-xs mt-0.5"></i>
-        <div class="flex-1 min-w-0">
-          <div class="text-xs font-semibold ${tones[3]}">${title}</div>
-          <div class="text-xs ${tones[3]} opacity-80 leading-relaxed mt-0.5">${body}</div>
-          ${extra}
-        </div>
-      </div>`;
-  }
-
-  function renderGateway(g) {
-    // Not running at all — almost always means the .bat file is not open.
-    if (!g.running) {
-      return gatewayCard('red', 'fa-circle-xmark',
-        'Gateway is not running',
-        esc(g.error || 'Open the whatsapp-gateway folder and run start-gateway.bat, then keep that window open.'));
-    }
-
-    // Running and linked — the everyday state.
-    if (g.connected) {
-      return gatewayCard('green', 'fa-circle-check',
-        'Connected and sending automatically',
-        `Linked to <span class="font-semibold">${esc(g.phone || 'your phone')}</span>${g.queued ? ` · ${g.queued} message(s) waiting` : ''}`,
-        `<button onclick="unlinkGateway(this)" class="text-[11px] text-red-600 hover:underline mt-1.5">Unlink this phone</button>`);
-    }
-
-    // Running, waiting to be paired.
-    if (g.qr) {
-      return `
-        <div class="bg-white border border-slate-200 rounded-lg p-4">
-          <div class="text-xs font-semibold text-slate-800 mb-1">Scan this code with your phone</div>
-          <ol class="text-xs text-slate-500 leading-relaxed mb-3 pl-4 list-decimal">
-            <li>Open WhatsApp on your phone</li>
-            <li>Tap <span class="font-semibold">Settings → Linked Devices</span></li>
-            <li>Tap <span class="font-semibold">Link a Device</span></li>
-            <li>Point your camera at this code</li>
-          </ol>
-          <div class="flex justify-center">
-            <img src="${esc(g.qr)}" alt="WhatsApp pairing QR code" class="w-52 h-52 rounded-lg border border-slate-200">
-          </div>
-          <p class="text-[11px] text-slate-400 text-center mt-2">The code refreshes on its own. This box turns green once linked.</p>
-        </div>`;
-    }
-
-    return gatewayCard('amber', 'fa-spinner fa-spin',
-      'Gateway is starting up',
-      esc(g.error || 'Waiting for WhatsApp to respond. The QR code will appear here shortly.'));
-  }
-
-  window.unlinkGateway = function (btn) {
-    Atelier.confirm({
-      variant: 'delete',
-      title: 'Unlink this phone?',
-      message: 'Automatic sending stops until you scan a QR code again. Your messages and templates are untouched.',
-      confirmLabel: 'Unlink',
-      onConfirm: async () => {
-        const res = await Atelier.api.post(SETTINGS_ROUTES.gatewayLogout, {});
-        toast(res.message, 'success');
-        refreshGateway();
-      },
+  window.switchSmsProvider = function (provider) {
+    document.querySelectorAll('[data-sms-provider]').forEach(block => {
+      block.hidden = block.dataset.smsProvider !== provider;
+      block.querySelectorAll('[data-setting]').forEach(input => input.disabled = block.hidden);
     });
+    markDirty();
   };
-
+  function metaMappings() {
+    return DEFAULT_TEMPLATES.map(t => Object.assign({id:t.id, active:false, name:'', language:'en_US', parameters:[]}, (DB_SETTINGS.meta_templates || []).find(m => m.id === t.id) || {}));
+  }
+  function collectMetaMappings() {
+    return Array.from(document.querySelectorAll('[data-meta-event]')).map(el => ({
+      id: el.dataset.metaEvent,
+      active: el.querySelector('[data-meta-active]').checked,
+      name: el.querySelector('[data-meta-name]').value.trim(),
+      language: el.querySelector('[data-meta-language]').value.trim(),
+      parameters: el.querySelector('[data-meta-parameters]').value.split(',').map(v => v.trim()).filter(Boolean)
+    }));
+  }
+  function panelMeta() {
+    return `<div class="p-6">
+      <div class="flex justify-between items-start mb-6"><div><h3 class="text-lg font-semibold text-slate-900 mb-1 tracking-tight">WhatsApp Business API</h3>
+      <p class="text-sm text-slate-500">Meta WhatsApp Cloud API · approved customer notification templates.</p></div>
+      <span class="badge ${isOn('whatsapp_enabled') ? 'badge-delivered' : 'badge-overdue'}">${isOn('whatsapp_enabled') ? 'Enabled' : 'Disabled'}</span></div>
+      <div class="set-card mb-6"><h4 class="set-legend">Official Meta configuration</h4>
+        <p class="set-hint mb-4">Delivery is controlled under Notifications → Delivery Channels. Saved credentials are not proof of connection.</p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div><label class="set-label">Meta Access Token</label><input type="password" autocomplete="new-password" data-setting="meta_access_token" class="set-field pro-input" value="${esc(val('meta_access_token'))}"><p class="set-hint">Saved dots mean unchanged. Use a token authorized for your WhatsApp business.</p></div>
+          <div><label class="set-label">Phone Number ID</label><input data-setting="meta_phone_number_id" class="set-field pro-input" value="${esc(val('meta_phone_number_id'))}"></div>
+          <div><label class="set-label">WhatsApp Business Account ID (WABA)</label><input data-setting="meta_waba_id" class="set-field pro-input" value="${esc(val('meta_waba_id'))}"><p class="set-hint">Used to verify your approved templates.</p></div>
+        </div>
+        <button onclick="testWhatsappConnection(this)" class="mt-4 bg-white border border-slate-200 text-slate-600 px-3 py-1.5 rounded-lg text-xs font-medium">Test Connection & Templates</button>
+        <div id="meta-status" class="set-hint mt-3" role="status">Not verified in this session.</div>
+      </div>
+      <h4 class="set-legend">Approved event templates</h4>
+      <p class="set-hint mb-4">Create and approve text-body templates in Meta first. Enter ordered Tailor variable names separated by commas, matching @{{1}}, @{{2}}, and so on. Optional static footers are supported; headers and buttons are not.</p>
+      <p class="set-hint mb-4">Variables: ${Object.keys(TEMPLATE_VARS).map(esc).join(', ')}</p>
+      ${metaMappings().map(m => `<div class="set-card mb-4" data-meta-event="${m.id}">
+        <div class="flex items-center justify-between mb-3"><h4 class="set-legend mb-0">${esc(DEFAULT_TEMPLATES.find(t=>t.id===m.id).name)}</h4><label class="text-xs text-slate-600"><input type="checkbox" data-meta-active ${m.active ? 'checked' : ''}> Enabled</label></div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4"><div><label class="set-label">Approved template name</label><input data-meta-name class="set-field pro-input" value="${esc(m.name)}" placeholder="bst_${m.id.replaceAll('-', '_')}"></div>
+        <div><label class="set-label">Language code</label><input data-meta-language class="set-field pro-input" value="${esc(m.language)}"></div></div>
+        <label class="set-label mt-3">Body variables in order</label><input data-meta-parameters class="set-field pro-input" value="${esc(m.parameters.join(', '))}" placeholder="customerName, orderID, shopName">
+        <p class="set-hint mt-2" data-meta-status="${m.id}">Save and test the configuration to verify this mapping.</p>
+      </div>`).join('')}
+      <div class="set-card mb-6"><h4 class="set-legend">Send Test Message</h4>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4"><div><label class="set-label">Recipient</label><input id="meta-test-phone" class="set-field pro-input" placeholder="03001234567"></div>
+        <div><label class="set-label">Approved event mapping</label><select id="meta-test-event" class="set-field pro-input">${DEFAULT_TEMPLATES.map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join('')}</select></div></div>
+        <p class="set-hint mt-3">Uses the saved mapping and most recent order for variables. This sends a real message and may incur provider charges.</p>
+        <button onclick="sendMetaTest(this)" class="mt-3 bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-600">Send Test Message</button>
+      </div>${panelFooter()}</div>`;
+  }
   window.testWhatsappConnection = async function (btn) {
+    if (!requireSavedMessaging()) return;
     Atelier.setBusy(btn, true);
+    const host = document.getElementById('meta-status');
     try {
       const res = await Atelier.api.post(SETTINGS_ROUTES.testWhatsapp, {});
+      if (host) host.textContent = res.message + (res.sender ? ' Sender: '+res.sender.name+' '+res.sender.phone : '');
+      (res.templates || []).forEach(t => {
+        const el = document.querySelector('[data-meta-status="'+t.id+'"]');
+        if (el) el.textContent = (t.active ? '' : 'Disabled. ') + (t.error || 'Approved template and parameter mapping verified.');
+      });
       toast(res.message, 'success');
     } catch (err) {
-      Atelier.reportError(err, 'Could not reach UltraMsg');
-    } finally {
-      Atelier.setBusy(btn, false);
-    }
+      if (host) host.textContent = 'Verification failed. Review the error and saved configuration.';
+      Atelier.reportError(err, 'Could not verify Meta configuration');
+    } finally { Atelier.setBusy(btn, false); }
+  };
+  window.sendMetaTest = async function (btn) {
+    if (!requireSavedMessaging()) return;
+    Atelier.setBusy(btn, true);
+    try {
+      const res = await Atelier.api.post(SETTINGS_ROUTES.sendTest, {phone:document.getElementById('meta-test-phone').value, template_id:document.getElementById('meta-test-event').value});
+      toast(res.message, res.success ? 'success' : 'warning');
+    } catch (err) { Atelier.reportError(err, 'Meta test message failed'); }
+    finally { Atelier.setBusy(btn, false); }
   };
 
   /* ------------------------ Templates ------------------------ */
@@ -2472,7 +2052,7 @@
           </div>
           <div class="flex gap-3">
             <button onclick="resetTemplate('${t.id}')" class="text-xs text-slate-500 hover:text-slate-900 transition-colors">Reset</button>
-            <button onclick="testSendTemplate('${t.id}', this)" class="text-xs text-indigo-600 font-semibold hover:underline">Test send</button>
+
           </div>
         </div>
         <div class="grid grid-cols-2 gap-0">
@@ -2571,39 +2151,6 @@
     renderTemplates();
     markDirty();
     toast('Template reset — press Save to keep it', 'info');
-  };
-
-  /**
-   * Sends through the real delivery path, using the text currently in the
-   * editor so a draft can be checked before it is saved.
-   */
-  window.testSendTemplate = async function (id, btn) {
-    const tpl = messageTemplates.find(t => t.id === id);
-    if (!tpl) return;
-
-    const phone = window.prompt(
-      'Send this test to which number?\n(Leave blank to use your shop WhatsApp number.)',
-      val('whatsapp_number') || val('phone') || ''
-    );
-    if (phone === null) return;
-
-    Atelier.setBusy(btn, true);
-    try {
-      const res = await Atelier.api.post(SETTINGS_ROUTES.testTemplate, {
-        template_id: id,
-        phone: phone.trim(),
-        text: document.getElementById(`tpl-${id}`)?.value ?? tpl.text,
-      });
-
-      toast(res.message, res.success ? 'success' : 'warning');
-
-      // Manual mode hands back a link for the browser to open.
-      if (res.url) window.open(res.url, '_blank', 'noopener');
-    } catch (err) {
-      Atelier.reportError(err, 'Could not send the test message');
-    } finally {
-      Atelier.setBusy(btn, false);
-    }
   };
 
   /* ============================================================

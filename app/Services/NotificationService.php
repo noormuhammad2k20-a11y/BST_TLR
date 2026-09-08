@@ -157,9 +157,9 @@ class NotificationService
     public static function whatsappSent(Order $order): ?Notification
     {
         return self::push(
-            'WhatsApp Notification Sent',
+            'Customer Notice Accepted',
             sprintf(
-                'Pickup message sent to %s for %s',
+                'Pickup message accepted for sending to %s for %s',
                 $order->customer?->name ?? 'Customer',
                 $order->display_number,
             ),
@@ -213,7 +213,7 @@ class NotificationService
         $raised = 0;
 
         $orders = Order::query()
-            ->with('customer:id,name')
+            ->with('customer:id,name,phone')
             ->open()
             ->whereNotNull('delivery_date')
             ->whereDate('delivery_date', '<=', now()->addDays($days)->toDateString())
@@ -249,11 +249,7 @@ class NotificationService
 
             $raised += $notification ? 1 : 0;
 
-            // Give the customer the shop's own reminder template too.
-            WhatsAppService::sendTemplate('due-reminder', $order);
-
-            // SMS channel — fires independently of WhatsApp.
-            SmsService::sendTemplate('due-reminder', $order);
+            CustomerNotificationDispatcher::dispatch('due-reminder', $order);
         }
 
         return $raised;
@@ -268,24 +264,10 @@ class NotificationService
     public static function mayRepeat(string $subject): bool
     {
         $key = 'notify.last.' . $subject;
-        $last = Cache::get($key);
-
-        if ($last !== null) {
-            if (!Settings::bool('repeat_alerts')) {
-                return false;
-            }
-
-            $hours = max(1, Settings::int('repeat_alert_hours'));
-
-            if (now()->diffInHours(\Illuminate\Support\Carbon::parse($last), true) < $hours) {
-                return false;
-            }
-        }
-
-        // Remember for well past the longest permitted interval.
-        Cache::put($key, now()->toIso8601String(), now()->addDays(30));
-
-        return true;
+        $ttl = Settings::bool('repeat_alerts')
+            ? now()->addHours(max(1, Settings::int('repeat_alert_hours')))
+            : now()->addDays(30);
+        return Cache::add($key, now()->toIso8601String(), $ttl);
     }
 
     public static function unreadCount(): int

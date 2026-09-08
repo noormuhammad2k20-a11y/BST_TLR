@@ -15,8 +15,6 @@ use App\Services\Money;
 use App\Services\OrderService;
 use App\Services\PricingService;
 use App\Services\Settings;
-use App\Services\SmsService;
-use App\Services\WhatsAppService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -193,147 +191,39 @@ class OrderController extends Controller
         ]);
     }
 
-    /**
-     * Mark ready (optionally) and hand back a prefilled WhatsApp deep link.
-     */
+    /** Explicit collection notice; notification acceptance does not prove delivery. */
     public function notify(Request $request, Order $order): JsonResponse
     {
-        $validated = $request->validate([
-            'mark_ready' => ['nullable', 'boolean'],
-        ]);
-
+        $validated = $request->validate(['mark_ready' => ['nullable', 'boolean']]);
         if (($validated['mark_ready'] ?? false) && $order->status !== 'Ready') {
             $order = $this->service->changeStatus($order, 'Ready', 'Marked ready before notifying the customer');
         }
-
-        $this->service->markNotified($order);
-        $order->load('customer');
-
-        // Goes out through whichever provider is configured; manual mode hands
-        // back a link for the browser to open.
-        $result = $this->dispatchWhatsapp($order, 'order-ready');
-
-        return response()->json([
-            'success'      => true,
-            'message'      => match (true) {
-                $result === null    => 'Marked notified. The ORDER READY template is switched off.',
-                // Automatic send worked — nothing further for the user to do.
-                $result['sent'] && $result['provider'] !== 'manual'
-                    => 'Sent automatically via ' . WhatsAppService::providerLabel() . '.',
-                $result['sent']     => 'Message ready — press Send in WhatsApp.',
-                // Automatic route was down, but the hybrid fallback caught it.
-                $result['fell_back'] => 'Automatic sending is offline, so WhatsApp Web has opened instead. Press Send there.',
-                default             => $result['error'] ?? 'Marked notified, but the message could not be sent.',
-            },
-            'whatsapp'     => $result,
-            'whatsapp_url' => $result['url'] ?? null,
-            'order'        => $this->serialize($order->loadPaymentTotals()),
-        ]);
+        $result = $this->dispatchCustomerNotice($order->load('customer'), 'order-ready');
+        if ($result['sent']) $this->service->markNotified($order);
+        return response()->json(['success' => true,
+            'message' => $result['sent'] ? 'Collection notice accepted for sending.' : $result['error'],
+            'notification' => $result, 'order' => $this->serialize($order->loadPaymentTotals())]);
     }
 
-    /**
-     * Notify every selected order that is ready for collection.
-     */
     public function bulkNotify(Request $request): JsonResponse
     {
-        $validated = $request->validate([
-            'order_ids'   => ['required', 'array', 'min:1', 'max:200'],
-            'order_ids.*' => ['integer', 'exists:orders,id'],
-        ]);
-
-        /*
-         * Only orders a member of staff has already verified are eligible.
-         *
-         * This is the hinge of the workflow: the garments are physically back
-         * in the shop and checked, the customer is told, and *that* is what
-         * makes the order Ready — not a date, not a timer. An order still being
-         * stitched cannot be notified, and one already marked Ready has been
-         * notified once and should not be pestered again.
-         */
-        $orders = Order::with('customer:id,name,phone')
-            ->whereIn('id', $validated['order_ids'])
-            ->where('status', 'Ready for Verification')
-            ->get();
-
-        if ($orders->isEmpty()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'None of the selected orders are awaiting verification. Verify the garments first, then notify.',
-                'sent'    => 0,
-            ], 422);
-        }
-
-        $links     = [];
-        $delivered = 0;
-        $failed    = [];
-
-        $promoted = 0;
-
+        $validated = $request->validate(['order_ids' => ['required', 'array', 'min:1', 'max:200'],
+            'order_ids.*' => ['integer', 'exists:orders,id']]);
+        $orders = Order::with('customer:id,name,phone')->whereIn('id', $validated['order_ids'])
+            ->where('status', 'Ready for Verification')->get();
+        if ($orders->isEmpty()) return response()->json(['success' => false,
+            'message' => 'None of the selected orders are awaiting verification.', 'sent' => 0], 422);
+        $accepted = 0; $failed = [];
         foreach ($orders as $order) {
+            $result = $this->dispatchCustomerNotice($order, 'order-ready');
+            if (!$result['sent']) { $failed[] = $order->display_number; continue; }
             $this->service->markNotified($order);
-            $result = $this->dispatchWhatsapp($order, 'order-ready');
-
-            if ($result === null) {
-                $failed[] = $order->display_number;
-                continue;
-            }
-
-            if ($result['sent'] && $result['provider'] === 'ultramsg') {
-                $delivered++;
-            } elseif (!$result['sent']) {
-                $failed[] = $order->display_number;
-            }
-
-            /*
-             * Move to Ready once the customer has actually been told.
-             *
-             * A manual-mode send hands back a WhatsApp link rather than
-             * delivering the message itself, and that still counts: the shop
-             * has committed to contacting this customer and the order should
-             * not sit in the verification queue waiting to be found again.
-             * A hard failure — no template, no number — leaves the order where
-             * it is, so nothing is silently marked Ready that nobody was told
-             * about.
-             */
-            if ($result['sent'] || $result['url']) {
-                $this->service->changeStatus(
-                    $order,
-                    'Ready',
-                    'Verified and collection notice sent'
-                );
-                $promoted++;
-            }
-
-            // Manual mode returns a link per order for the client to open.
-            if ($result['url']) {
-                $links[] = [
-                    'order'    => $order->display_number,
-                    'customer' => $order->customer?->name,
-                    'url'      => $result['url'],
-                ];
-            }
+            $this->service->changeStatus($order, 'Ready', 'Verified and collection notice accepted for sending');
+            $accepted++;
         }
-
-        $provider = WhatsAppService::provider();
-
-        return response()->json([
-            'success'  => true,
-            'sent'     => $orders->count(),
-            'delivered' => $delivered,
-            'promoted' => $promoted,
-            'skipped'  => count($validated['order_ids']) - $orders->count(),
-            'failed'   => $failed,
-            'provider' => $provider,
-            'message'  => $provider === 'ultramsg'
-                ? sprintf(
-                    '%d message(s) sent via UltraMsg%s. %d order(s) marked Ready.',
-                    $delivered,
-                    $failed ? ', ' . count($failed) . ' failed' : '',
-                    $promoted
-                )
-                : sprintf('%d customer(s) ready to notify; %d order(s) marked Ready.', count($links), $promoted),
-            'links'    => $links,
-        ]);
+        return response()->json(['success' => true, 'sent' => $accepted, 'accepted' => $accepted,
+            'promoted' => $accepted, 'skipped' => count($validated['order_ids']) - $orders->count(),
+            'failed' => $failed, 'message' => sprintf('%d notice(s) accepted; %d failed. %d order(s) marked Ready.', $accepted, count($failed), $accepted)]);
     }
 
     /**
@@ -356,7 +246,6 @@ class OrderController extends Controller
         }
 
         $orders = $query->with('customer')->get();
-        $links  = [];
 
         foreach ($orders as $order) {
             $oldDate = $order->delivery_date?->copy();
@@ -374,33 +263,18 @@ class OrderController extends Controller
             );
 
             // Tell the customer, using the shop's DUE DATE EXTENDED template.
-            $result = $this->dispatchWhatsapp($order->fresh()->load('customer'), 'due-extended', [
+            $result = $this->dispatchCustomerNotice($order->fresh()->load('customer'), 'due-extended', [
                 'newDate' => Dates::format($order->fresh()->delivery_date, 'To be confirmed'),
                 'oldDate' => Dates::format($oldDate, 'the original date'),
                 'reason'  => $validated['reason'],
             ]);
 
-            // SMS channel — fires independently of WhatsApp.
-            SmsService::sendTemplate('due-extended', $order->fresh()->load('customer'), [
-                'newDate' => Dates::format($order->fresh()->delivery_date, 'To be confirmed'),
-                'oldDate' => Dates::format($oldDate, 'the original date'),
-                'reason'  => $validated['reason'],
-            ]);
-
-            if ($result && $result['url']) {
-                $links[] = [
-                    'order'    => $order->display_number,
-                    'customer' => $order->customer?->name,
-                    'url'      => $result['url'],
-                ];
-            }
         }
 
         return response()->json([
             'success' => true,
             'updated' => $orders->count(),
             'message' => sprintf('%d order(s) extended by %d day(s).', $orders->count(), $validated['days']),
-            'links'   => $links,
         ]);
     }
 
@@ -741,40 +615,9 @@ class OrderController extends Controller
         ];
     }
 
-    /**
-     * The message body comes from the shop's own "ORDER READY" template, so
-     * editing it in Settings changes what customers actually receive.
-     */
-    private function whatsappUrl(Order $order, string $templateId = 'order-ready'): ?string
+    private function dispatchCustomerNotice(Order $order, string $templateId, array $extra = []): array
     {
-        if (!WhatsAppService::enabled()) {
-            return null;
-        }
-
-        $message = WhatsAppService::renderTemplate(
-            $templateId,
-            WhatsAppService::variablesForOrder($order)
-        );
-
-        if ($message === null) {
-            return null;
-        }
-
-        return WhatsAppService::manualLink($order->customer?->phone, $message);
-    }
-
-    /**
-     * Delivers the template through the configured provider and reports what
-     * happened, so the client knows whether to open WhatsApp Web.
-     *
-     * @return array{sent: bool, provider: string, url: ?string, message: string, error: ?string}|null
-     */
-    private function dispatchWhatsapp(Order $order, string $templateId, array $extra = []): ?array
-    {
-        // SMS channel — fires independently of WhatsApp.
-        SmsService::sendTemplate($templateId, $order, $extra);
-
-        return WhatsAppService::sendTemplate($templateId, $order, $extra);
+        return \App\Services\CustomerNotificationDispatcher::dispatch($templateId, $order, $extra);
     }
 
     /**

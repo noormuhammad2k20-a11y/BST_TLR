@@ -31,9 +31,7 @@ class BusinessIntegrityTest extends TestCase
         $product=Product::create(['cs_category_id'=>$category->id,'name'=>'Integrity cotton','sku'=>'TEST-'.uniqid(),
             'price'=>'10.00','cost_price'=>'4.00','stock_quantity'=>'0.00','unit'=>'meter','status'=>'Active']);
         $main=Location::where('name','Main Store')->firstOrFail();
-        $other=Location::create(['name'=>'Test warehouse','type'=>'Warehouse','is_active'=>true]);
-        app(InventoryService::class)->move($product->id,'4.00','Test fixture','fixture',$main->id);
-        app(InventoryService::class)->move($product->id,'16.00','Test fixture','fixture',$other->id);
+        app(InventoryService::class)->move($product->id,'20.00','Test fixture','fixture',$main->id);
         $response=$this->postJson(route('cloth-store.checkout.store'),['cs_customer_id'=>$customer->id,
             'items'=>[['cs_product_id'=>$product->id,'quantity'=>$quantity]],'paid_amount'=>$paid,'discount'=>$discount,'payment_method'=>'Cash']);
         $response->assertOk()->assertJsonPath('success',true);
@@ -44,7 +42,7 @@ class BusinessIntegrityTest extends TestCase
         return app(ReturnService::class)->create(['order_id'=>$order->id,'items'=>[['order_item_id'=>$order->items()->first()->id,
             'quantity'=>$qty,'reason'=>'Fit','action_type'=>$action,'exchange_product_id'=>$replacement]]]);
     }
-    public function test_multilocation_checkout_keeps_stock_equal(): void
+    public function test_single_shop_checkout_keeps_stock_equal(): void
     {
         [$c,$p,$o]=$this->sale('70.00','7.00');
         $this->assertSame('13.00',$p->stock_quantity);
@@ -118,7 +116,7 @@ class BusinessIntegrityTest extends TestCase
         [$c,$p,$o]=$this->sale();$this->returned($o,'7.00');
         $this->expectException(ValidationException::class);$this->returned($o,'4.00');
     }
-    public function test_exchange_updates_both_product_locations(): void
+    public function test_exchange_updates_both_product_totals(): void
     {
         [$c,$p,$o]=$this->sale();
         $replacement=$p->replicate();$replacement->sku='EX-'.uniqid();$replacement->stock_quantity='0.00';$replacement->save();
@@ -139,7 +137,7 @@ class BusinessIntegrityTest extends TestCase
         [$c,$p]=$this->sale();$p->update(['stock_quantity'=>'99.00']);
         $this->expectException(ValidationException::class);app(InventoryService::class)->move($p->id,'-1.00','Sale','test');
     }
-    public function test_tailor_cannot_access_finance_or_other_jobs(): void
+    public function test_tailor_login_cannot_access_business_data(): void
     {
         $tailor=User::factory()->create(['role'=>'tailor','is_active'=>true]);$this->actingAs($tailor);
         $this->getJson(route('finance.index'))->assertForbidden();
@@ -163,11 +161,11 @@ class BusinessIntegrityTest extends TestCase
     }
     public function test_secret_settings_are_encrypted_and_masked(): void
     {
-        Settings::put(['gateway_token'=>'a-secret-that-must-not-be-cached-plaintext']);
-        $raw=DB::table('settings')->where('key','gateway_token')->value('value');
+        Settings::put(['meta_access_token'=>'a-secret-that-must-not-be-cached-plaintext']);
+        $raw=DB::table('settings')->where('key','meta_access_token')->value('value');
         $this->assertStringStartsWith('enc:v1:',$raw);
-        $this->assertSame('a-secret-that-must-not-be-cached-plaintext',Settings::str('gateway_token'));
-        $this->assertNotSame(Settings::str('gateway_token'),Settings::forClient()['gateway_token']);
+        $this->assertSame('a-secret-that-must-not-be-cached-plaintext',Settings::str('meta_access_token'));
+        $this->assertNotSame(Settings::str('meta_access_token'),Settings::forClient()['meta_access_token']);
     }
     public function test_discounted_invoice_full_refund_is_exact(): void
     {

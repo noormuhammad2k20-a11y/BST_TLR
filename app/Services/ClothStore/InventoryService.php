@@ -19,6 +19,9 @@ final class InventoryService
     public function move(int $productId, string $quantity, string $reason, string $reference, ?int $locationId = null, ?int $orderItemId = null): void
     {
         DB::transaction(function () use ($productId,$quantity,$reason,$reference,$locationId,$orderItemId) {
+            // This installation has one shop. Every movement is anchored to
+            // Main Store even if an old caller submits a legacy location id.
+            $locationId = $this->mainLocation();
             $product = Product::withTrashed()->whereKey($productId)->lockForUpdate()->firstOrFail();
             $rows = ProductLocation::where('cs_product_id',$productId)->orderBy('cs_location_id')->lockForUpdate()->get();
             $sum = '0.00';
@@ -31,7 +34,6 @@ final class InventoryService
             $out = D::cmp($quantity,'0') < 0;
             $remaining = $out ? D::sub('0',$quantity) : $quantity;
             if (!$out) {
-                $locationId ??= $this->mainLocation();
                 if (!Location::whereKey($locationId)->where('is_active',true)->exists()) $this->fail('Inactive or missing destination location.');
                 $row = ProductLocation::firstOrCreate(['cs_product_id'=>$productId,'cs_location_id'=>$locationId],['quantity'=>'0.00']);
                 $rows = collect([$row]);

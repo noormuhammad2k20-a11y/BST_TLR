@@ -96,7 +96,7 @@ class BackupService
             'version'     => self::FORMAT_VERSION,
             'exported_at' => now()->toIso8601String(),
             'shop'        => Settings::str('store_name'),
-            'settings'    => Setting::query()->pluck('value', 'key')->mapWithKeys(function ($value, $key) {
+            'settings'    => Setting::query()->whereIn('key', array_keys(Settings::SCHEMA))->pluck('value', 'key')->mapWithKeys(function ($value, $key) {
                 $secret = !empty(Settings::SCHEMA[$key]['secret']);
                 return [$key => $secret ? '[redacted]' : $value];
             })->all(),

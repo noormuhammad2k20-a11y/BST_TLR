@@ -35,12 +35,12 @@ class Setting extends Model
     {
         // Shared caches contain ciphertext only, including after legacy secret conversion.
         $values=Cache::rememberForever(self::CACHE_KEY, function () {
-            return static::query()->whereNotIn('key',collect(\App\Services\Settings::SCHEMA)->filter(fn($m)=>!empty($m['secret']))->keys())->pluck('value','key')->all();
+            return static::query()->whereIn('key', array_keys(\App\Services\Settings::SCHEMA))->whereNotIn('key',collect(\App\Services\Settings::SCHEMA)->filter(fn($m)=>!empty($m['secret']))->keys())->pluck('value','key')->all();
         });
         foreach (static::query()->whereIn('key',collect(\App\Services\Settings::SCHEMA)->filter(fn($m)=>!empty($m['secret']))->keys())->pluck('value','key') as $key=>$value) {
             $values[$key]=\App\Services\SecretSettings::decode($key,$value);
         }
-        return $values;
+        return array_intersect_key($values, \App\Services\Settings::SCHEMA);
     }
 
     public static function getValue(string $key, $default = null)

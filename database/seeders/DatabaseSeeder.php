@@ -23,6 +23,7 @@ class DatabaseSeeder extends Seeder
         $this->keepOnlyOwner((int) $owner->id);
         $this->seedSettings();
         $this->seedTailoring((int) $owner->id);
+        $this->seedTimeline((int) $owner->id, (string) $owner->name);
         $this->seedClothStore((int) $owner->id, (string) $owner->name);
         $this->call(ProductionPermissionsSeeder::class);
         $ownerRole=DB::table('cs_roles')->where('name','Super Admin')->value('id');
@@ -91,6 +92,11 @@ class DatabaseSeeder extends Seeder
             $tailors = DB::table('staff')->orderBy('id')->get();
         }
         DB::table('staff')->whereNotIn('role', ['Master Tailor','Tailor'])->update(['role'=>'Tailor']);
+        DB::table('staff')->whereRaw('LOWER(TRIM(name)) = ?', ['test'])->update([
+            'name'=>'Irfan Malik','notes'=>'Experienced tailor','updated_at'=>now(),
+        ]);
+        DB::table('measurements')->whereRaw('LOWER(TRIM(tailor)) = ?', ['test'])->update(['tailor'=>'Irfan Malik']);
+        $tailors = DB::table('staff')->orderBy('id')->get();
 
         // Older orders used login accounts as tailors. Keep every order and
         // attach any unassigned row to the preserved tailor directory.
@@ -318,5 +324,65 @@ class DatabaseSeeder extends Seeder
             'start_date'=>now()->subDays(5),'end_date'=>now()->addMonths(2),'min_purchase'=>1000,
             'max_discount'=>1000,'usage_limit'=>100,'customer_limit'=>2,'usage_count'=>$i-1,
             'is_active'=>$i<=6,'created_at'=>now(),'updated_at'=>now()]);
+    }
+
+    private function seedTimeline(int $ownerId, string $ownerName): void
+    {
+        // Notifications and activity entries are transient dashboard data. Clear
+        // stale demo alerts without touching orders, measurements or stitching
+        // history, then rebuild a concise timeline from the connected seed orders.
+        DB::table('notifications')->delete();
+        DB::table('activity_logs')->delete();
+
+        $orders = DB::table('orders')
+            ->join('customers', 'customers.id', '=', 'orders.customer_id')
+            ->where('orders.order_number', 'like', 'SEED-ORD-%')
+            ->orderBy('orders.order_number')
+            ->limit(10)
+            ->get([
+                'orders.id', 'orders.order_number', 'orders.customer_id',
+                'orders.status', 'orders.total', 'customers.name as customer_name',
+            ]);
+
+        foreach ($orders as $index => $order) {
+            $createdAt = now()->subHours(2 + ($index * 3));
+            $isRead = $index >= 6;
+            $message = match ($order->status) {
+                'Delivered' => "{$order->order_number} for {$order->customer_name} was delivered successfully.",
+                'Ready', 'Ready for Verification' => "{$order->order_number} for {$order->customer_name} is ready for collection.",
+                default => "Stitching is in progress for {$order->order_number} ({$order->customer_name}).",
+            };
+
+            DB::table('notifications')->insert([
+                'customer_id' => $order->customer_id,
+                'order_id' => $order->id,
+                'title' => $order->status === 'Delivered' ? 'Order Delivered' : 'Order Update',
+                'message' => $message,
+                'type' => 'Info',
+                'category' => 'orders',
+                'icon' => $order->status === 'Delivered' ? 'fa-check-circle' : 'fa-scissors',
+                'color' => $order->status === 'Delivered' ? 'success' : 'primary',
+                'action_url' => '/orders/'.$order->id,
+                'is_read' => $isRead,
+                'read_at' => $isRead ? $createdAt->copy()->addHour() : null,
+                'created_at' => $createdAt,
+                'updated_at' => $createdAt,
+            ]);
+
+            DB::table('activity_logs')->insert([
+                'action' => 'Order '.$order->status,
+                'category' => 'orders',
+                'event' => 'order.status',
+                'description' => "{$order->order_number} for {$order->customer_name} is {$order->status}.",
+                'subject_type' => 'App\\Models\\Order',
+                'subject_id' => $order->id,
+                'properties' => json_encode(['status' => $order->status, 'total' => $order->total]),
+                'user_id' => $ownerId,
+                'actor_name' => $ownerName,
+                'ip_address' => '127.0.0.1',
+                'created_at' => $createdAt,
+                'updated_at' => $createdAt,
+            ]);
+        }
     }
 }

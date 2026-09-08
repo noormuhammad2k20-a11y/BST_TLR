@@ -2,7 +2,7 @@
 namespace Tests\Integration;
 
 use App\Models\{User,Customer as TailorCustomer,Order as TailorOrder,Payment,Delivery,Staff,StaffPayment};
-use App\Models\ClothStore\{Customer,CustomerPayment,Order,Product,Location,Role,Permission};
+use App\Models\ClothStore\{Customer,CustomerPayment,Order,Product};
 use App\Services\{Settings,TailoringFinanceService,OrderService,PricingService,BackupService};
 use App\Services\ClothStore\{ReturnService,FinanceService,OrderWorkflow};
 use Illuminate\Support\Facades\DB;
@@ -24,15 +24,11 @@ final class WorkflowCoverageTest extends BusinessIntegrityTest
         $this->putJson(route('cloth-store.customers.update',$customer),['name'=>'Updated customer','phone'=>'03001234567'])->assertSuccessful();
         $this->assertSame('Updated customer',$customer->fresh()->name);
     }
-    public function test_manager_and_cashier_permissions_use_stored_grants(): void
+    public function test_non_owner_accounts_cannot_access_business_routes(): void
     {
-        $permission=Permission::firstOrCreate(['name'=>'Finance - Reverse Payment'],['module'=>'Finance']);
-        $role=Role::create(['name'=>'Test Manager '.uniqid()]);$role->permissions()->attach($permission);
-        $manager=User::factory()->create(['role'=>'staff','is_active'=>true]);$manager->csRoles()->attach($role);
-        [$c,$p,$o]=$this->sale();$payment=CustomerPayment::where('cs_order_id',$o->id)->firstOrFail();
-        $this->actingAs($manager)->putJson(route('cloth-store.payments.reverse',$payment))->assertSuccessful();
-        $this->assertSame('100.00',$o->fresh()->remaining_amount);
-        $this->getJson(route('cloth-store.settings.index'))->assertForbidden();
+        $staffLogin=User::factory()->create(['role'=>'staff','is_active'=>true]);
+        $this->actingAs($staffLogin)->getJson(route('cloth-store.dashboard'))->assertForbidden();
+        $this->getJson(route('dashboard'))->assertForbidden();
     }
     public function test_tailoring_full_partial_payment_and_reversal_keep_original(): void
     {
@@ -89,18 +85,18 @@ final class WorkflowCoverageTest extends BusinessIntegrityTest
         $this->assertSame('110.00',PricingService::grandTotal('100.00'));
         Settings::put(['tax_inclusive'=>true]);$this->assertSame('100.00',PricingService::grandTotal('100.00'));
     }
-    public function test_gateway_failure_returns_existing_manual_fallback(): void
+    public function test_unconfigured_meta_does_not_send(): void
     {
-        Settings::put(['whatsapp_enabled'=>true,'whatsapp_provider'=>'gateway','gateway_url'=>'http://127.0.0.1:3001','gateway_token'=>str_repeat('a',40)]);
-        \Illuminate\Support\Facades\Http::fake(['*'=>\Illuminate\Support\Facades\Http::response(['error'=>'offline'],503)]);
-        $result=\App\Services\WhatsAppService::send('03001234567','Test only');
+        Settings::put(['whatsapp_enabled'=>true]);
+        \Illuminate\Support\Facades\Http::preventStrayRequests();
+        $result=\App\Services\WhatsAppService::sendMapped('order-ready','03001234567',[]);
         $this->assertFalse($result['sent']);
     }
     public function test_json_backup_redacts_secret_settings(): void
     {
-        Settings::put(['gateway_token'=>str_repeat('s',40),'store_name'=>'Backup shop']);
+        Settings::put(['meta_access_token'=>str_repeat('s',40),'store_name'=>'Backup shop']);
         $settings=BackupService::payload()['settings'];
-        $this->assertSame('[redacted]',$settings['gateway_token']);
+        $this->assertSame('[redacted]',$settings['meta_access_token']);
         $this->assertSame('Backup shop',$settings['store_name']);
     }
     public function test_staff_payment_reversal_retains_linked_history(): void

@@ -118,23 +118,18 @@ class Settings
         'whatsapp_enabled'  => ['rule' => 'boolean', 'default' => '1', 'group' => 'whatsapp'],
         'email_enabled'     => ['rule' => 'boolean', 'default' => '1', 'group' => 'whatsapp'],
         'sms_enabled'       => ['rule' => 'boolean', 'default' => '0', 'group' => 'whatsapp'],
-        'whatsapp_provider' => ['rule' => 'nullable|in:manual,gateway,ultramsg', 'default' => 'manual', 'group' => 'whatsapp'],
-        'ultramsg_instance' => ['rule' => 'nullable|string|max:100', 'default' => '', 'group' => 'whatsapp'],
-        'ultramsg_token'    => ['rule' => 'nullable|string|max:255', 'default' => '', 'group' => 'whatsapp', 'secret' => true],
-
-        /* Free self-hosted gateway (Baileys). Runs on the shop's own machine. */
-        'gateway_url'       => ['rule' => 'nullable|url|max:255', 'default' => 'http://localhost:3001', 'group' => 'whatsapp'],
-        'gateway_token'     => ['rule' => 'nullable|string|max:255', 'default' => '', 'group' => 'whatsapp', 'secret' => true],
-        // When the gateway is offline, hand back a manual link instead of
-        // failing — this is what makes the hybrid mode never lose a message.
-        'gateway_fallback_manual' => ['rule' => 'boolean', 'default' => '1', 'group' => 'whatsapp'],
+        'meta_access_token' => ['rule' => 'nullable|string|max:4096', 'default' => '', 'group' => 'meta', 'secret' => true],
+        'meta_phone_number_id' => ['rule' => 'nullable|regex:/^[0-9]+$/|max:100', 'default' => '', 'group' => 'meta'],
+        'meta_waba_id' => ['rule' => 'nullable|regex:/^[0-9]+$/|max:100', 'default' => '', 'group' => 'meta'],
+        'meta_templates' => ['rule' => 'nullable|array|max:6', 'default' => null, 'json' => true, 'group' => 'meta'],
         'message_templates' => ['rule' => 'nullable|array', 'default' => null, 'json' => true, 'group' => 'whatsapp'],
 
         /* -------------------------------- SMS ----------------------------- */
-        'sms_provider'      => ['rule' => 'nullable|in:sendpk', 'default' => 'sendpk', 'group' => 'sms'],
+        'sms_provider'      => ['rule' => 'required|in:veevo,sendpk', 'default' => 'veevo', 'group' => 'sms'],
+        'veevo_api_key' => ['rule' => 'nullable|string|max:4096', 'default' => '', 'group' => 'sms', 'secret' => true],
+        'veevo_sender_id' => ['rule' => 'nullable|string|max:50', 'default' => '', 'group' => 'sms'],
         'sendpk_api_key'    => ['rule' => 'nullable|string|max:255', 'default' => '', 'group' => 'sms', 'secret' => true],
         'sendpk_sender_id'  => ['rule' => 'nullable|string|max:50',  'default' => '', 'group' => 'sms'],
-        'sendpk_sms_type'   => ['rule' => 'nullable|in:semi_branded,branded', 'default' => 'semi_branded', 'group' => 'sms'],
         'sms_templates'     => ['rule' => 'nullable|array', 'default' => null, 'json' => true, 'group' => 'sms'],
     ];
 

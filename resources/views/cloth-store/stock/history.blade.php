@@ -47,7 +47,6 @@
                     $operation = match ($tx->type) {
                         'in'       => ['badge-delivered', 'fa-arrow-down', 'Stock In'],
                         'out'      => ['badge-overdue', 'fa-arrow-up', 'Stock Out'],
-                        'transfer' => ['badge-progress', 'fa-right-left', 'Transfer'],
                         default    => ['badge-pending', 'fa-sliders', 'Adjustment'],
                     };
 
@@ -66,9 +65,7 @@
 
                     <td>
                         <span class="badge {{ $badgeClass }}"><i class="fa-solid {{ $icon }} mr-1"></i>{{ $label }}</span>
-                        @if($tx->type === 'transfer')
-                            <div class="cell-muted mt-1">{{ $tx->fromLocation->name ?? 'Unknown' }} &rarr; {{ $tx->toLocation->name ?? 'Unknown' }}</div>
-                        @elseif($tx->type === 'in' && $tx->toLocation)
+                        @if($tx->type === 'in' && $tx->toLocation)
                             <div class="cell-muted mt-1">To {{ $tx->toLocation->name }}</div>
                         @elseif($tx->type === 'out' && $tx->fromLocation)
                             <div class="cell-muted mt-1">From {{ $tx->fromLocation->name }}</div>
@@ -76,13 +73,9 @@
                     </td>
 
                     <td class="text-center">
-                        @if($tx->type === 'transfer')
-                            <span class="text-sky-600 font-semibold cell-num">{{ $fmt($tx->quantity) }}</span>
-                        @else
-                            <span class="font-semibold cell-num {{ $isIncrease ? 'text-emerald-600' : 'text-red-600' }}">
-                                {{ $isIncrease ? '+' : '−' }}{{ $fmt($tx->quantity) }}
-                            </span>
-                        @endif
+                        <span class="font-semibold cell-num {{ $isIncrease ? 'text-emerald-600' : 'text-red-600' }}">
+                            {{ $isIncrease ? '+' : '−' }}{{ $fmt($tx->quantity) }}
+                        </span>
                     </td>
 
                     <td class="text-right">

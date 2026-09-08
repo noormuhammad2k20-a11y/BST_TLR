@@ -1,11 +1,11 @@
 @extends('cloth-store.layouts.app')
-@section('title', 'Advanced Stock Management')
+@section('title', 'Stock Management')
 @section('spaPage', 'cloth-store-stock')
 
 @section('content')
 <x-cloth-store.page-header
     title="Stock Management"
-    subtitle="Manage inventory, locations and track every movement">
+    subtitle="Manage Main Store inventory and track every movement">
     <x-slot:actions>
         <a href="{{ route('cloth-store.stock.alerts') }}" class="btn-cs-ghost">
             <i class="fa-solid fa-bell text-[10px]"></i> Alerts
@@ -248,16 +248,6 @@
                         </select>
                     </div>
 
-                    <!-- Location (Single) -->
-                    <div id="field-location" class="sm:col-span-2">
-                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-2">Location</label>
-                        <select name="location_id" id="input-location" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:border-indigo-500 focus:bg-white transition shadow-sm">
-                            @foreach($locations as $loc)
-                            <option value="{{ $loc->id }}">{{ $loc->name }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    
                     <!-- Adjustment Type (+/-) -->
                     <div id="field-adj-type" class="sm:col-span-2 hidden">
                         <label class="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-2">Adjustment Type</label>

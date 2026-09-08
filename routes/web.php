@@ -174,16 +174,14 @@ Route::middleware(['auth', 'active', 'business'])->group(function () {
         Route::post('settings/reset', [SettingController::class, 'reset'])->name('settings.reset');
 
         /* WhatsApp */
-        Route::post('settings/whatsapp/test', [SettingController::class, 'testWhatsapp'])->name('settings.whatsapp.test');
-        Route::post('settings/whatsapp/test-template', [SettingController::class, 'testTemplate'])->name('settings.whatsapp.test-template');
-        Route::get('settings/whatsapp/gateway', [SettingController::class, 'gatewayStatus'])->name('settings.whatsapp.gateway');
-        Route::post('settings/whatsapp/gateway/logout', [SettingController::class, 'gatewayLogout'])->name('settings.whatsapp.gateway.logout');
-        Route::post('settings/whatsapp/send-test', [SettingController::class, 'sendTest'])->name('settings.whatsapp.send-test');
+        Route::post('settings/whatsapp/test', [SettingController::class, 'testWhatsapp'])->middleware('throttle:6,1')->name('settings.whatsapp.test');
+        Route::post('settings/whatsapp/test-template', [SettingController::class, 'testTemplate'])->middleware('throttle:6,1')->name('settings.whatsapp.test-template');
+        Route::post('settings/whatsapp/send-test', [SettingController::class, 'sendTest'])->middleware('throttle:6,1')->name('settings.whatsapp.send-test');
 
         /* SMS */
-        Route::post('settings/sms/test', [SettingController::class, 'testSms'])->name('settings.sms.test');
-        Route::post('settings/sms/send-test', [SettingController::class, 'sendTestSms'])->name('settings.sms.send-test');
-        Route::get('settings/sms/balance', [SettingController::class, 'smsBalance'])->name('settings.sms.balance');
+        Route::post('settings/sms/test', [SettingController::class, 'testSms'])->middleware('throttle:6,1')->name('settings.sms.test');
+        Route::post('settings/sms/send-test', [SettingController::class, 'sendTestSms'])->middleware('throttle:6,1')->name('settings.sms.send-test');
+        Route::get('settings/sms/balance', [SettingController::class, 'smsBalance'])->middleware('throttle:6,1')->name('settings.sms.balance');
 
         /* Backup & data */
         Route::get('settings/backup', [SettingController::class, 'backup'])->name('settings.backup');

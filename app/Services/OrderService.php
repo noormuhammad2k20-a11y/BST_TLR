@@ -112,11 +112,7 @@ class OrderService
 
             NotificationService::orderCreated($order);
 
-            // Send the shop's own ORDER CREATED template, if it is switched on.
-            DB::afterCommit(fn()=>WhatsAppService::sendTemplate('order-created', $order));
-
-            // SMS channel — fires independently of WhatsApp.
-            DB::afterCommit(fn()=>SmsService::sendTemplate('order-created', $order));
+            CustomerNotificationDispatcher::dispatch('order-created', $order);
 
             ActivityLogger::created(
                 $order,
@@ -283,7 +279,7 @@ class OrderService
     }
 
     /**
-     * Mark ready + flag that the customer was notified over WhatsApp.
+     * Record that a customer notice was accepted by a delivery provider.
      */
     public function markNotified(Order $order): Order
     {
@@ -291,7 +287,7 @@ class OrderService
 
         NotificationService::whatsappSent($order);
         ActivityLogger::log(
-            'WhatsApp sent',
+            'Customer notice accepted',
             sprintf('Pickup notification sent for %s', $order->display_number),
             'orders',
             $order,

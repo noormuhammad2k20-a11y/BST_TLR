@@ -32,8 +32,8 @@ class SettingController extends Controller
         // the shop sees here is what its customers will actually receive.
         $previewOrder = Order::with('customer')->latest()->first();
         $previewVariables = $previewOrder
-            ? WhatsAppService::variablesForOrder($previewOrder)
-            : WhatsAppService::shopVariables();
+            ? \App\Services\NotificationVariables::variablesForOrder($previewOrder)
+            : \App\Services\NotificationVariables::shopVariables();
 
         return view('settings.index', [
             'settings'          => $settings,
@@ -46,8 +46,6 @@ class SettingController extends Controller
             'defaultTemplates'  => Settings::defaultTemplates(),
             'defaultSmsTemplates' => Settings::defaultSmsTemplates(),
             'backupTypes'       => BackupService::typesForClient(),
-            'whatsappReady'     => WhatsAppService::configured(),
-            'smsReady'          => SmsService::configured(),
         ]);
     }
 
@@ -60,7 +58,33 @@ class SettingController extends Controller
             }
         }
 
+        $events = array_column(Settings::defaultTemplates(), 'id');
+        $variables = array_keys(Settings::templateVariables());
+        if ($request->has('meta_templates')) {
+            $rules += [
+                'meta_templates.*' => 'required|array:id,active,name,language,parameters',
+                'meta_templates.*.id' => ['required', 'distinct', \Illuminate\Validation\Rule::in($events)],
+                'meta_templates.*.active' => 'required|boolean',
+                'meta_templates.*.name' => ['nullable', 'string', 'max:512', 'regex:/^[a-z0-9_]+$/'],
+                'meta_templates.*.language' => ['required', 'string', 'max:20', 'regex:/^[a-z]{2,3}(?:_[A-Za-z]{2,4})?$/'],
+                'meta_templates.*.parameters' => 'present|array|max:30',
+                'meta_templates.*.parameters.*' => ['required', \Illuminate\Validation\Rule::in($variables)],
+            ];
+        }
+        foreach (['sms_templates', 'message_templates'] as $key) {
+            if ($request->has($key)) $rules += [
+                $key.'.*' => 'required|array:id,name,active,event,text',
+                $key.'.*.id' => ['required', 'distinct', \Illuminate\Validation\Rule::in($events)],
+                $key.'.*.text' => 'required|string|max:2000', $key.'.*.active' => 'required|boolean',
+                $key.'.*.name' => 'required|string|max:100', $key.'.*.event' => 'required|string|max:100',
+            ];
+        }
         $validated = $request->validate($rules);
+        foreach ($validated['meta_templates'] ?? [] as $mapping) {
+            if ($mapping['active'] && empty($mapping['name'])) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['meta_templates' => 'Active Meta mappings require an approved template name.']);
+            }
+        }
 
         // Only persist what was actually submitted, so saving one panel can
         // never blank out another panel's values.
@@ -79,6 +103,18 @@ class SettingController extends Controller
             $payload[$key] = str_contains($meta['rule'], 'boolean')
                 ? $request->boolean($key)
                 : ($validated[$key] ?? ($meta['json'] ?? false ? [] : ''));
+        }
+
+        $smsProvider = $payload['sms_provider'] ?? Settings::str('sms_provider');
+        $smsEnabled = $payload['sms_enabled'] ?? Settings::bool('sms_enabled');
+        if ($smsEnabled && array_intersect(array_keys($payload), ['sms_enabled','sms_provider','veevo_api_key','sendpk_api_key','sendpk_sender_id'])) {
+            $key = $smsProvider.'_api_key';
+            if (blank($payload[$key] ?? Settings::str($key))) {
+                throw \Illuminate\Validation\ValidationException::withMessages([$key => 'The selected SMS provider requires an API key.']);
+            }
+            if ($smsProvider === 'sendpk' && blank($payload['sendpk_sender_id'] ?? Settings::str('sendpk_sender_id'))) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['sendpk_sender_id' => 'SendPK requires an approved sender ID.']);
+            }
         }
 
         if (!$payload) {
@@ -203,161 +239,14 @@ class SettingController extends Controller
     /** Verifies the configured provider is reachable, without messaging anyone. */
     public function testWhatsapp(): JsonResponse
     {
-        if (WhatsAppService::provider() === 'manual') {
-            return response()->json([
-                'success' => true,
-                'message' => 'Manual mode needs no setup — messages open in WhatsApp Web.',
-            ]);
-        }
-
         $result = WhatsAppService::testConnection();
-
-        return response()->json([
-            'success' => $result['ok'],
-            'message' => $result['ok']
-                ? 'Connected — ' . $result['status'] . '.'
-                : $result['error'],
-        ], $result['ok'] ? 200 : 422);
+        return response()->json(['success' => $result['ok']] + $result, $result['ok'] ? 200 : 422);
     }
 
-    /**
-     * Live gateway state, polled by the Settings panel so the QR appears and
-     * disappears on its own as the phone is linked.
-     */
-    public function gatewayStatus(): JsonResponse
-    {
-        $gateway = WhatsAppService::gatewayStatus();
-
-        return response()->json([
-            'success' => true,
-            'gateway' => array_merge($gateway, $this->gatewayDiagnostics()),
-            'log'     => $this->gatewayLog(),
-        ]);
-    }
-
-    /**
-     * The things that go wrong before the gateway ever answers.
-     *
-     * When the panel says "not running", the reason is almost always one of
-     * three: the folder was never installed, the token in Settings does not
-     * match config.json, or nobody started it. Each is answerable from disk
-     * without asking the gateway anything, so the panel can say which it is
-     * instead of leaving the shop to guess.
-     *
-     * @return array<string, mixed>
-     */
-    private function gatewayDiagnostics(): array
-    {
-        $dir    = base_path('whatsapp-gateway');
-        $config = $dir . DIRECTORY_SEPARATOR . 'config.json';
-
-        $installed = is_dir($dir . DIRECTORY_SEPARATOR . 'node_modules');
-        $hasConfig = is_file($config);
-
-        // Whether the token saved here is the one the gateway will accept. The
-        // token itself is never returned — only whether the two agree.
-        $tokenMatches = null;
-
-        if ($hasConfig) {
-            $parsed = json_decode((string) @file_get_contents($config), true);
-            $onDisk = is_array($parsed) ? (string) ($parsed['token'] ?? '') : '';
-            $saved  = Settings::str('gateway_token');
-
-            if ($onDisk !== '' && $saved !== '') {
-                $tokenMatches = hash_equals($onDisk, $saved);
-            }
-        }
-
-        return [
-            'folder_present' => is_dir($dir),
-            'installed'      => $installed,
-            'has_config'     => $hasConfig,
-            'token_matches'  => $tokenMatches,
-            'provider'       => WhatsAppService::provider(),
-        ];
-    }
-
-    /**
-     * The tail of the gateway's own log, read straight off disk.
-     *
-     * The gateway writes it next to its own script, which means the panel can
-     * show it without another endpoint — and without the shop opening a second
-     * window to find out why a message did not go out.
-     *
-     * @return array<int, string>
-     */
-    private function gatewayLog(int $lines = 40): array
-    {
-        $path = base_path('whatsapp-gateway' . DIRECTORY_SEPARATOR . 'gateway.log');
-
-        if (!is_file($path) || !is_readable($path)) {
-            return [];
-        }
-
-        // Only the tail is ever wanted, and the file grows without bound, so
-        // the last chunk is read rather than the whole thing.
-        $size   = filesize($path);
-        $chunk  = min($size, 64 * 1024);
-        $handle = @fopen($path, 'rb');
-
-        if (!$handle) {
-            return [];
-        }
-
-        fseek($handle, -$chunk, SEEK_END);
-        $tail = (string) fread($handle, $chunk);
-        fclose($handle);
-
-        $rows = preg_split('/\r?\n/', trim($tail)) ?: [];
-
-        return array_values(array_slice($rows, -$lines));
-    }
-
-    /**
-     * Send one arbitrary message to one number, through whatever provider is
-     * configured.
-     *
-     * Deliberately not routed through `testTemplate`: that needs a template to
-     * exist and be switched on, which is exactly what a shop cannot rely on
-     * while it is still proving the link works at all.
-     */
     public function sendTest(Request $request): JsonResponse
     {
-        $validated = $request->validate([
-            'phone'   => ['required', 'string', 'max:50'],
-            'message' => ['required', 'string', 'max:1000'],
-        ]);
-
-        $result = WhatsAppService::send($validated['phone'], $validated['message']);
-
-        return response()->json([
-            'success'  => $result['sent'] || (bool) $result['url'],
-            'provider' => $result['provider'],
-            'url'      => $result['url'],
-            'message'  => $result['sent']
-                ? 'Sent. It should arrive on that phone within a few seconds.'
-                : ($result['url']
-                    ? 'Manual mode: opening WhatsApp Web with the message ready.'
-                    : $result['error']),
-        ], $result['sent'] || $result['url'] ? 200 : 422);
+        return $this->testTemplate($request);
     }
-
-    /** Unlinks the phone so a different number can be paired. */
-    public function gatewayLogout(): JsonResponse
-    {
-        $result = WhatsAppService::gatewayLogout();
-
-        return response()->json([
-            'success' => $result['ok'],
-            'message' => $result['ok']
-                ? 'Phone unlinked. Scan the new QR code to link another number.'
-                : $result['error'],
-        ], $result['ok'] ? 200 : 422);
-    }
-
-    /* ------------------------------------------------------------------ */
-    /*  SMS                                                                */
-    /* ------------------------------------------------------------------ */
 
     /** Verifies the configured SMS provider is reachable, without sending anything. */
     public function testSms(): JsonResponse
@@ -366,9 +255,8 @@ class SettingController extends Controller
 
         return response()->json([
             'success' => $result['ok'],
-            'message' => $result['ok']
-                ? $result['status']
-                : $result['error'],
+            'message' => $result['message'],
+            'verified' => $result['verified'] ?? false,
         ], $result['ok'] ? 200 : 422);
     }
 
@@ -386,7 +274,7 @@ class SettingController extends Controller
             'success'  => $result['sent'],
             'provider' => $result['provider'],
             'message'  => $result['sent']
-                ? 'SMS sent successfully. It should arrive within a few seconds.'
+                ? 'SMS accepted for sending. Delivery is not yet confirmed.'
                 : ($result['error'] ?? 'Could not send the SMS.'),
         ], $result['sent'] ? 200 : 422);
     }
@@ -398,10 +286,8 @@ class SettingController extends Controller
 
         return response()->json([
             'success' => $result['ok'],
-            'data'    => $result['data'] ?? [],
-            'message' => $result['ok']
-                ? 'Balance retrieved.'
-                : ($result['error'] ?? 'Could not check the balance.'),
+            'data' => ['balance' => $result['balance'] ?? null],
+            'message' => $result['message'],
         ], $result['ok'] ? 200 : 422);
     }
 
@@ -412,48 +298,15 @@ class SettingController extends Controller
     public function testTemplate(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'template_id' => 'required|string',
-            'phone'       => 'nullable|string|max:50',
-            'text'        => 'nullable|string|max:2000',
+            'template_id' => ['required', \Illuminate\Validation\Rule::in(array_column(Settings::defaultTemplates(), 'id'))],
+            'phone' => ['required', 'string', 'max:50'],
         ]);
-
         $order = Order::with('customer')->latest()->first();
-
-        $variables = $order
-            ? WhatsAppService::variablesForOrder($order)
-            : WhatsAppService::shopVariables();
-
-        // Prefer the unsaved text in the editor so a draft can be tested.
-        $body = filled($validated['text'] ?? null)
-            ? WhatsAppService::render($validated['text'], $variables)
-            : WhatsAppService::renderTemplate($validated['template_id'], $variables);
-
-        if ($body === null) {
-            return response()->json(['success' => false, 'message' => 'That template is switched off.'], 422);
-        }
-
-        $phone = $validated['phone']
-            ?: Settings::str('whatsapp_number')
-            ?: Settings::str('phone');
-
-        if (blank($phone)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Add a WhatsApp number in Business Profile, or type one to test against.',
-            ], 422);
-        }
-
-        $result = WhatsAppService::send($phone, $body);
-
-        return response()->json([
-            'success'  => $result['sent'],
-            'provider' => $result['provider'],
-            'url'      => $result['url'],
-            'preview'  => $body,
-            'message'  => $result['sent']
-                ? ($result['provider'] === 'manual' ? 'Opening WhatsApp Web with the message ready.' : 'Test message sent via UltraMsg.')
-                : $result['error'],
-        ], $result['sent'] || $result['url'] ? 200 : 422);
+        $variables = $order ? \App\Services\NotificationVariables::variablesForOrder($order) : \App\Services\NotificationVariables::shopVariables();
+        $result = WhatsAppService::sendMapped($validated['template_id'], $validated['phone'], $variables);
+        return response()->json(['success' => $result['sent'], 'message' => $result['sent']
+            ? 'Meta accepted the approved template for sending. Delivery is not yet confirmed.' : $result['error'],
+            'result' => $result], $result['sent'] ? 200 : 422);
     }
 
     /* ------------------------------------------------------------------ */

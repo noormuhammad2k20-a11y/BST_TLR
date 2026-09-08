@@ -6,9 +6,7 @@ use App\Models\Delivery;
 use App\Models\Order;
 use App\Services\ActivityLogger;
 use App\Services\OrderService;
-use App\Services\SmsService;
 use App\Services\StatsService;
-use App\Services\WhatsAppService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -152,15 +150,12 @@ class DeliveryController extends Controller
 
         $sent    = [];
         $failed  = [];
-        $links   = [];
 
         foreach ($deliveries as $delivery) {
             $order  = $delivery->order;
-            $result = WhatsAppService::sendTemplate('order-ready', $order);
+            $result = \App\Services\CustomerNotificationDispatcher::dispatch('order-ready', $order);
 
-            // A null result means the template itself is switched off, which is
-            // a shop-wide problem rather than a per-customer one.
-            if ($result === null || !$result['sent']) {
+            if (!$result['sent']) {
                 $failed[] = [
                     'order'    => $order->display_number,
                     'customer' => $order->customer?->name ?? 'Unknown',
@@ -171,23 +166,11 @@ class DeliveryController extends Controller
 
             $this->orders->markNotified($order);
 
-            // SMS channel — fires independently of WhatsApp.
-            SmsService::sendTemplate('order-ready', $order);
-
             $sent[] = [
                 'order'    => $order->display_number,
                 'customer' => $order->customer?->name ?? 'Unknown',
             ];
 
-            // Manual mode hands back a prefilled WhatsApp link per customer for
-            // the browser to open.
-            if ($result['url']) {
-                $links[] = [
-                    'order'    => $order->display_number,
-                    'customer' => $order->customer?->name,
-                    'url'      => $result['url'],
-                ];
-            }
         }
 
         ActivityLogger::log(
@@ -204,11 +187,10 @@ class DeliveryController extends Controller
             'sent'     => count($sent),
             'failed'   => $failed,
             'results'  => $sent,
-            'links'    => $links,
-            'provider' => WhatsAppService::provider(),
+            'channels' => ['whatsapp', 'sms'],
             'message'  => $failed
-                ? sprintf('%d notified, %d could not be sent.', count($sent), count($failed))
-                : sprintf('%d customer(s) notified.', count($sent)),
+                ? sprintf('%d notice(s) accepted, %d could not be sent.', count($sent), count($failed))
+                : sprintf('%d customer notice(s) accepted for sending.', count($sent)),
         ]);
     }
 

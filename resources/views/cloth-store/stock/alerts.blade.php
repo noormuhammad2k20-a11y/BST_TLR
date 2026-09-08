@@ -138,9 +138,9 @@
                     </div>
 
                     <div>
-                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-2">Suggested Reorder Qty</label>
+                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-2">Suggested Market Purchase</label>
                         <input type="number" id="config-suggested" name="suggested_reorder_qty" required min="0" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:border-indigo-500 focus:bg-white transition shadow-sm">
-                        <p class="text-[10px] text-slate-400 mt-1">Default quantity when generating a Purchase Order.</p>
+                        <p class="text-[10px] text-slate-400 mt-1">Suggested quantity to buy during the next market visit.</p>
                     </div>
                 </div>
             </form>

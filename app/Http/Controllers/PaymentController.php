@@ -11,9 +11,7 @@ use App\Services\NotificationService;
 use App\Services\OrderService;
 use App\Services\PricingService;
 use App\Services\Settings;
-use App\Services\SmsService;
 use App\Services\StatsService;
-use App\Services\WhatsAppService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -89,20 +87,11 @@ class PaymentController extends Controller
 
         $order = $order->fresh()->load('customer')->loadPaymentTotals();
 
-        // Send the shop's own "payment received" template, if that template and
-        // the WhatsApp channel are both switched on.
-        $whatsapp = WhatsAppService::sendTemplate(
+        $delivery = \App\Services\CustomerNotificationDispatcher::dispatch(
             $order->balance_due <= 0 ? 'final-receipt' : 'payment-received',
-            $order,
-            ['paidAmount' => Money::format($validated['amount'])]
+            $order, ['paidAmount' => Money::format($validated['amount'])]
         );
-
-        // SMS channel — fires independently of WhatsApp.
-        SmsService::sendTemplate(
-            $order->balance_due <= 0 ? 'final-receipt' : 'payment-received',
-            $order,
-            ['paidAmount' => Money::format($validated['amount'])]
-        );
+        $whatsapp = $delivery['channels']['whatsapp'] ?? null;
 
         return response()->json([
             'success'  => true,

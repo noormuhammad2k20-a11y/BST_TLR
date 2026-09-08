@@ -5,7 +5,7 @@ Har step number wise hai. Upar se neeche, ek ek karke follow karein. Koi step sk
 na karein.
 
 Project ka naam: **Atelier** — Tailor Shop + Cloth Store management system
-(Laravel 12 + MySQL + Tailwind + WhatsApp gateway).
+(Laravel 12 + MySQL + Tailwind + Meta WhatsApp Cloud API).
 
 ---
 
@@ -24,7 +24,7 @@ Project ka naam: **Atelier** — Tailor Shop + Cloth Store management system
 | 8 | Project ko chalana (run karna) | 2 min |
 | 9 | Pehli dafa login karna | 3 min |
 | 10 | Shuruaati settings (store ka naam, logo, currency) | 10 min |
-| 11 | WhatsApp gateway setup (free, optional) | 15 min |
+| 11 | Official notification setup (optional) | 15 min |
 | 12 | Sab kuch auto-start karna (computer on hote hi) | 10 min |
 | 13 | Roz ka istemal — kaise chalayein | 3 min |
 | 14 | Backup aur restore | 5 min |
@@ -52,7 +52,7 @@ Project ka naam: **Atelier** — Tailor Shop + Cloth Store management system
 
 1. **XAMPP** — isme PHP, MySQL database aur Apache server teeno aa jaate hain
 2. **Composer** — PHP ki libraries download karta hai
-3. **Node.js** — design (CSS/JS) build karta hai + WhatsApp gateway chalata hai
+3. **Node.js** — design (CSS/JS) build karta hai
 
 Bas. Iske alawa kuch nahi chahiye.
 
@@ -213,7 +213,7 @@ composer -V
 
 # Section 3 — Node.js install karna
 
-Node.js do kaam karta hai — design (CSS/JS) build karna, aur WhatsApp gateway chalana.
+Node.js frontend design (CSS/JS) build karta hai. Notifications Laravel backend se send hoti hain.
 
 ## 3.1 Download aur install
 
@@ -637,123 +637,9 @@ Roles: **admin** (sab kuch), **staff** (orders/customers), **tailor** (sirf apne
 
 ---
 
-# Section 11 — WhatsApp gateway setup (Free, optional)
+# Section 11 — Official customer notifications
 
-Isse customers ko order ready hone ka message **khud-b-khud** WhatsApp par chala
-jayega. Bilkul free hai — koi monthly fees nahi.
-
-> **Agar abhi nahi karna, to skip kar dein.** WhatsApp ke bagair bhi poora system
-> chalta hai — bas messages manually bhejne parenge (system link bana ke deta hai,
-> click karke WhatsApp Web khul jata hai).
-
-## 11.1 Pehle ye samajh lein
-
-- Ye WhatsApp ka **official** tareeqa nahi hai. Ye WhatsApp Web ki tarah kaam karta hai.
-- ⚠️ **Alag SIM / alag number istemal karein** — apna zaati number nahi.
-- Sirf **apne customers** ko **order updates** bhejein. Marketing ya bulk promotional
-  messages bilkul na bhejein — number block ho jayega.
-- Message bhejne ki raftaar jaan-boojh kar dheemi rakhi gayi hai (4-9 second ka gap,
-  ghante mein 60 tak). Isse chhera-chhar na karein — yehi cheez number ko bachati hai.
-
-## 11.2 Install karein
-
-1. Folder kholein:
-
-```
-D:\Xamp\htdocs\test-fnal_telor\test-fnal_telor\whatsapp-gateway
-```
-
-2. **`install.bat`** par double-click karein
-3. Black window khulegi, 1-2 minute lagenge
-4. `Done. Now run: start-gateway.bat` dikhe to ✅
-5. Koi bhi key dabayein window band karne ke liye
-
-> ❌ Agar `Node.js is not installed` likhe — Section 3 dobara karein.
-
-## 11.3 Apna password (token) set karein
-
-1. Usi folder mein **`config.json`** par right-click → **Open with → Notepad**
-2. Aisa dikhega:
-
-```json
-{
-  "port": 3001,
-  "token": "meri-dukan-2026-xyz",
-  "minDelayMs": 4000,
-  "maxDelayMs": 9000,
-  "maxPerHour": 60
-}
-```
-
-3. `token` wali line mein apna khud ka password likhein. Misaal:
-
-```json
-  "token": "haseeb-tailors-8823-secret",
-```
-
-> 📌 **Ye token likh kar rakh lein** — agle step mein panel mein bilkul yehi
-> daalna hai, ek ek letter same.
-
-4. **Ctrl + S** → save → band karein
-
-| Setting | Kya karti hai | Badlein? |
-|---|---|---|
-| `port` | Gateway kis port par chalega | Nahi (agar 3001 busy ho to hi) |
-| `token` | Password | ✅ Haan, zaroor badlein |
-| `minDelayMs` / `maxDelayMs` | Do messages ke darmiyan gap | Nahi — barhana safe hai, ghatana khatarnak |
-| `maxPerHour` | Ghante mein zyada se zyada messages | Nahi — barhana risky hai |
-
-## 11.4 Gateway chalayein
-
-1. **`start-gateway.bat`** par double-click
-2. Black window khulegi — **isse band na karein**
-3. Usme QR code dikhega
-
-## 11.5 Phone se link karein
-
-1. Us phone par **WhatsApp** kholein jo dukan ke liye istemal karna hai
-2. **Settings → Linked Devices → Link a Device**
-3. Screen par jo QR code hai, use phone se **scan** karein
-4. Black window mein `WhatsApp connected` jaisa message aa jayega ✅
-
-## 11.6 Panel se connect karein
-
-1. Browser mein: **http://localhost:8000/settings**
-2. **WhatsApp & Alerts** wala tab kholein
-3. Set karein:
-   - **Provider:** `Free Gateway`
-   - **Gateway URL:** `http://localhost:3001`
-   - **Token:** wohi token jo `config.json` mein likha tha (copy-paste karein)
-4. **Save** dabayein
-5. **Test** button dabayein → apna number daalein → message aa jaye to ✅ kaam ho gaya
-
-## 11.7 Message ke templates
-
-Usi page par messages ke templates hain — order ready, delivery, payment reminder wagera.
-Apni marzi ka text likh sakte hain. Ye placeholders khud badal jaate hain:
-
-| Placeholder | Kya banega |
-|---|---|
-| `{customer}` | Customer ka naam |
-| `{order}` | Order number |
-| `{amount}` | Rakam |
-| `{date}` | Tareekh |
-| `{store}` | Dukan ka naam |
-
-Misaal:
-```
-Assalam-o-Alaikum {customer}, aap ka order #{order} tayyar hai.
-Rs. {amount} baqaya hai. {store}
-```
-
-## 11.8 Yaad rahe
-
-- Gateway ki black window **khuli rehni chahiye** warna auto message band ho jayega
-- Window band ho to bhi koi message zaya nahi hota — panel manual WhatsApp link de deta hai
-- `session` folder mein WhatsApp ka login mehfooz hota hai — **kisi ko na dein**, jo ye
-  copy kar le wo aapke number se messages bhej sakta hai
-
----
+Follow [NOTIFICATION-SETUP.md](NOTIFICATION-SETUP.md) for Meta WhatsApp, Veevo/SPEXT and SendPK setup. Configure approved templates before enabling automated WhatsApp.
 
 # Section 12 — Sab kuch auto-start karna
 
@@ -778,19 +664,9 @@ Yehi kaam **Apache** ke liye bhi kar sakte hain (agar Apache istemal kar rahe ha
 
 Ab computer on hote hi website khud chalu ho jayegi.
 
-## 12.3 WhatsApp gateway ko auto-start karein
+## 12.3 Scheduled reminders
 
-1. Folder kholein: `whatsapp-gateway`
-2. **`install-autostart.bat`** par **right-click → Run as administrator**
-3. Screen par jo likha hai follow karein
-4. `[OK] Done.` dikhe to ✅
-
-Ab gateway bina koi window dikhaye background mein khud chalta rahega, aur agar
-kabhi band ho jaye to khud dobara start ho jayega.
-
-**Check karne ke liye:** browser mein `http://localhost:3001/status` kholein.
-
-**Band karna ho to:** `uninstall-autostart.bat` chalayein.
+Run `php artisan schedule:run` every minute through Windows Task Scheduler or your hosting scheduler. Keep the app server and database available.
 
 ---
 
@@ -1066,15 +942,7 @@ Phir `http://localhost:8080` kholein.
 
 ## 15.12 WhatsApp message nahi ja raha
 
-| Check | Kaise |
-|---|---|
-| Gateway chal raha hai? | `http://localhost:3001/status` kholein |
-| Phone linked hai? | Gateway window mein `connected` dikhna chahiye |
-| Token match kar raha hai? | `config.json` ka token = panel wala token, bilkul same |
-| Phone ka internet on hai? | WhatsApp ko phone ka net chahiye |
-| Ghante ki limit khatam? | 60 messages/hour ki had hai — thora intezaar karein |
-
-Phone unlink ho jaye to `start-gateway.bat` dobara chalayein aur naya QR scan karein.
+Check Notifications → Delivery Channels, then WhatsApp Business API → Test Connection & Templates. Check the approved template name, language, ordered variables, and provider error. An accepted message is not proof of delivery. See [notification setup](NOTIFICATION-SETUP.md).
 
 ## 15.13 Sab kuch reset karke naya shuru karna
 
@@ -1153,10 +1021,10 @@ Sab kuch install ho jane ke baad ye list check karein. Har cheez par ✅ lagna c
 
 ## Optional
 
-- [ ] WhatsApp gateway install ho gaya
-- [ ] Phone QR se link ho gaya
+- [ ] Meta credentials verified
+- [ ] Six approved event templates mapped
 - [ ] Test message chala gaya
-- [ ] Auto-start set kar diya (MySQL service + START.bat + gateway)
+- [ ] Auto-start set kar diya (MySQL service + START.bat + scheduler)
 - [ ] `START.bat` shortcut Desktop par bana diya
 
 ---
@@ -1220,7 +1088,6 @@ php artisan optimize:clear
 5. 🔴 **MySQL hamesha chalna chahiye.** Iske bagair "Connection refused" aayega.
 6. ⚠️ **WhatsApp ke liye alag SIM.** Zaati number istemal na karein.
 7. ⚠️ **`.env` file kisi ko na dein.** Isme database ke passwords hain.
-8. ⚠️ **`whatsapp-gateway\session` folder kisi ko na dein.** Isme WhatsApp ka login hai.
 9. 💡 **`.env` badalne ke baad hamesha `php artisan config:clear`.**
 10. 💡 **`storage\logs\laravel.log`** — har error ka asli sabab yahan milta hai.
 
