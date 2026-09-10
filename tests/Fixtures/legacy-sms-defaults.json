@@ -1,0 +1,8 @@
+{
+  "order-created": "{shopName}: Aap ka order {orderID} mil gaya. {garmentType}, Total: {totalAmount}, Advance: {advancePaid}, Baqi: {remainingBalance}. Tayyar: {dueDate}. Shukriya!",
+  "order-ready": "{shopName}: {customerName}, aap ka {garmentType} tayyar hai! Order: {orderID}, Baqi: {remainingBalance}. Tashreef laein. {shopPhone}",
+  "payment-received": "{shopName}: {customerName}, {paidAmount} mil gaye, shukriya! Order: {orderID}, Baqi: {remainingBalance}. {shopPhone}",
+  "due-reminder": "{shopName}: {customerName}, aap ka {garmentType} kal tayyar hoga. Order: {orderID}, Baqi: {remainingBalance}. {shopPhone}",
+  "due-extended": "{shopName}: {customerName}, delivery date barhi: {newDate}. Wajah: {reason}. Maafi chahte hain. {shopPhone}",
+  "final-receipt": "{shopName}: {customerName}, shukriya! Order {orderID}, Total: {totalAmount} — poora hisaab saaf. {shopPhone}"
+}

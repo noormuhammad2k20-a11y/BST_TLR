@@ -14,7 +14,7 @@ final class DeliveryResult
     public static function safeText(mixed $text, int $limit = 500): string
     {
         $text = is_scalar($text) ? (string) $text : '';
-        foreach (['meta_access_token', 'veevo_api_key', 'sendpk_api_key'] as $key) {
+        foreach (['veevo_api_key', 'sendpk_api_key'] as $key) {
             try {
                 $secret = Settings::str($key);
                 if ($secret !== '') {

@@ -11,12 +11,22 @@ class ProductService extends Model
     protected $guarded = ['id'];
 
     protected $casts = [
+        'requires_measurements' => 'boolean',
         'price'               => 'decimal:2',
         'cost_price'          => 'decimal:2',
         'stock_quantity'      => 'integer',
         'low_stock_threshold' => 'integer',
         'duration_days'       => 'integer',
     ];
+
+    protected static function booted(): void
+    {
+        static::saving(function ($product) {
+            $product->normalized_name = $product->canonical_id ? null : \App\Services\CatalogueIdentity::normalize($product->name);
+        });
+    }
+
+    public function lineItems(): HasMany { return $this->hasMany(OrderItem::class); }
 
     public function orders(): HasMany
     {

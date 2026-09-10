@@ -192,7 +192,7 @@
           <div class="text-[10px]">Date: ${Atelier.escapeHtml(r.date)}</div>
           <div class="text-[10px]">Cust: ${Atelier.escapeHtml(r.customer)}</div>
           <div class="dashed-line"></div>
-          <div class="text-[10px]">${Atelier.escapeHtml(r.garment)}</div>
+          ${(r.items||[{name:r.garment,qty:1}]).map(i=>`<div class="text-[10px]">${Atelier.escapeHtml(i.name)} × ${i.qty}${i.desc?' · '+Atelier.escapeHtml(i.desc):''}</div>`).join('')}
           ${r.fabric ? `<div class="text-[10px]">${Atelier.escapeHtml(r.fabric)}</div>` : ''}
           <div class="dashed-line"></div>
           <div class="flex justify-between text-[10px] font-bold"><span>Total:</span><span>${Atelier.escapeHtml(r.total)}</span></div>
@@ -220,7 +220,7 @@
           <div class="flex justify-between text-xs"><span>Customer:</span><span>${Atelier.escapeHtml(r.customer)}</span></div>
           <div class="dashed-line"></div>
           <div class="text-xs font-bold mb-1">ORDER DETAILS</div>
-          <div class="flex justify-between text-xs"><span>${Atelier.escapeHtml(r.garment)}${r.fabric ? ' (' + Atelier.escapeHtml(r.fabric) + ')' : ''}</span><span>${Atelier.escapeHtml(r.total)}</span></div>
+          ${(r.items||[{name:r.garment,qty:1,desc:r.fabric}]).map(i=>`<div class="flex justify-between text-xs"><span>${Atelier.escapeHtml(i.name)} × ${i.qty}${i.desc?' ('+Atelier.escapeHtml(i.desc)+')':''}</span><span>${i.price!==undefined?Atelier.money(i.price):Atelier.escapeHtml(r.total)}</span></div>`).join('')}
           <div class="dashed-line"></div>
           <div class="flex justify-between text-sm font-bold"><span>TOTAL:</span><span>${Atelier.escapeHtml(r.total)}</span></div>
           <div class="flex justify-between text-xs"><span>Advance Paid:</span><span>${Atelier.escapeHtml(r.advance)}</span></div>

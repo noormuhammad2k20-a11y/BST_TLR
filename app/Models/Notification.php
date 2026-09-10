@@ -15,7 +15,7 @@ class Notification extends Model
         'read_at' => 'datetime',
     ];
 
-    public const CATEGORIES = ['orders', 'payments', 'stock', 'whatsapp', 'alerts', 'system'];
+    public const CATEGORIES = ['orders', 'payments', 'stock', 'sms', 'alerts', 'system'];
 
     public function customer(): BelongsTo
     {

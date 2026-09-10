@@ -11,7 +11,6 @@ use App\Services\ActivityLogger;
 use App\Services\BackupService;
 use App\Services\Settings;
 use App\Services\SmsService;
-use App\Services\WhatsAppService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -41,9 +40,9 @@ class SettingController extends Controller
             'measurementFields' => $measurementFields,
             'timezones'         => $timezones,
             'previewVariables'  => $previewVariables,
+            'smsPreviewVariables' => \App\Services\SmsTemplateContent::variables($previewVariables),
             'previewOrder'      => $previewOrder,
             'templateVariables' => Settings::templateVariables(),
-            'defaultTemplates'  => Settings::defaultTemplates(),
             'defaultSmsTemplates' => Settings::defaultSmsTemplates(),
             'backupTypes'       => BackupService::typesForClient(),
         ]);
@@ -58,20 +57,8 @@ class SettingController extends Controller
             }
         }
 
-        $events = array_column(Settings::defaultTemplates(), 'id');
-        $variables = array_keys(Settings::templateVariables());
-        if ($request->has('meta_templates')) {
-            $rules += [
-                'meta_templates.*' => 'required|array:id,active,name,language,parameters',
-                'meta_templates.*.id' => ['required', 'distinct', \Illuminate\Validation\Rule::in($events)],
-                'meta_templates.*.active' => 'required|boolean',
-                'meta_templates.*.name' => ['nullable', 'string', 'max:512', 'regex:/^[a-z0-9_]+$/'],
-                'meta_templates.*.language' => ['required', 'string', 'max:20', 'regex:/^[a-z]{2,3}(?:_[A-Za-z]{2,4})?$/'],
-                'meta_templates.*.parameters' => 'present|array|max:30',
-                'meta_templates.*.parameters.*' => ['required', \Illuminate\Validation\Rule::in($variables)],
-            ];
-        }
-        foreach (['sms_templates', 'message_templates'] as $key) {
+        $events = array_column(Settings::defaultSmsTemplates(), 'id');
+        foreach (['sms_templates'] as $key) {
             if ($request->has($key)) $rules += [
                 $key.'.*' => 'required|array:id,name,active,event,text',
                 $key.'.*.id' => ['required', 'distinct', \Illuminate\Validation\Rule::in($events)],
@@ -80,12 +67,13 @@ class SettingController extends Controller
             ];
         }
         $validated = $request->validate($rules);
-        foreach ($validated['meta_templates'] ?? [] as $mapping) {
-            if ($mapping['active'] && empty($mapping['name'])) {
-                throw \Illuminate\Validation\ValidationException::withMessages(['meta_templates' => 'Active Meta mappings require an approved template name.']);
+        foreach ($validated['sms_templates'] ?? [] as $index => $template) {
+            if (\App\Services\SmsTemplateContent::containsRomanUrdu($template['text'])) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    "sms_templates.$index.text" => 'Please write customer SMS templates in professional English.',
+                ]);
             }
         }
-
         // Only persist what was actually submitted, so saving one panel can
         // never blank out another panel's values.
         $payload = [];
@@ -232,22 +220,6 @@ class SettingController extends Controller
         ]);
     }
 
-    /* ------------------------------------------------------------------ */
-    /*  WhatsApp                                                           */
-    /* ------------------------------------------------------------------ */
-
-    /** Verifies the configured provider is reachable, without messaging anyone. */
-    public function testWhatsapp(): JsonResponse
-    {
-        $result = WhatsAppService::testConnection();
-        return response()->json(['success' => $result['ok']] + $result, $result['ok'] ? 200 : 422);
-    }
-
-    public function sendTest(Request $request): JsonResponse
-    {
-        return $this->testTemplate($request);
-    }
-
     /** Verifies the configured SMS provider is reachable, without sending anything. */
     public function testSms(): JsonResponse
     {
@@ -289,24 +261,6 @@ class SettingController extends Controller
             'data' => ['balance' => $result['balance'] ?? null],
             'message' => $result['message'],
         ], $result['ok'] ? 200 : 422);
-    }
-
-    /**
-     * Sends one template to a nominated number so the shop can see exactly what
-     * lands, using the same code path as a real notification.
-     */
-    public function testTemplate(Request $request): JsonResponse
-    {
-        $validated = $request->validate([
-            'template_id' => ['required', \Illuminate\Validation\Rule::in(array_column(Settings::defaultTemplates(), 'id'))],
-            'phone' => ['required', 'string', 'max:50'],
-        ]);
-        $order = Order::with('customer')->latest()->first();
-        $variables = $order ? \App\Services\NotificationVariables::variablesForOrder($order) : \App\Services\NotificationVariables::shopVariables();
-        $result = WhatsAppService::sendMapped($validated['template_id'], $validated['phone'], $variables);
-        return response()->json(['success' => $result['sent'], 'message' => $result['sent']
-            ? 'Meta accepted the approved template for sending. Delivery is not yet confirmed.' : $result['error'],
-            'result' => $result], $result['sent'] ? 200 : 422);
     }
 
     /* ------------------------------------------------------------------ */

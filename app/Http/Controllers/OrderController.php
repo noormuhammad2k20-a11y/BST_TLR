@@ -49,7 +49,7 @@ class OrderController extends Controller
             ->withCount('orders')
             ->withSum('orders as orders_total', 'total')
             ->with(['measurements' => fn ($q) => $q->select(
-                array_merge(['id', 'customer_id', 'garment_type', 'unit'], \App\Models\Measurement::FIELDS)
+                array_merge(['id', 'customer_id', 'garment_type', 'unit', 'details', 'order_item_piece_id'], \App\Models\Measurement::FIELDS)
             )])
             ->orderBy('name')
             ->get()
@@ -65,13 +65,15 @@ class OrderController extends Controller
                 'spent'        => (float) ($c->orders_total ?? 0),
                 'since'        => $c->created_at?->format('M Y'),
                 'notes'        => $c->notes ?? '',
-                'measurements' => $c->measurements,
+                'measurements' => $c->measurements->map(fn($m) => array_merge($m->toArray(), ['profile_key' => $m->piece?->profile['key'] ?? \App\Services\MeasurementProfiles::infer($m->garment_type)])),
             ]);
 
         $activeServices = ProductService::active()
-            ->select('id', 'name', 'price', 'category', 'duration_days')
+            ->whereNull('canonical_id')
             ->orderBy('name')
             ->get();
+
+        $activeServices->each(fn($service) => $service->setAttribute('profile', \App\Services\MeasurementProfiles::forProduct($service)));
 
         // Assignable people now come from the Staff module rather than from
         // login accounts, so a tailor who never signs in can still be assigned.
@@ -288,7 +290,7 @@ class OrderController extends Controller
         // Every optional block below is governed by the Thermal Printer panel,
         // so a switch turned off there really does drop off the paper.
         $config  = Settings::receipt();
-        $pricing = PricingService::breakdown((float) $order->total);
+        $pricing = PricingService::forOrder($order);
 
         // The workshop copy needs the numbers the tailor actually cuts to.
         // An order usually carries its own measurement record; when it was
@@ -304,9 +306,9 @@ class OrderController extends Controller
         // each one under its own "PIECE n" heading so the cutter never has to
         // guess which numbers belong to which suit. A single-garment order
         // resolves to exactly one entry and prints exactly as it always did.
-        $sheets = $order->measurementSheets->all();
+        $sheets = $order->items_migrated_at ? $order->lineItems()->with('pieces.measurement')->get()->flatMap(fn($item) => $item->pieces->pluck('measurement')->filter())->all() : $order->measurementSheets->all();
 
-        if (empty($sheets) && $sheet) {
+        if (!$order->items_migrated_at && empty($sheets) && $sheet) {
             $sheets = [$sheet];
         }
 
@@ -329,8 +331,9 @@ class OrderController extends Controller
                 'customer'    => $order->customer?->name,
                 'customer_ph' => $config['show_phone'] ? $order->customer?->phone : null,
                 'garment'     => $order->primary_item_name,
+                'items' => PricingService::invoiceItems($order),
                 'fabric'      => $order->fabric,
-                'lines'       => PricingService::lines((float) $order->total),
+                'lines'       => PricingService::orderLines($order),
                 'subtotal'    => $pricing['subtotal'],
                 'tax'         => $pricing['tax_enabled'] ? $pricing['tax'] : null,
                 'tax_label'   => $pricing['tax_label'],
@@ -367,6 +370,7 @@ class OrderController extends Controller
                     'rows'    => $this->measurementRows($sheet),
                     'pieces'  => collect($sheets)->values()->map(fn (Measurement $m, int $i) => [
                         'piece' => $m->piece_no ?: $i + 1,
+                        'garment' => $m->garment_type, 'unit' => $m->unit,
                         'notes' => $m->notes ?: null,
                         'rows'  => $this->measurementRows($m),
                     ])->all(),
@@ -428,8 +432,9 @@ class OrderController extends Controller
 
         $rows = [];
 
-        foreach (Measurement::FIELDS as $field) {
-            $value = $sheet->{$field};
+        $profile = $sheet->piece?->profile;
+        foreach ($profile['fields'] ?? Measurement::FIELDS as $field) {
+            $value = in_array($field, Measurement::FIELDS) ? $sheet->{$field} : ($sheet->details[$field] ?? null);
 
             if ($value === null || $value === '') {
                 continue;
@@ -440,7 +445,7 @@ class OrderController extends Controller
             $clean = rtrim(rtrim(number_format((float) $value, 2, '.', ''), '0'), '.');
 
             $rows[] = [
-                'label' => Measurement::label($field),
+                'label' => $profile['labels'][$field] ?? Measurement::label($field),
                 'value' => $clean === '' ? '0' : $clean,
             ];
         }
@@ -574,6 +579,16 @@ class OrderController extends Controller
 
         return [
             'db_id'     => $order->id,
+            'customer_id' => $order->customer_id,
+            'edit_version' => $order->edit_version,
+            'billing_lines' => PricingService::orderLines($order),
+            'items_locked' => $order->items_locked,
+            'garments' => $order->lineItems()->with('pieces.measurement')->get()->map(fn($item) => [
+                'id' => $item->id, 'product_service_id' => $item->product_service_id, 'name' => $item->name,
+                'quantity' => $item->quantity, 'unit_price' => $item->unit_price, 'subtotal' => $item->subtotal, 'fabric' => $item->fabric ?? '', 'style_notes' => $item->style_notes ?? '',
+                'pieces' => $item->pieces->map(fn($piece) => ['id' => $piece->id, 'unit' => $piece->unit, 'profile' => $piece->profile,
+                    'values' => $piece->measurement ? array_merge($piece->measurement->only(Measurement::FIELDS), $piece->measurement->details ?? []) : (object)[]])->all(),
+            ])->all(),
             'id'        => $order->display_number,
             'invoice'   => $order->display_invoice,
             'customer'  => $order->customer?->name ?? 'Unknown',

@@ -88,6 +88,7 @@ class MeasurementController extends Controller
 
     public function update(Request $request, Measurement $measurement): JsonResponse
     {
+        if ($measurement->order_item_piece_id) return response()->json(['message'=>'Edit this piece through its order so ownership and completion locks are enforced.'],422);
         $validated = $this->validated($request);
 
         $customer = $this->resolveCustomer($validated, $measurement);
@@ -113,7 +114,7 @@ class MeasurementController extends Controller
     public function destroy(Measurement $measurement): JsonResponse
     {
         // Keep measurements that orders still point at.
-        if ($measurement->orders()->exists()) {
+        if ($measurement->order_item_piece_id || $measurement->order_id || $measurement->orders()->withTrashed()->exists()) {
             return response()->json([
                 'success' => false,
                 'message' => 'This measurement is linked to an order and cannot be deleted.',

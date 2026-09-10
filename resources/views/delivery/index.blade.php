@@ -31,7 +31,7 @@
   </div>
   <div class="flex gap-2">
     <button class="bg-white border border-slate-200 text-slate-600 px-3.5 py-2 rounded-lg text-xs font-medium hover:bg-slate-50 hover:border-slate-300 flex items-center gap-2 transition-colors shadow-sm" onclick="openModal('bulk-extend')"><i class="fa-solid fa-calendar-day text-[10px]"></i> Extend Due Dates</button>
-    <button class="bg-slate-900 text-white px-3.5 py-2 rounded-lg text-xs font-medium hover:bg-slate-800 flex items-center gap-2 transition-colors shadow-sm" onclick="filterDelivery('Ready')"><i class="fa-brands fa-whatsapp text-[11px]"></i> Notify Ready Orders</button>
+    <button class="bg-slate-900 text-white px-3.5 py-2 rounded-lg text-xs font-medium hover:bg-slate-800 flex items-center gap-2 transition-colors shadow-sm" onclick="filterDelivery('Ready')"><i class="fa-solid fa-comment-sms text-[11px]"></i> Notify Ready Orders</button>
   </div>
 </div>
 
@@ -110,7 +110,7 @@
     <div class="flex items-center gap-2">
       <button class="bg-white border border-slate-200 text-slate-600 px-3 py-1.5 rounded-md text-xs font-medium hover:bg-slate-100 transition-colors" onclick="clearSelection()">Clear</button>
       <button id="bulk-notify-btn" class="bg-emerald-500 text-white px-3.5 py-1.5 rounded-md text-xs font-semibold hover:bg-emerald-600 flex items-center gap-2 transition-colors shadow-sm" onclick="confirmBulkNotify()">
-        <i class="fa-brands fa-whatsapp text-[12px]"></i> Send WhatsApp / SMS
+        <i class="fa-solid fa-comment-sms text-[12px]"></i> Send SMS
       </button>
     </div>
   </div>
@@ -426,7 +426,7 @@
       let actions = `<button class="w-8 h-8 rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-900 inline-flex items-center justify-center mr-1 transition-colors" title="View Order" onclick="openModal('delivery-details', ${dataStr})"><i class="fa-regular fa-eye text-xs"></i></button>`;
 
       if (eligible) {
-        actions += `<button class="w-8 h-8 rounded-md text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 inline-flex items-center justify-center mr-1 transition-colors" title="${d.overdue ? 'Send follow-up' : 'Send WhatsApp / SMS'}" onclick="notifyOne(${d.db_id})"><i class="fa-brands fa-whatsapp text-sm"></i></button>`;
+        actions += `<button class="w-8 h-8 rounded-md text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 inline-flex items-center justify-center mr-1 transition-colors" title="${d.overdue ? 'Send follow-up' : 'Send SMS'}" onclick="notifyOne(${d.db_id})"><i class="fa-solid fa-comment-sms text-sm"></i></button>`;
       }
 
       if (d.status !== 'Delivered') {
@@ -449,7 +449,7 @@
           <td class="px-5 py-3 whitespace-nowrap">
             <span class="badge ${statusColors[d.status] || 'badge-scheduled'}">${d.status}</span>
             ${d.overdue ? `<span class="badge badge-overdue ml-1">Overdue</span>` : ''}
-            ${d.notified && d.status === 'Ready' ? `<i class="fa-brands fa-whatsapp text-emerald-500 text-xs ml-1" title="Customer already notified"></i>` : ''}
+            ${d.notified && d.status === 'Ready' ? `<i class="fa-solid fa-comment-sms text-emerald-500 text-xs ml-1" title="Customer already notified"></i>` : ''}
           </td>
           <td class="px-5 py-3 text-right whitespace-nowrap">${actions}</td>
         </tr>
@@ -629,7 +629,7 @@
       <div class="p-6">
         <div class="flex items-start gap-3">
           <div class="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 flex-shrink-0">
-            <i class="fa-brands fa-whatsapp"></i>
+            <i class="fa-solid fa-comment-sms"></i>
           </div>
           <div class="flex-1">
             <p class="text-sm text-slate-700">The shop's <span class="font-semibold">ORDER READY</span> message will be sent to <span class="font-bold text-emerald-600">${data.count}</span> customer${data.count === 1 ? '' : 's'}.</p>

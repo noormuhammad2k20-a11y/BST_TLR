@@ -37,7 +37,9 @@ class StoreOrderRequest extends FormRequest
             'time_slot'          => ['nullable', 'string', 'max:100'],
             'payment_method'     => ['nullable', Rule::in(\App\Models\Payment::METHODS)],
             'notes'              => ['nullable', 'string', 'max:2000'],
-            'quantity'           => ['nullable', 'integer', 'min:1', 'max:999'],
+            'quantity'           => ['nullable', 'integer', 'min:1', 'max:20'],
+            'pieces' => ['nullable','array','max:20'],
+            'pieces.*' => ['array'],
             'measurements'       => ['nullable', 'array'],
         ];
 
@@ -47,13 +49,19 @@ class StoreOrderRequest extends FormRequest
         $decimals = Settings::measurementDecimals();
 
         foreach (Measurement::FIELDS as $field) {
+            $rules["pieces.*.{$field}"] = ['nullable','numeric','min:0','max:999','decimal:0,'.$decimals];
             $rules["measurements.{$field}"] = array_merge(
                 [in_array($field, $required, true) ? 'required_with:measurements' : 'nullable'],
                 ['numeric', 'min:0', 'max:999', 'decimal:0,' . $decimals]
             );
         }
 
-        return $rules;
+        if ($this->has('garments')) {
+            $rules['garment'] = ['prohibited'];
+            $rules['total'] = ['nullable'];
+            $rules['advance'] = ['required','numeric','min:0','max:99999999'];
+        }
+        return array_merge($rules, \App\Services\OrderItemsService::rules());
     }
 
     public function messages(): array
@@ -71,5 +79,25 @@ class StoreOrderRequest extends FormRequest
         }
 
         return $messages;
+    }
+
+    public function withValidator($validator): void
+    {
+        $validator->after(function ($validator) {
+            if ($this->has('garments') || $validator->errors()->isNotEmpty()) return;
+            $product = $this->input('product_service_id') ? \App\Models\ProductService::find($this->input('product_service_id')) : null;
+            $profile = $product ? \App\Services\MeasurementProfiles::forProduct($product)
+                : \App\Services\MeasurementProfiles::all()[\App\Services\MeasurementProfiles::infer((string)$this->input('garment'))];
+            $saved = $this->input('measurement_id') ? Measurement::find($this->input('measurement_id')) : null;
+            if ($saved && ($saved->piece?->profile['key'] ?? \App\Services\MeasurementProfiles::infer($saved->garment_type)) !== $profile['key']) {
+                $validator->errors()->add('measurement_id','The saved measurement profile is incompatible.'); return;
+            }
+            $pieces = $saved ? [array_merge($saved->only(Measurement::FIELDS),$saved->details ?? [])] : ($this->input('pieces') ?: [$this->input('measurements',[])]);
+            if ($this->filled('pieces') && count($pieces)!==(int)$this->input('quantity',1)) $validator->errors()->add('pieces','Provide one measurement sheet per piece.');
+            foreach ($pieces as $index => $values) {
+                foreach ($profile['required'] as $field) if (!isset($values[$field]) || $values[$field]==='') $validator->errors()->add("pieces.$index.$field",($profile['labels'][$field] ?? $field).' is required.');
+                if ($profile['at_least_one'] && !count(array_filter(array_intersect_key($values,array_flip($profile['fields'])),fn($v)=>$v!==null&&$v!==''))) $validator->errors()->add("pieces.$index",'Enter at least one alteration measurement.');
+            }
+        });
     }
 }

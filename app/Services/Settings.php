@@ -37,7 +37,6 @@ class Settings
         'registration_no' => ['rule' => 'nullable|string|max:100', 'default' => '',        'group' => 'business'],
         'address'         => ['rule' => 'nullable|string|max:500', 'default' => '',        'group' => 'business'],
         'phone'           => ['rule' => 'nullable|string|max:50',  'default' => '',        'group' => 'business'],
-        'whatsapp_number' => ['rule' => 'nullable|string|max:50',  'default' => '',        'group' => 'business'],
         'email'           => ['rule' => 'nullable|email|max:255',  'default' => '',        'group' => 'business'],
         'website'         => ['rule' => 'nullable|string|max:255', 'default' => '',        'group' => 'business'],
         'logo_path'       => ['rule' => 'nullable|string|max:255', 'default' => '',        'group' => 'business'],
@@ -114,15 +113,8 @@ class Settings
         'compact_tables' => ['rule' => 'boolean',                       'default' => '0', 'group' => 'theme'],
         'rows_per_page'  => ['rule' => 'nullable|integer|min:5|max:100', 'default' => '10', 'group' => 'theme'],
 
-        /* --------------------------- WhatsApp & alerts -------------------- */
-        'whatsapp_enabled'  => ['rule' => 'boolean', 'default' => '1', 'group' => 'whatsapp'],
-        'email_enabled'     => ['rule' => 'boolean', 'default' => '1', 'group' => 'whatsapp'],
-        'sms_enabled'       => ['rule' => 'boolean', 'default' => '0', 'group' => 'whatsapp'],
-        'meta_access_token' => ['rule' => 'nullable|string|max:4096', 'default' => '', 'group' => 'meta', 'secret' => true],
-        'meta_phone_number_id' => ['rule' => 'nullable|regex:/^[0-9]+$/|max:100', 'default' => '', 'group' => 'meta'],
-        'meta_waba_id' => ['rule' => 'nullable|regex:/^[0-9]+$/|max:100', 'default' => '', 'group' => 'meta'],
-        'meta_templates' => ['rule' => 'nullable|array|max:6', 'default' => null, 'json' => true, 'group' => 'meta'],
-        'message_templates' => ['rule' => 'nullable|array', 'default' => null, 'json' => true, 'group' => 'whatsapp'],
+        /* --------------------------- SMS delivery -------------------- */
+        'sms_enabled'       => ['rule' => 'boolean', 'default' => '0', 'group' => 'sms'],
 
         /* -------------------------------- SMS ----------------------------- */
         'sms_provider'      => ['rule' => 'required|in:veevo,sendpk', 'default' => 'veevo', 'group' => 'sms'],
@@ -189,7 +181,6 @@ class Settings
                 $out[$key] = match (true) {
                     is_array($decoded) && $decoded !== [] => $decoded,
                     $key === 'business_hours'       => self::DEFAULT_HOURS,
-                    $key === 'message_templates'    => self::defaultTemplates(),
                     $key === 'sms_templates'        => self::defaultSmsTemplates(),
                     $key === 'measurement_required' => Measurement::REQUIRED_FIELDS,
                     default => [],
@@ -212,6 +203,7 @@ class Settings
     public static function forClient(): array
     {
         $all = self::all();
+        $all['sms_templates'] = self::smsTemplates();
 
         foreach (self::SCHEMA as $key => $meta) {
             if (!empty($meta['secret']) && filled($all[$key] ?? null)) {
@@ -403,34 +395,6 @@ class Settings
     /* --------------------------------- Templates ---------------------- */
 
     /**
-     * Persisted message templates, guaranteed to include every shipped
-     * template id so a missing entry can never break a send.
-     *
-     * @return array<int, array<string, mixed>>
-     */
-    public static function templates(): array
-    {
-        $saved = collect(self::json('message_templates'))->keyBy('id');
-
-        return collect(self::defaultTemplates())
-            ->map(function (array $default) use ($saved) {
-                $override = $saved->get($default['id']);
-
-                return $override ? array_merge($default, $override) : $default;
-            })
-            ->values()
-            ->all();
-    }
-
-    /** One template by id, or null when the shop has switched it off. */
-    public static function activeTemplate(string $id): ?array
-    {
-        $template = collect(self::templates())->firstWhere('id', $id);
-
-        return ($template && ($template['active'] ?? true)) ? $template : null;
-    }
-
-    /**
      * Placeholders every template may use, with a short description. Drives the
      * variable chips in Settings so the list can never drift from reality.
      *
@@ -445,6 +409,7 @@ class Settings
             'orderID'          => 'Order number',
             'invoiceID'        => 'Invoice number',
             'garmentType'      => 'Garment described on the order',
+            'garmentSummary'   => 'All garments and quantities on the order',
             'fabric'           => 'Fabric noted on the order',
             'quantity'         => 'Number of pieces',
             'dueDate'          => 'Delivery date',
@@ -464,21 +429,6 @@ class Settings
         ];
     }
 
-    /**
-     * @return array<int, array<string, mixed>>
-     */
-    public static function defaultTemplates(): array
-    {
-        return [
-            ['id' => 'order-created', 'name' => 'ORDER CREATED', 'active' => true, 'event' => 'order.created', 'text' => "Assalam o Alaikum {customerName}!\n\nAap ka order mil gaya, shukriya! 🎉\n\n📋 Order No: {orderID}\n👔 Kapra: {garmentType}\n📅 Tayyar hoga: {dueDate}\n\n💰 Kul Raqam: {totalAmount}\n💰 Advance: {advancePaid}\n💰 Baqi: {remainingBalance}\n\n— {shopName}\n📞 {shopPhone}"],
-            ['id' => 'order-ready', 'name' => 'ORDER READY', 'active' => true, 'event' => 'order.ready', 'text' => "Assalam o Alaikum {customerName}!\n\nKhushi ki khabar! 🎊\nAap ka {garmentType} tayyar ho gaya hai.\n\n💰 Baqi Raqam: {remainingBalance}\n📋 Order No: {orderID}\n\n— {shopName}\n📞 {shopPhone}"],
-            ['id' => 'payment-received', 'name' => 'PAYMENT RECEIVED', 'active' => true, 'event' => 'payment.received', 'text' => "Assalam o Alaikum {customerName}!\n\nAap ki payment mil gayi, shukriya! ✅\n\n📋 Order No: {orderID}\n💰 Ada Ki Gayi Raqam: {paidAmount}\n💰 Baqi: {remainingBalance}\n\n— {shopName}\n📞 {shopPhone}"],
-            ['id' => 'due-reminder', 'name' => 'DUE DATE REMINDER', 'active' => true, 'event' => 'order.due', 'text' => "Assalam o Alaikum {customerName}!\n\nAap ka {garmentType} kal tayyar ho jayega! 📅\n\n📋 Order No: {orderID}\n💰 Baqi Raqam: {remainingBalance}\n\n— {shopName}\n📞 {shopPhone}"],
-            ['id' => 'due-extended', 'name' => 'DUE DATE EXTENDED', 'active' => true, 'event' => 'order.extended', 'text' => "Assalam o Alaikum {customerName}!\n\nPehle maafi chahte hain. 🙏\n\nAap ke {garmentType} ki delivery date barha di gayi hai.\n📅 Nayi Tarikh: {newDate}\n📝 Wajah: {reason}\n\n— {shopName}\n📞 {shopPhone}"],
-            ['id' => 'final-receipt', 'name' => 'FINAL RECEIPT', 'active' => true, 'event' => 'order.delivered', 'text' => "Assalam o Alaikum {customerName}!\n\nShukriya tashreef lane ka! 🎉\n\n📋 Order No: {orderID}\n💰 Kul Raqam: {totalAmount}\n✅ Poora Hisaab Saaf\n\n— {shopName}\n📞 {shopPhone}"],
-        ];
-    }
-
     /* --------------------------------- SMS Templates ------------------- */
 
     /**
@@ -495,6 +445,11 @@ class Settings
             ->map(function (array $default) use ($saved) {
                 $override = $saved->get($default['id']);
 
+                if ($override && SmsTemplateContent::containsRomanUrdu($override['text'] ?? '')) {
+                    $override['text'] = $default['text'];
+                }
+                if ($override && ($override['text'] ?? '') === str_replace('{garmentSummary}', '{garmentType}', $default['text'])) $override['text'] = $default['text'];
+
                 return $override ? array_merge($default, $override) : $default;
             })
             ->values()
@@ -510,20 +465,19 @@ class Settings
     }
 
     /**
-     * Default SMS templates — shorter than WhatsApp because of the 160-char
-     * ASCII limit (70 chars for Unicode). Uses the same template IDs.
+     * Concise SMS templates. Long or Unicode messages may use multiple segments.
      *
      * @return array<int, array<string, mixed>>
      */
     public static function defaultSmsTemplates(): array
     {
         return [
-            ['id' => 'order-created',    'name' => 'ORDER CREATED',       'active' => true, 'event' => 'order.created',   'text' => "{shopName}: Aap ka order {orderID} mil gaya. {garmentType}, Total: {totalAmount}, Advance: {advancePaid}, Baqi: {remainingBalance}. Tayyar: {dueDate}. Shukriya!"],
-            ['id' => 'order-ready',      'name' => 'ORDER READY',         'active' => true, 'event' => 'order.ready',     'text' => "{shopName}: {customerName}, aap ka {garmentType} tayyar hai! Order: {orderID}, Baqi: {remainingBalance}. Tashreef laein. {shopPhone}"],
-            ['id' => 'payment-received', 'name' => 'PAYMENT RECEIVED',    'active' => true, 'event' => 'payment.received', 'text' => "{shopName}: {customerName}, {paidAmount} mil gaye, shukriya! Order: {orderID}, Baqi: {remainingBalance}. {shopPhone}"],
-            ['id' => 'due-reminder',     'name' => 'DUE DATE REMINDER',   'active' => true, 'event' => 'order.due',       'text' => "{shopName}: {customerName}, aap ka {garmentType} kal tayyar hoga. Order: {orderID}, Baqi: {remainingBalance}. {shopPhone}"],
-            ['id' => 'due-extended',     'name' => 'DUE DATE EXTENDED',   'active' => true, 'event' => 'order.extended',   'text' => "{shopName}: {customerName}, delivery date barhi: {newDate}. Wajah: {reason}. Maafi chahte hain. {shopPhone}"],
-            ['id' => 'final-receipt',    'name' => 'FINAL RECEIPT',       'active' => true, 'event' => 'order.delivered',  'text' => "{shopName}: {customerName}, shukriya! Order {orderID}, Total: {totalAmount} — poora hisaab saaf. {shopPhone}"],
+            ['id' => 'order-created',    'name' => 'ORDER CREATED',       'active' => true, 'event' => 'order.created',   'text' => "{shopName}: Dear {customerName}, your order {orderID} has been received. {garmentSummary}. Total: {totalAmount}, Advance: {advancePaid}, Balance: {remainingBalance}. Due: {dueDate}. Thank you."],
+            ['id' => 'order-ready',      'name' => 'ORDER READY',         'active' => true, 'event' => 'order.ready',     'text' => "{shopName}: Dear {customerName}, your {garmentSummary} is ready for collection. Order: {orderID}. Balance due: {remainingBalance}. For assistance, call {shopPhone}."],
+            ['id' => 'payment-received', 'name' => 'PAYMENT RECEIVED',    'active' => true, 'event' => 'payment.received', 'text' => "{shopName}: Dear {customerName}, we have received your payment of {paidAmount} for order {orderID}. Remaining balance: {remainingBalance}. Thank you."],
+            ['id' => 'due-reminder',     'name' => 'DUE DATE REMINDER',   'active' => true, 'event' => 'order.due',       'text' => "{shopName}: Reminder for {customerName}: Order {orderID} ({garmentSummary}) is scheduled for delivery on {dueDate}. Balance due: {remainingBalance}. Contact: {shopPhone}."],
+            ['id' => 'due-extended',     'name' => 'DUE DATE EXTENDED',   'active' => true, 'event' => 'order.extended',   'text' => "{shopName}: Dear {customerName}, the delivery date for order {orderID} has been updated from {oldDate} to {newDate}. Reason: {reason}. We apologize for the inconvenience."],
+            ['id' => 'final-receipt',    'name' => 'FINAL RECEIPT',       'active' => true, 'event' => 'order.delivered',  'text' => "{shopName}: Dear {customerName}, order {orderID} is fully paid. Total: {totalAmount}. Balance: {remainingBalance}. Thank you for choosing {shopName}."],
         ];
     }
 

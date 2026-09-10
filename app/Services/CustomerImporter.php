@@ -76,7 +76,7 @@ class CustomerImporter
                 'group'    => 'customer',
                 'type'     => 'text',
                 'required' => true,
-                'aliases'  => ['phone', 'mobile', 'mobile no', 'mobile number', 'phone no', 'phone number', 'contact', 'contact no', 'cell', 'cell no', 'whatsapp', 'number'],
+                'aliases'  => ['phone', 'mobile', 'mobile no', 'mobile number', 'phone no', 'phone number', 'contact', 'contact no', 'cell', 'cell no', 'number'],
             ],
             'email' => [
                 'label'   => 'Email',

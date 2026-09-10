@@ -252,309 +252,11 @@
     orders = orders.filter(o => o.db_id !== dbId);
   }
 
-  /* ============= WIZARD STATE ============= */
-  var blankOrderState = () => ({
-    customerId: null,
-    customerName: '',
-    customerPhone: '',
-    garmentId: '',
-    garmentName: '',
-    fabric: '',
-    styleNotes: '',
-    unit: 'cm',
-    measurements: {},
-    savedMeasurementId: null,
-    quantity: 1,
-    unitPrice: 0,
-    // One measurement map per garment. pieces[0] is the first suit, pieces[1]
-    // the second, and so on — activePiece is the tab currently on screen.
-    pieces: [{}],
-    activePiece: 0,
-    price: 0,
-    advance: 0,
-    date: '',
-    slot: '',
-    priority: 'Normal',
-    tailorId: '',
-    measurementsMode: 'new'
-  });
-
-  var newOrderState = blankOrderState();
-
-  /* Mirrors the `req: true` flags in the measurement layout below, so a piece
-     the user never opened can still be checked before the order is submitted. */
-  var WIZARD_REQUIRED_MEASUREMENTS = ['chest_losing', 'waist_losing', 'hip_losing'];
-
-  /* Grow or shrink the per-piece measurement list to match the quantity,
-     keeping whatever was already typed for the pieces that survive. */
-  function syncWizardPieces() {
-    const qty = Math.max(parseInt(newOrderState.quantity, 10) || 1, 1);
-
-    if (!Array.isArray(newOrderState.pieces)) newOrderState.pieces = [];
-
-    while (newOrderState.pieces.length < qty) newOrderState.pieces.push({});
-    newOrderState.pieces.length = qty;
-
-    if (newOrderState.activePiece >= qty) newOrderState.activePiece = qty - 1;
-    if (newOrderState.activePiece < 0) newOrderState.activePiece = 0;
-  }
-
-  /* Read whatever is on screen into the piece being edited, without judging it
-     — validation happens on Next, but switching tabs must never lose typing. */
-  function captureActivePiece() {
-    const piece = {};
-
-    document.querySelectorAll('.wizard-measurement-input').forEach(inp => {
-      const val = inp.value.trim();
-      if (val !== '') piece[inp.dataset.label] = val;
-    });
-
-    syncWizardPieces();
-    newOrderState.pieces[newOrderState.activePiece] = piece;
-    newOrderState.measurements = newOrderState.pieces[0] || {};
-  }
-
-  window.selectWizardPiece = function(index) {
-    captureActivePiece();
-    newOrderState.activePiece = index;
-    openModal('add-order-wizard');
-  };
-
-  window.updateWizardQuantity = function(input) {
-    const qty = Math.min(Math.max(parseInt(input.value, 10) || 1, 1), 20);
-
-    newOrderState.quantity = qty;
-    input.classList.remove('border-red-500');
-
-    // The garment's own rate drives the total, so changing the count repeats
-    // the price instead of making the counter do the arithmetic.
-    if (newOrderState.unitPrice) newOrderState.price = newOrderState.unitPrice * qty;
-
-    syncWizardPieces();
-
-    const box = document.getElementById('wizard-qty-total');
-    if (box) box.textContent = Atelier.money(newOrderState.price || 0);
-  };
-
-  window.selectWizardGarment = function(id, name, price) {
-    newOrderState.garmentId = id;
-    newOrderState.garmentName = name;
-    newOrderState.unitPrice = price;
-    newOrderState.price = price * Math.max(newOrderState.quantity || 1, 1);
-    openModal('add-order-wizard');
-  };
-
-  window.wizardNext = function() {
-    if (wizardStep === 1) {
-      if (!newOrderState.customerName) {
-        showCustomToast('Please select a customer first', 'warning');
-        return;
-      }
-    } else if (wizardStep === 2) {
-      const fabricInput = document.querySelector('input[placeholder="e.g. Italian Wool"]');
-      if (fabricInput) newOrderState.fabric = fabricInput.value;
-      if (!newOrderState.garmentName) {
-        showCustomToast('Please select a garment type', 'warning');
-        return;
-      }
-      const styleNotes = document.querySelector('textarea[placeholder="e.g. Peak lapel, side vents..."]');
-      if (styleNotes) newOrderState.styleNotes = styleNotes.value;
-
-      const qtyInput = document.getElementById('wizard-qty');
-      const qty = qtyInput ? parseInt(qtyInput.value, 10) : newOrderState.quantity;
-
-      if (!qty || qty < 1 || qty > 20) {
-        if (qtyInput) qtyInput.classList.add('border-red-500');
-        showCustomToast('Quantity 1 se 20 ke darmiyan honi chahiye', 'error');
-        return;
-      }
-
-      newOrderState.quantity = qty;
-      if (newOrderState.unitPrice) newOrderState.price = newOrderState.unitPrice * qty;
-      newOrderState.activePiece = 0;
-      syncWizardPieces();
-
-      const activeCustomer = customers.find(c => c.db_id === newOrderState.customerId);
-      const allMeasurements = (activeCustomer && activeCustomer.measurements) || [];
-      const saved = allMeasurements.find(m => m.garment_type === newOrderState.garmentName);
-      newOrderState.savedMeasurementId = saved ? saved.id : null;
-      newOrderState.measurementsMode = saved ? 'saved' : 'new';
-    } else if (wizardStep === 3) {
-      const unitSelect = document.getElementById('wizard-unit');
-      if (unitSelect) newOrderState.unit = unitSelect.value;
-
-      const inputs = document.querySelectorAll('.wizard-measurement-input');
-      let valid = true;
-      let numericError = false;
-      const piece = {};
-
-      inputs.forEach(inp => {
-        const val = inp.value.trim();
-        const isRequired = inp.dataset.required === 'true';
-        inp.classList.remove('border-red-500');
-
-        if (isRequired && !val) {
-          valid = false;
-          inp.classList.add('border-red-500');
-        } else if (val) {
-          const num = parseFloat(val);
-          if (isNaN(num) || num < 0) {
-            valid = false;
-            numericError = true;
-            inp.classList.add('border-red-500');
-          } else {
-            piece[inp.dataset.label] = val;
-          }
-        }
-      });
-
-      // Store the piece on screen before looking at the others, so nothing the
-      // user typed is thrown away by the checks that follow.
-      syncWizardPieces();
-      newOrderState.pieces[newOrderState.activePiece] = piece;
-      newOrderState.measurements = newOrderState.pieces[0] || {};
-
-      if (!valid) {
-        if (numericError) {
-          showCustomToast('Measurement values numeric aur positive hone chahiye', 'error');
-        } else {
-          showCustomToast('Chest Losing, Waist Losing, aur Hip Losing required hain', 'error');
-        }
-        return;
-      }
-
-      // A piece the user never opened is still going to be stitched, so every
-      // piece is checked here — not just the one that happens to be visible.
-      if (newOrderState.measurementsMode !== 'saved') {
-        const missing = newOrderState.pieces.findIndex(pc =>
-          WIZARD_REQUIRED_MEASUREMENTS.some(key => !pc || !pc[key])
-        );
-
-        if (missing > -1) {
-          newOrderState.activePiece = missing;
-          openModal('add-order-wizard');
-          showCustomToast(`Piece ${missing + 1} ki required measurements baaqi hain`, 'error');
-          return;
-        }
-      }
-    } else if (wizardStep === 4) {
-      const amount = document.getElementById('wizard-amount');
-      const advance = document.getElementById('wizard-advance');
-      const date = document.getElementById('wizard-date');
-      const slot = document.getElementById('wizard-slot');
-      const priority = document.getElementById('wizard-priority');
-      // Optional on purpose: an order can be booked before the shop decides
-      // who stitches it, exactly like the edit modal's "Unassigned".
-      const tailor = document.getElementById('wizard-tailor');
-
-      let valid = true;
-      [amount, date, slot, priority, advance].forEach(el => {
-        if(el) el.classList.remove('border-red-500');
-      });
-
-      if (!amount || !amount.value || parseFloat(amount.value) <= 0) { valid = false; if(amount) amount.classList.add('border-red-500'); }
-      if (!advance || advance.value === '') { valid = false; if(advance) advance.classList.add('border-red-500'); }
-      if (!date || !date.value) { valid = false; if(date) date.classList.add('border-red-500'); }
-      if (!slot || !slot.value) { valid = false; if(slot) slot.classList.add('border-red-500'); }
-      if (!priority || !priority.value) { valid = false; if(priority) priority.classList.add('border-red-500'); }
-
-      if (!valid) {
-        showCustomToast('Ye field zaruri hai', 'error');
-        return;
-      }
-
-      // A delivery promised for a day that has already passed is never what the
-      // counter meant. The `min` attribute can be typed straight past, and a
-      // wizard left open overnight carries yesterday's `min`, so the date is
-      // re-checked here against the clock as it is right now.
-      if (date.value < todayISO()) {
-        date.classList.add('border-red-500');
-        showCustomToast('Delivery date guzri hui tareekh nahi ho sakti', 'error');
-        return;
-      }
-
-      newOrderState.price = parseFloat(amount.value);
-      newOrderState.advance = parseFloat(advance.value);
-      newOrderState.date = date.value;
-      newOrderState.slot = slot.value;
-      newOrderState.priority = priority.value;
-      newOrderState.tailorId = tailor ? tailor.value : '';
-    }
-
-    wizardStep++;
-    openModal('add-order-wizard');
-  };
-
-  window.confirmOrderCreation = async function(btn) {
-    if (btn) Atelier.setBusy(btn, true);
-
-    const payload = {
-      customer_id:        newOrderState.customerId,
-      customer_name:      newOrderState.customerName,
-      customer_phone:     newOrderState.customerPhone,
-      product_service_id: newOrderState.garmentId || null,
-      measurement_id:     newOrderState.measurementsMode === 'saved' ? newOrderState.savedMeasurementId : null,
-      quantity:           newOrderState.quantity || 1,
-      staff_id:           newOrderState.tailorId || null,
-      garment:            newOrderState.garmentName,
-      fabric:             newOrderState.fabric,
-      style_notes:        newOrderState.styleNotes,
-      unit:               newOrderState.unit,
-      total:              newOrderState.price,
-      advance:            newOrderState.advance,
-      priority:           newOrderState.priority,
-      delivery_date:      newOrderState.date,
-      time_slot:          newOrderState.slot,
-      measurements:       newOrderState.measurementsMode === 'saved' ? null : (newOrderState.pieces[0] || {}),
-      // One sheet per garment. A saved sheet covers every piece, so `pieces`
-      // is left out entirely in that mode.
-      pieces:             newOrderState.measurementsMode === 'saved' ? null : newOrderState.pieces,
-    };
-
-    try {
-      const res = await Atelier.api.post(ROUTES.store, payload);
-      const created = upsertOrder(res.order);
-
-      closeModal();
-      showCustomToast(res.message || 'Order created successfully', 'success');
-
-      // Business-hours notice, only shown when the shop asked to be warned.
-      if (res.warning) setTimeout(() => toast(res.warning, 'warning'), 1200);
-
-      newOrderState = blankOrderState();
-      wizardStep = 1;
-      renderPage();
-      Atelier.refreshCounters();
-
-      setTimeout(() => window.openReceipt(created.db_id), 400);
-    } catch (err) {
-      Atelier.reportError(err, 'Could not create the order');
-    } finally {
-      if (btn) Atelier.setBusy(btn, false);
-    }
-  };
-
-  window.updateWizardBalance = function() {
-    const amt = parseFloat(document.getElementById('wizard-amount').value) || 0;
-    const adv = parseFloat(document.getElementById('wizard-advance').value) || 0;
-    const balEl = document.getElementById('wizard-balance');
-    if (balEl) balEl.textContent = Atelier.money(amt - adv);
-  };
-
-  window.updateEditPrice = function(selectElem) {
-    const option = selectElem.options[selectElem.selectedIndex];
-    if (option && option.dataset.price) {
-      const amtInput = document.getElementById('edit-amount');
-      if (amtInput) amtInput.value = option.dataset.price;
-    }
-  };
-
+  var newOrderState;
+  var blankOrderState;
   var extensionReasons = @json($extensionReasons);
   var autoStatus = @json($autoStatus);
-  /* Mirrors Order::WORKFLOW. Used only to tell a forward move from a backward
-     one; the server owns the actual rules. */
   var WORKFLOW = ['Pending', 'In Progress', 'Ready for Verification', 'Ready', 'Delivered'];
-
   var viewMode = 'table';
   var wizardStep = 1;
   var orderFilterStatus = 'All';
@@ -620,12 +322,6 @@
       dueDate.getMonth() === today.getMonth() &&
       dueDate.getFullYear() === today.getFullYear() &&
       order.status !== 'Delivered';
-  }
-
-  function generateWhatsAppLink(phone, message) {
-    const cleanPhone = phone.replace(/[^0-9]/g, '');
-    const encodedMsg = encodeURIComponent(message);
-    return `https://wa.me/${cleanPhone}?text=${encodedMsg}`;
   }
 
   async function confirmReadyAndSend(dbId) {
@@ -895,8 +591,6 @@
       if (bar) bar.style.width = '100%';
       if (count) count.innerText = `${res.sent} out of ${total} processed`;
 
-      // Open each prefilled WhatsApp thread; browsers allow this right after a
-      // user-initiated action, and we cap it so nothing floods the screen.
 
       await refreshOrders();
 
@@ -968,42 +662,6 @@
   function goToOrderPage(page) {
     currentPage = page;
     renderPage();
-  }
-
-  async function saveOrderUpdates(dbId, btn) {
-    const garmentSelect = document.getElementById('edit-garment');
-    const selectedOption = garmentSelect?.options[garmentSelect.selectedIndex];
-
-    const payload = {
-      product_service_id: selectedOption?.dataset.id || null,
-      garment:  garmentSelect?.value || null,
-      fabric:   document.getElementById('edit-fabric').value,
-      status:   document.getElementById('edit-status').value,
-      priority: document.getElementById('edit-priority').value,
-      staff_id: document.getElementById('edit-tailor')?.value || null,
-      total:    parseFloat(document.getElementById('edit-amount').value) || 0,
-      advance:  parseFloat(document.getElementById('edit-advance').value) || 0,
-      notes:    document.getElementById('edit-notes').value,
-    };
-
-    if (payload.advance > payload.total) {
-      toast('The advance cannot be more than the total amount', 'error');
-      return;
-    }
-
-    Atelier.setBusy(btn, true);
-    try {
-      const res = await Atelier.api.put(ROUTES.update(dbId), payload);
-      upsertOrder(res.order);
-      closeModal();
-      toast(res.message, 'success');
-      renderPage();
-      Atelier.refreshCounters();
-    } catch (err) {
-      Atelier.reportError(err, 'Could not update the order');
-    } finally {
-      Atelier.setBusy(btn, false);
-    }
   }
 
   /* ============= STATUS TRANSITIONS (kanban + quick actions) ============= */
@@ -1157,8 +815,10 @@
       customer:    o.customer,
       customer_ph: o.phone,
       garment:     o.garment,
+      items: o.garments.map(r=>({name:r.name,qty:r.quantity,unit_price:r.unit_price,price:Number(r.unit_price)*r.quantity,desc:r.fabric})),
       fabric:      o.fabric,
       total:       o.amount,
+      lines:       o.billing_lines,
       qty:         o.qty,
       unitPrice:   o.unitPrice,
       advance:     o.paid,
@@ -1203,9 +863,9 @@
       const pieces = (m.pieces || []).filter(pc => pc.rows && pc.rows.length);
       const rows = m.rows || [];
 
-      if (pieces.length > 1) {
+      if (pieces.length > 0) {
         body.innerHTML = pieces.map(pc => `
-          <div class="slip-kind ghost" style="margin:1.5mm 0 1mm">PIECE ${pc.piece}</div>
+          <div class="slip-kind ghost" style="margin:1.5mm 0 1mm">${Atelier.escapeHtml(pc.garment || "Garment")} · PIECE ${pc.piece} (${Atelier.escapeHtml(pc.unit || "")})</div>
           ${grid(pc.rows)}
           ${pc.notes ? `<div class="slip-note">&bull; ${Atelier.escapeHtml(pc.notes)}</div>` : ''}
         `).join('');
@@ -1388,6 +1048,8 @@
       </div>
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-0">
         <div class="lg:col-span-2 p-6 border-r border-slate-200">
+          <div class="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-3">Garments and pieces</div>
+          ${(d.garments||[]).map(item=>`<div class="border border-slate-200 rounded-lg p-3 mb-3"><div class="flex justify-between"><b>${Atelier.escapeHtml(item.name)} × ${item.quantity}</b><span>${Atelier.money(item.subtotal)}</span></div><p class="text-xs text-slate-500">${Atelier.money(item.unit_price)} each · ${Atelier.escapeHtml(item.fabric||'')}</p><p class="text-sm">${Atelier.escapeHtml(item.style_notes||'')}</p>${item.pieces.map((piece,index)=>`<details class="text-xs mt-2"><summary>${Atelier.escapeHtml(item.name)} · Piece ${index+1} (${Atelier.escapeHtml(piece.unit)})</summary><div class="grid grid-cols-2 gap-2 p-2">${Object.entries(piece.values).filter(([key,value])=>value!==null&&value!=='').map(([key,value])=>`<span>${Atelier.escapeHtml(piece.profile.labels[key]||key)}: ${Atelier.escapeHtml(String(value))}</span>`).join('')||'No measurements recorded / not required'}</div></details>`).join('')}</div>`).join('')}
           <div class="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-3">Auto Status Timeline</div>
           <div class="bg-slate-50 rounded-lg p-4 mb-6">
             <div class="flex items-center justify-between">
@@ -1478,284 +1140,7 @@
       <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">
         <button class="bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-100 flex items-center gap-2 transition-colors" onclick="closeModal(); window.openReceipt(${d.db_id})"><i class="fa-solid fa-print text-xs"></i> Print Receipt</button>
         <button class="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-800 flex items-center gap-2 transition-colors shadow-sm" onclick="closeModal(); openModal('edit-order', ${JSON.stringify(d).replace(/"/g, '&quot;')})"><i class="fa-solid fa-pen-to-square text-xs"></i> Edit Details</button>
-        <button class="bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-600 flex items-center gap-2 transition-colors shadow-sm shadow-emerald-500/30" onclick="confirmReadyAndSend(${d.db_id})"><i class="fa-brands fa-whatsapp text-xs"></i> Mark Ready & Send WA</button>
-      </div>
-    `,
-    'edit-order': (d) => `
-      <div class="p-5 border-b border-slate-200 flex justify-between items-center">
-        <div class="flex items-center gap-3">
-          <div class="text-lg font-bold text-slate-900 tracking-tight">Edit Order ${d.id}</div>
-        </div>
-        <button class="w-8 h-8 rounded-lg text-slate-400 hover:bg-slate-100 flex items-center justify-center" onclick="closeModal()"><i class="fa-solid fa-xmark text-sm"></i></button>
-      </div>
-      <div class="p-6 overflow-y-auto">
-        <div class="grid grid-cols-2 gap-4 mb-4">
-          <div class="col-span-2">
-            <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Garment Type *</label>
-            <select id="edit-garment" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-colors" onchange="window.updateEditPrice(this)">
-              <option value="${Atelier.escapeHtml(d.garment || '')}">${Atelier.escapeHtml(d.garment || 'Custom/Other')}</option>
-              ${activeServices.filter(s => s.name !== d.garment).map(s => `<option value="${Atelier.escapeHtml(s.name)}" data-id="${s.id}" data-price="${s.price}">${Atelier.escapeHtml(s.name)}</option>`).join('')}
-            </select>
-          </div>
-          <div class="col-span-2">
-            <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Fabric</label>
-            <input id="edit-fabric" type="text" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-colors" value="${d.fabric}">
-          </div>
-          <div>
-            <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Status *</label>
-            <select id="edit-status" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-colors">
-              ${['Pending', 'In Progress', 'Ready for Verification', 'Ready', 'Delivered', 'Cancelled'].map(s => `<option ${d.status === s ? 'selected' : ''}>${s}</option>`).join('')}
-            </select>
-          </div>
-          <div>
-            <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Priority *</label>
-            <select id="edit-priority" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-colors">
-              ${['Normal', 'High', 'Express'].map(p => `<option ${d.priority === p ? 'selected' : ''}>${p}</option>`).join('')}
-            </select>
-          </div>
-          <div>
-            <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Total Amount (${Atelier.currency})</label>
-            <input id="edit-amount" type="number" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-colors" value="${d.amount}">
-          </div>
-          <div>
-            <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Advance Paid (${Atelier.currency})</label>
-            <input id="edit-advance" type="number" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-colors" value="${d.advance}">
-          </div>
-          <div class="col-span-2">
-            <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Assigned Tailor</label>
-            <select id="edit-tailor" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-colors">
-              <option value="">Unassigned</option>
-              ${tailors.map(t => `<option value="${t.id}" ${d.tailor_id == t.id ? 'selected' : ''}>${Atelier.escapeHtml(t.name)}</option>`).join('')}
-            </select>
-          </div>
-          <div class="col-span-2">
-            <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Notes</label>
-            <textarea id="edit-notes" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-colors" rows="3" placeholder="Order notes...">${Atelier.escapeHtml(d.notes || '')}</textarea>
-          </div>
-        </div>
-      </div>
-      <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">
-        <button class="bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-100 transition-colors" onclick="closeModal()">Cancel</button>
-        <button class="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors shadow-sm" onclick="saveOrderUpdates(${d.db_id}, this)">Save Changes</button>
-      </div>
-    `,
-    'add-order-wizard': () => `
-      <div class="p-5 border-b border-slate-200 flex justify-between items-center">
-        <div><div class="text-lg font-bold text-slate-900 tracking-tight">Create New Order</div><div class="text-xs text-slate-500">Step ${wizardStep} of 5</div></div>
-        <button class="w-8 h-8 rounded-lg text-slate-400 hover:bg-slate-100 flex items-center justify-center" onclick="closeModal()"><i class="fa-solid fa-xmark text-sm"></i></button>
-      </div>
-      <div class="p-2 bg-slate-50 border-b border-slate-200">
-        <div class="flex items-center justify-between max-w-2xl mx-auto px-4">
-          ${['Customer', 'Garment', 'Measurements', 'Pricing', 'Confirm'].map((s, i) => `
-            <div class="flex items-center ${i < 4 ? 'flex-1' : ''}">
-              <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${wizardStep > i ? 'bg-emerald-500 text-white' : wizardStep === i + 1 ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-400'}">
-                ${wizardStep > i ? '<i class="fa-solid fa-check"></i>' : i + 1}
-              </div>
-              <div class="ml-2 text-xs font-medium ${wizardStep === i + 1 ? 'text-slate-900' : 'text-slate-500'} hidden sm:block">${s}</div>
-              ${i < 4 ? `<div class="flex-1 h-0.5 mx-2 ${wizardStep > i + 1 ? 'bg-emerald-500' : 'bg-slate-200'}"></div>` : ''}
-            </div>
-          `).join('')}
-        </div>
-      </div>
-      <div class="p-6 overflow-y-auto" style="max-height:60vh">
-        ${wizardStep === 1 ? `
-          <h3 class="text-sm font-semibold text-slate-900 mb-3">Select Customer</h3>
-          <div class="relative mb-4">
-            <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400"></i>
-            <input id="customer-search-input" autofocus oninput="window.renderCustomerList(this.value); document.getElementById('clear-search-btn').classList.toggle('hidden', this.value === '')" class="w-full pl-9 pr-9 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900" placeholder="Customer ka naam ya number likho...">
-            <button id="clear-search-btn" onclick="document.getElementById('customer-search-input').value=''; window.renderCustomerList(''); this.classList.add('hidden'); document.getElementById('customer-search-input').focus();" class="hidden absolute right-2 top-1.5 text-slate-400 hover:text-slate-600 p-1"><i class="fa-solid fa-xmark"></i></button>
-          </div>
-          <div id="customer-list-container" class="max-h-60 overflow-y-auto pr-1">
-            <img src="x" onerror="window.renderCustomerList(''); setTimeout(() => { const input = document.getElementById('customer-search-input'); if(input) input.focus(); }, 50);" style="display:none;" />
-          </div>
-        ` : wizardStep === 2 ? `
-          <h3 class="text-sm font-semibold text-slate-900 mb-3">Garment & Fabric Details</h3>
-          <div class="grid grid-cols-2 gap-4">
-            <div class="col-span-2">
-              <label class="block text-xs font-semibold text-slate-500 mb-1.5">Garment Type *</label>
-              <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                ${activeServices.map(s => {
-                   let icon = s.name.toLowerCase().includes('suit') ? 'fa-vest' : s.name.toLowerCase().includes('shirt') ? 'fa-shirt' : 'fa-vest-patches';
-                   let isSelected = newOrderState.garmentId == s.id;
-                   return `<button class="p-3 border-2 ${isSelected ? 'border-indigo-600 bg-indigo-50 text-indigo-600' : 'border-slate-200 text-slate-500 hover:border-indigo-600'} rounded-lg text-xs font-medium flex flex-col items-center gap-1 transition-colors" onclick="window.selectWizardGarment('${s.id}', '${s.name.replace(/'/g, "\\'")}', ${s.price})"><i class="fa-solid ${icon} text-lg"></i> <span class="text-center">${s.name}</span></button>`;
-                }).join('')}
-              </div>
-            </div>
-            <div>
-              <label class="block text-xs font-semibold text-slate-500 mb-1.5">Quantity (kitne kapre) *</label>
-              <input type="number" id="wizard-qty" min="1" max="20" step="1" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900" value="${newOrderState.quantity || 1}" oninput="window.updateWizardQuantity(this)">
-              <p class="mt-1 text-[11px] text-slate-400">Har piece ka apna naap agle step mein.</p>
-            </div>
-            <div>
-              <label class="block text-xs font-semibold text-slate-500 mb-1.5">Total (auto)</label>
-              <div class="w-full px-3 py-2 bg-slate-100 border border-slate-200 rounded-lg text-sm font-semibold text-slate-900" id="wizard-qty-total">${Atelier.money(newOrderState.price || 0)}</div>
-              <p class="mt-1 text-[11px] text-slate-400">${Atelier.money(newOrderState.unitPrice || 0)} \u00d7 ${newOrderState.quantity || 1} \u2014 step 4 par badla ja sakta hai.</p>
-            </div>
-            <div class="col-span-2">
-              <label class="block text-xs font-semibold text-slate-500 mb-1.5">Fabric Selection *</label>
-              <input class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900" placeholder="e.g. Italian Wool">
-            </div>
-            <div class="col-span-2">
-              <label class="block text-xs font-semibold text-slate-500 mb-1.5">Style Notes</label>
-              <textarea class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900" placeholder="e.g. Peak lapel, side vents..."></textarea>
-            </div>
-          </div>
-        ` : wizardStep === 3 ? `
-          <h3 class="text-sm font-semibold text-slate-900 mb-3">Body Measurements</h3>
-          ${(newOrderState.quantity || 1) > 1 ? (
-            newOrderState.measurementsMode === 'saved'
-              ? `<div class="mb-3 p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
-                   Saved measurements sab ${newOrderState.quantity} pieces par lagenge. Har piece ka alag naap dena ho to <b>Enter New</b> chunein.
-                 </div>`
-              : `<div class="flex items-center gap-1.5 mb-3 overflow-x-auto pb-1">
-                   ${newOrderState.pieces.map((pc, i) => {
-                     const done = WIZARD_REQUIRED_MEASUREMENTS.every(k => pc && pc[k]);
-                     const on = newOrderState.activePiece === i;
-                     return `<button onclick="window.selectWizardPiece(${i})" class="shrink-0 px-3 py-1.5 rounded-md text-xs font-semibold border transition-colors ${on ? 'bg-indigo-600 border-indigo-600 text-white' : done ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:border-emerald-400' : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-400'}">
-                               ${done && !on ? '<i class="fa-solid fa-check mr-1"></i>' : ''}Piece ${i + 1}
-                             </button>`;
-                   }).join('')}
-                 </div>`
-          ) : ''}
-          <div class="flex items-center justify-between gap-2 mb-4 p-2 bg-slate-50 rounded-lg">
-            <div class="flex gap-2 w-full max-w-xs">
-              <button onclick="newOrderState.measurementsMode='saved'; openModal('add-order-wizard')" class="flex-1 px-3 py-1.5 text-xs font-medium rounded-md ${newOrderState.measurementsMode === 'saved' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-white'}">Use Saved Measurements</button>
-              <button onclick="newOrderState.measurementsMode='new'; openModal('add-order-wizard')" class="flex-1 px-3 py-1.5 text-xs font-medium rounded-md ${newOrderState.measurementsMode === 'new' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-white'}">Enter New</button>
-            </div>
-            <div class="flex items-center gap-2 pr-2">
-              <label class="text-xs font-semibold text-slate-500">Unit:</label>
-              <select id="wizard-unit" class="text-xs border border-slate-200 rounded p-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 font-medium">
-                <option value="cm" ${newOrderState.unit === 'cm' ? 'selected' : ''}>cm</option>
-                <option value="in" ${newOrderState.unit === 'in' ? 'selected' : ''}>in</option>
-              </select>
-            </div>
-          </div>
-          <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
-            ${(() => {
-              const activeCustomer = customers.find(c => c.db_id === newOrderState.customerId);
-              const allMeasurements = (activeCustomer && activeCustomer.measurements) || [];
-              const savedVals = allMeasurements.find(m => m.garment_type === newOrderState.garmentName) || {};
-              
-              if (newOrderState.measurementsMode === 'saved' && savedVals.unit && !newOrderState._unitLoaded) {
-                 newOrderState.unit = savedVals.unit;
-                 newOrderState._unitLoaded = true; 
-                 setTimeout(() => {
-                    const uSel = document.getElementById('wizard-unit');
-                    if (uSel) uSel.value = savedVals.unit;
-                 }, 0);
-              }
-
-              const layout = [
-                { key: 'length', label: 'Length' },
-                { key: 'shoulder_width', label: 'Shoulder Width' },
-                { key: 'sleeve_length', label: 'Sleeve Length' },
-                { key: 'chest', label: 'Chest' },
-                { key: 'chest_losing', label: 'Chest Losing', req: true },
-                { key: 'waist', label: 'Waist' },
-                { key: 'waist_losing', label: 'Waist Losing', req: true },
-                { key: 'hip', label: 'Hip' },
-                { key: 'hip_losing', label: 'Hip Losing', req: true },
-                { key: 'collar', label: 'Collar' },
-                { key: 'ghera', label: 'Ghera' },
-                { key: 'patti', label: 'Patti' },
-                { key: 'button', label: 'Button' },
-                { key: 'cuff', label: 'Cuff' },
-                { key: 'koni', label: 'Koni' },
-                { key: 'elbow', label: 'Elbow' },
-                { key: 'armhole', label: 'Armhole' },
-                { key: 'takai', label: 'Takai' },
-                { key: 'salwar_length', label: 'Salwar Length' },
-                { key: 'pancho', label: 'Pancho' }
-              ];
-              
-              return layout.map(f => {
-                 const activePiece = newOrderState.pieces[newOrderState.activePiece] || {};
-                 let val = newOrderState.measurementsMode === 'saved' ? (savedVals[f.key] || '') : (activePiece[f.key] !== undefined ? activePiece[f.key] : '');
-                 let reqHtml = f.req ? ' <span class="text-red-500">*</span>' : '';
-                 let borderClass = f.req ? 'border-red-200 focus:ring-red-500' : 'border-slate-200 focus:ring-indigo-500';
-                 let reqAttr = f.req ? 'data-required="true"' : '';
-                 let labelClass = f.req ? 'text-slate-700 font-bold' : 'text-slate-500 font-semibold';
-                 return `
-                   <div class="col-span-1">
-                     <label class="block text-xs ${labelClass} mb-1.5">${f.label}${reqHtml}</label>
-                     <input type="number" step="any" min="0" data-label="${f.key}" ${reqAttr} class="wizard-measurement-input w-full px-3 py-2 bg-slate-50 border ${borderClass} rounded-lg text-sm focus:outline-none focus:ring-2 text-slate-900" value="${val}" oninput="this.classList.remove('border-red-500')">
-                   </div>
-                 `;
-              }).join('');
-            })()}
-          </div>
-        ` : wizardStep === 4 ? `
-          <h3 class="text-sm font-semibold text-slate-900 mb-3">Pricing & Dates</h3>
-          <div class="grid grid-cols-2 gap-4">
-            <div>
-              <label class="block text-xs font-semibold text-slate-500 mb-1.5">Total Amount (${Atelier.currency}) *</label>
-              ${(newOrderState.quantity || 1) > 1 ? `<p class="mb-1.5 text-[11px] text-slate-400">${newOrderState.quantity} \u00d7 ${Atelier.money(newOrderState.unitPrice || 0)}</p>` : ''}
-              <input type="number" id="wizard-amount" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900" value="${newOrderState.price || ''}" oninput="this.classList.remove('border-red-500'); window.updateWizardBalance()">
-            </div>
-            <div>
-              <label class="block text-xs font-semibold text-slate-500 mb-1.5">Advance Paid (${Atelier.currency}) *</label>
-              <input type="number" id="wizard-advance" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900" value="${newOrderState.advance !== undefined ? newOrderState.advance : 0}" oninput="this.classList.remove('border-red-500'); window.updateWizardBalance()">
-            </div>
-            <div class="col-span-2 p-3 bg-emerald-50 rounded-lg flex justify-between items-center">
-              <span class="text-sm font-semibold text-emerald-700">Balance Due:</span>
-              <span class="text-lg font-bold text-emerald-700" id="wizard-balance">${Atelier.money((newOrderState.price || 0) - (newOrderState.advance || 0))}</span>
-            </div>
-            <div>
-              <label class="block text-xs font-semibold text-slate-500 mb-1.5">Delivery Date *</label>
-              <input type="date" id="wizard-date" min="${todayISO()}" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900" value="${newOrderState.date || ''}" oninput="this.classList.remove('border-red-500')">
-            </div>
-            <div>
-              <label class="block text-xs font-semibold text-slate-500 mb-1.5">Time Slot *</label>
-              <select id="wizard-slot" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900" onchange="this.classList.remove('border-red-500')">
-                <option value="">Select Slot</option>
-                ${timeSlots.map(s => `<option value="${Atelier.escapeHtml(s)}" ${newOrderState.slot === s ? 'selected' : ''}>${Atelier.escapeHtml(s)}</option>`).join('')}
-              </select>
-            </div>
-            <div>
-              <label class="block text-xs font-semibold text-slate-500 mb-1.5">Priority *</label>
-              <select id="wizard-priority" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900" onchange="this.classList.remove('border-red-500')">
-                <option value="Normal" ${newOrderState.priority === 'Normal' ? 'selected' : ''}>Normal</option>
-                <option value="High" ${newOrderState.priority === 'High' ? 'selected' : ''}>High</option>
-                <option value="Express" ${newOrderState.priority === 'Express' ? 'selected' : ''}>Express</option>
-              </select>
-            </div>
-            <div>
-              <label class="block text-xs font-semibold text-slate-500 mb-1.5">Tailor</label>
-              <select id="wizard-tailor" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900">
-                <option value="">Unassigned</option>
-                ${tailors.map(t => `<option value="${t.id}" ${newOrderState.tailorId == t.id ? 'selected' : ''}>${Atelier.escapeHtml(t.name)}</option>`).join('')}
-              </select>
-            </div>
-          </div>
-        ` : `
-          <h3 class="text-sm font-semibold text-slate-900 mb-3">Review & Confirm</h3>
-          <div class="bg-slate-50 rounded-xl p-5">
-            <div class="flex justify-between items-start mb-4">
-              <div>
-                <div class="text-xs text-slate-500">Order ID</div>
-                <div class="text-lg font-bold text-slate-900">Auto-Generated</div>
-              </div>
-              <span class="badge badge-pending">Pending</span>
-            </div>
-            <div class="grid grid-cols-2 gap-4 text-sm">
-              <div><div class="text-xs text-slate-500">Customer</div><div class="font-semibold text-slate-900">${newOrderState.customerName || '-'}</div></div>
-              <div><div class="text-xs text-slate-500">Garment</div><div class="font-semibold text-slate-900">${newOrderState.garmentName || '-'}${(newOrderState.quantity || 1) > 1 ? ` \u00d7 ${newOrderState.quantity}` : ''}</div></div>
-              <div><div class="text-xs text-slate-500">Fabric</div><div class="font-semibold text-slate-900">${newOrderState.fabric || 'N/A'}</div></div>
-              <div><div class="text-xs text-slate-500">Due Date</div><div class="font-semibold text-slate-900">${newOrderState.date ? newOrderState.date + ', ' + newOrderState.slot : '-'}</div></div>
-              <div class="col-span-2"><div class="text-xs text-slate-500">Tailor</div><div class="font-semibold text-slate-900">${Atelier.escapeHtml((tailors.find(t => t.id == newOrderState.tailorId) || {}).name || 'Unassigned')}</div></div>
-              <div><div class="text-xs text-slate-500">Total Amount</div><div class="font-semibold text-slate-900">${Atelier.money(newOrderState.price || 0)}</div></div>
-              <div><div class="text-xs text-slate-500">Advance Paid</div><div class="font-semibold text-slate-900">${Atelier.money(newOrderState.advance || 0)}</div></div>
-              <div class="col-span-2"><div class="text-xs text-slate-500">Balance Due</div><div class="font-bold text-red-500 text-lg">${Atelier.money((newOrderState.price || 0) - (newOrderState.advance || 0))}</div></div>
-            </div>
-          </div>
-        `}
-      </div>
-      <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-between">
-        <button class="bg-white border border-slate-200 text-slate-500 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-100" onclick="closeModal()">Cancel</button>
-        <div class="flex gap-2">
-          ${wizardStep > 1 ? `<button class="bg-white border border-slate-200 text-slate-500 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-100" onclick="wizardStep--; openModal('add-order-wizard')">Back</button>` : ''}
-          ${wizardStep < 5 ? `<button class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700" onclick="wizardNext()">Next <i class="fa-solid fa-arrow-right text-xs ml-1"></i></button>` : `<button class="bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-600" onclick="confirmOrderCreation(this)">Confirm & Create <i class="fa-solid fa-check text-xs ml-1"></i></button>`}
-        </div>
+        <button class="bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-600 flex items-center gap-2 transition-colors shadow-sm shadow-emerald-500/30" onclick="confirmReadyAndSend(${d.db_id})"><i class="fa-solid fa-comment-sms text-xs"></i> Mark Ready & Send SMS</button>
       </div>
     `,
     'bulk-sms-confirm': () => `
@@ -1836,17 +1221,12 @@
 
           <div class="slip-rule"></div>
 
-          <div class="slip-sec">ITEM</div>
-          <div class="slip-row">
-            <span class="k">${esc(o.garment || 'Stitching')}${(o.qty || 1) > 1 ? ` \u00d7 ${o.qty}` : ''}</span>
-            <span class="v">${money(o.total)}</span>
-          </div>
-          ${(o.qty || 1) > 1 ? `<div class="slip-sub">${o.qty} \u00d7 ${money(o.unitPrice || 0)}</div>` : ''}
-          ${o.fabric ? `<div class="slip-sub">Fabric: ${esc(o.fabric)}</div>` : ''}
+          <div class="slip-sec">ITEMS</div>
+          ${(o.items?.length?o.items:[{name:o.garment,qty:o.qty||1,price:o.total,desc:o.fabric}]).map(item=>`<div class="slip-row"><span class="k">${esc(item.name)} × ${item.qty}</span><span class="v">${money(item.price)}</span></div>${item.desc?`<div class="slip-sub">Fabric: ${esc(item.desc)}</div>`:''}`).join('')}
 
           <div class="slip-rule"></div>
 
-          <div class="slip-row"><span class="k">Total</span><span class="v">${money(o.total)}</span></div>
+          ${(o.lines||[{label:'Total',amount:o.total}]).map(line=>`<div class="slip-row"><span class="k">${esc(line.label)}</span><span class="v">${money(line.amount)}</span></div>`).join('')}
           <div class="slip-row"><span class="k">Advance Paid</span><span class="v">${money(o.advance)}</span></div>
 
           <div class="slip-rule-s"></div>
@@ -2125,7 +1505,7 @@
                           <span class="badge ${o.status === 'Pending' ? 'badge-pending' : o.status === 'In Progress' ? 'badge-progress' : o.status === 'Ready for Verification' ? 'badge-trial' : o.status === 'Ready' ? 'badge-ready' : o.status === 'Delivered' ? 'badge-delivered' : 'badge-overdue'}">${o.status}</span>
                           ${o.overdue ? '<span class="badge badge-overdue text-[9px]">Overdue</span>' : o.atRisk ? '<span class="badge badge-pending text-[9px]"><i class="fa-solid fa-triangle-exclamation mr-1"></i>At Risk</span>' : ''}
                           ${autoCD ? `<span class="text-[9px] text-slate-400" data-countdown="${o.id}">${autoCD}</span>` : ''}
-                          ${o.notified ? '<span class="badge badge-notified text-[9px]"><i class="fa-brands fa-whatsapp mr-1"></i>Notified</span>' : ''}
+                          ${o.notified ? '<span class="badge badge-notified text-[9px]"><i class="fa-solid fa-comment-sms mr-1"></i>Notified</span>' : ''}
                         </div>
                       </td>
                       <td class="px-5 py-3 text-right whitespace-nowrap flex justify-end">
@@ -2170,7 +1550,7 @@
                       <div class="flex justify-between items-start mb-2">
                         <div class="text-xs font-bold text-slate-900">${o.id}</div>
                         <div class="flex items-center gap-1">
-                           ${o.notified ? '<i class="fa-brands fa-whatsapp text-emerald-500 text-xs"></i>' : ''}
+                           ${o.notified ? '<i class="fa-solid fa-comment-sms text-emerald-500 text-xs"></i>' : ''}
                            <button class="text-slate-300 hover:text-indigo-600 transition-colors" onclick="event.stopPropagation(); openModal('edit-order', ${orderDataStr})"><i class="fa-solid fa-pen-to-square text-[10px]"></i></button>
                            <button type="button" onclick="event.stopPropagation(); deleteOrder(${o.db_id}, '${o.id}')" class="text-slate-300 hover:text-red-600 transition-colors"><i class="fa-solid fa-trash text-[10px]"></i></button>
                         </div>
@@ -2305,6 +1685,8 @@
       window.history.replaceState({}, '', @json(route('orders.index')));
     }
   }
+
+  @include('orders.item-editor')
 
   Atelier.onPageReady(() => {
     renderPage();

@@ -28,16 +28,24 @@ class OrderService
     public function create(array $data): Order
     {
         return DB::transaction(function () use ($data) {
+            if (!isset($data['garments'])) \Illuminate\Support\Facades\Validator::make($data,[
+                'quantity'=>['sometimes','integer','min:1','max:20'], 'pieces'=>['nullable','array','max:20'],
+            ])->validate();
             $customer = $this->resolveCustomer($data);
+            $prepared = isset($data['garments']) ? app(OrderItemsService::class)->prepare($data, $customer->id) : null;
+            if ($prepared) $data['total'] = $prepared['subtotal'];
 
             $measurementId = $data['measurement_id'] ?? null;
+            if ($measurementId && !Measurement::where('customer_id',$customer->id)->whereKey($measurementId)->exists()) {
+                throw ValidationException::withMessages(['measurement_id'=>'Select a measurement belonging to this customer.']);
+            }
 
             // A saved sheet the counter picked wins. Otherwise the booking form
             // supplies one sheet per garment, so a customer dropping off three
             // suits gets three sets of numbers the cutter can tell apart.
             $sheetIds = [];
 
-            if (empty($measurementId)) {
+            if (!$prepared && empty($measurementId)) {
                 $sheetIds      = $this->storeMeasurementSheets($customer, $data);
                 $measurementId = $sheetIds[0] ?? null;
             }
@@ -51,6 +59,7 @@ class OrderService
             // genuinely owes and the balance can never disagree with the
             // invoice. Inclusive rates leave the priced figure untouched.
             $total = PricingService::grandTotal($priced);
+            if (Decimal::cmp($total,'99999999') > 0) throw ValidationException::withMessages(['garments'=>'The order total exceeds the supported maximum.']);
             if (Decimal::cmp($advance,$total)>0) throw ValidationException::withMessages(['advance'=>'Advance exceeds invoice total.']);
 
             $order = Order::create([
@@ -81,11 +90,21 @@ class OrderService
                 'invoice_number' => $this->generateInvoiceNumber($order),
             ])->save();
 
+            if ($prepared) {
+                app(OrderItemsService::class)->write($order, $prepared['rows']);
+                $order->forceFill(['billing_snapshot' => PricingService::breakdown((float)$total)])->save();
+            }
+
             // The sheets exist before the order does (the order needs to point
             // at the first one), so ownership is stamped on once there is an
             // id to point back at.
             if ($sheetIds) {
                 Measurement::whereIn('id', $sheetIds)->update(['order_id' => $order->id]);
+            }
+
+            if (!$prepared) {
+                app(OrderItemsBackfill::class)->run($order, true);
+                $order->refresh()->forceFill(['billing_snapshot'=>PricingService::breakdown((float)$total)])->save();
             }
 
             // The advance is a real payment: record it so Payments & Billing,
@@ -133,6 +152,23 @@ class OrderService
     {
         return DB::transaction(function () use ($order, $data) {
             $order=Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
+            if (!isset($data['garments']) && $order->items_migrated_at) {
+                $data = app(OrderItemsService::class)->normalizeLegacyUpdate($order,$data);
+            }
+            if (isset($data['edit_version']) && (int)$data['edit_version'] !== $order->edit_version) {
+                throw ValidationException::withMessages(['edit_version' => 'This order changed. Reload it before saving.']);
+            }
+            $prepared = null;
+            if (isset($data['garments'])) {
+                if (!array_key_exists('edit_version', $data)) throw ValidationException::withMessages(['edit_version' => 'Reload the order before editing garments.']);
+                if ($order->items_locked) throw ValidationException::withMessages(['garments' => 'Garment, price and piece changes are locked after completion or credited work.']);
+                $prepared = app(OrderItemsService::class)->prepare($data, $order->customer_id, $order);
+                unset($data['total']);
+                if ($prepared['repriced']) $data['total'] = $prepared['subtotal'];
+            }
+            if (!$prepared && $order->items_migrated_at && array_intersect(array_keys($data), ['total','garment','product_service_id','fabric','style_notes'])) {
+                throw ValidationException::withMessages(['garments' => 'Use the garment editor to change this order.']);
+            }
             $previousStatus = $order->status;
             $newStatus      = $data['status'] ?? $previousStatus;
 
@@ -141,6 +177,7 @@ class OrderService
             $total = array_key_exists('total', $data)
                 ? PricingService::grandTotal((string) $data['total'])
                 : (string) $order->total;
+            if (Decimal::cmp($total,'99999999') > 0) throw ValidationException::withMessages(['garments'=>'The order total exceeds the supported maximum.']);
 
             $advance = array_key_exists('advance', $data) ? (string) $data['advance'] : (string) $order->advance;
 
@@ -166,7 +203,7 @@ class OrderService
 
             // A re-priced order must not keep advertising the old per-piece
             // rate on its receipt, so the line is rebuilt from the new total.
-            if (array_key_exists('total', $data)) {
+            if (!$prepared && array_key_exists('total', $data)) {
                 $items = $order->items ?: [];
                 $qty   = max((int) ($items[0]['qty'] ?? 1), 1);
 
@@ -185,14 +222,22 @@ class OrderService
             // and on the receipt.
             $this->syncAdvancePayment($order, $advance);
 
+            if (Decimal::cmp($total, app(TailoringFinanceService::class)->paid($order)) < 0) throw ValidationException::withMessages(['total' => 'The invoice total cannot be less than recorded payments.']);
+
             $order->total    = $total;
             $order->advance  = $advance;
             $order->balance  = Decimal::max(Decimal::sub($total,app(TailoringFinanceService::class)->paid($order)));
             $order->status   = $newStatus;
             $order->progress = Order::progressFor($newStatus);
+            $order->edit_version++;
 
             $this->applyStatusTimestamps($order, $newStatus);
             $order->save();
+
+            if ($prepared) {
+                app(OrderItemsService::class)->write($order, $prepared['rows']);
+                if ($prepared['repriced']) $order->forceFill(['billing_snapshot' => PricingService::breakdown((float)$total)])->save();
+            }
 
             $this->recordStaffWork($order, $newStatus);
 
@@ -285,7 +330,7 @@ class OrderService
     {
         $order->forceFill(['notified_at' => now()])->save();
 
-        NotificationService::whatsappSent($order);
+        NotificationService::smsSent($order);
         ActivityLogger::log(
             'Customer notice accepted',
             sprintf('Pickup notification sent for %s', $order->display_number),
@@ -576,7 +621,10 @@ class OrderService
 
         // Per-suit rate means per suit: an order for three garments earns the
         // tailor three times the rate, not once.
-        $quantity = (float) $order->quantity;
+        $quantity = $order->items_migrated_at
+            ? (float)$order->lineItems->sum(fn($item) => ($item->productService ? $item->productService->type !== 'Service' : ($item->pieces->first()?->profile['key'] ?? 'generic') === 'accessory') ? 0 : $item->quantity)
+            : (float)$order->quantity;
+        if ($quantity <= 0) return;
         $rate     = (float) $staff->per_suit_rate;
 
         StaffWorkLog::create([
@@ -666,7 +714,7 @@ class OrderService
         $pieces = $data['pieces'] ?? null;
 
         if (!is_array($pieces) || $pieces === []) {
-            $pieces = [$data['measurements'] ?? []];
+            $pieces = array_fill(0, max(1,(int)($data['quantity'] ?? 1)), $data['measurements'] ?? []);
         }
 
         $ids     = [];

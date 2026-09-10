@@ -1,3 +1,5 @@
+> Archived implementation history. Superseded by [SMS-only audit and final report](SMS-REMOVAL-AUDIT.md). Do not use this document for current setup.
+
 # Official notification integration — implementation report
 
 Verified 8 September 2026 in the existing BST_TLR checkout. Existing uncommitted inventory, purchase-order, authorization and tailor-workspace changes were preserved. No deployment or working-database migration/reset was performed. No real messages were sent.

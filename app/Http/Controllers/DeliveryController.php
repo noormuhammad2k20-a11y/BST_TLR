@@ -138,6 +138,7 @@ class DeliveryController extends Controller
         $deliveries = Delivery::with('order.customer:id,name,phone')
             ->whereIn('id', $validated['delivery_ids'])
             ->get()
+            ->unique('order_id')
             ->filter(fn (Delivery $d) => $d->order !== null && $d->order->status !== 'Delivered');
 
         if ($deliveries->isEmpty()) {
@@ -187,7 +188,7 @@ class DeliveryController extends Controller
             'sent'     => count($sent),
             'failed'   => $failed,
             'results'  => $sent,
-            'channels' => ['whatsapp', 'sms'],
+            'channels' => ['sms'],
             'message'  => $failed
                 ? sprintf('%d notice(s) accepted, %d could not be sent.', count($sent), count($failed))
                 : sprintf('%d customer notice(s) accepted for sending.', count($sent)),

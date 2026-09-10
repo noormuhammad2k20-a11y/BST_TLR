@@ -7,13 +7,11 @@ use App\Models\Delivery;
 use App\Models\Order;
 use App\Models\SmsLog;
 use App\Models\User;
-use App\Models\WhatsAppLog;
 use App\Services\CustomerNotificationDispatcher;
 use App\Services\NotificationService;
 use App\Services\OrderService;
 use App\Services\Settings;
 use App\Services\SmsService;
-use App\Services\WhatsAppService;
 use Illuminate\Http\Client\Factory;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -33,11 +31,8 @@ final class OfficialNotificationTest extends TestCase
         Settings::flush();
         Cache::flush();
         Http::preventStrayRequests();
-        Settings::put(['whatsapp_enabled' => false, 'sms_enabled' => false, 'meta_access_token' => 'test-meta-secret',
-            'meta_phone_number_id' => '123', 'meta_waba_id' => '456', 'veevo_api_key' => 'test-veevo-secret',
-            'sendpk_api_key' => 'test-sendpk-secret', 'sendpk_sender_id' => 'Approved', 'sms_provider' => 'veevo',
-            'meta_templates' => array_map(fn ($t) => ['id' => $t['id'], 'active' => true, 'name' => 'bst_'.str_replace('-', '_', $t['id']),
-                'language' => 'en_US', 'parameters' => ['customerName', 'orderID']], Settings::defaultTemplates())]);
+        Settings::put(['sms_enabled' => false, 'veevo_api_key' => 'test-veevo-secret',
+            'sendpk_api_key' => 'test-sendpk-secret', 'sendpk_sender_id' => 'Approved', 'sms_provider' => 'veevo']);
         $this->actingAs(User::factory()->create(['role' => 'admin', 'is_active' => true]));
     }
 
@@ -59,14 +54,9 @@ final class OfficialNotificationTest extends TestCase
         Http::fake($responses);
     }
 
-    private function fakeMeta(array $overrides = []): void
+    private function fakeSms(array $overrides = []): void
     {
-        $templates = array_map(fn ($m) => ['name' => $m['name'], 'language' => 'en_US', 'status' => 'APPROVED',
-            'components' => [['type' => 'BODY', 'text' => 'Hello {{1}}, order {{2}}.']]], WhatsAppService::mappings());
         $this->fakeHttp(array_merge([
-            'graph.facebook.com/v26.0/456/message_templates*' => Http::response(['data' => $templates]),
-            'graph.facebook.com/v26.0/123/messages' => Http::response(['messages' => [['id' => 'wamid.test']]]),
-            'graph.facebook.com/v26.0/123?*' => Http::response(['id' => '123', 'display_phone_number' => '+923001234567', 'verified_name' => 'Shop']),
             'api.veevotech.com/*' => Http::response(['STATUS' => 'SUCCESSFUL', 'MESSAGE_ID' => 'veevo-1', 'NETWORK_NAME' => 'Test']),
         ], $overrides));
     }
@@ -79,72 +69,103 @@ final class OfficialNotificationTest extends TestCase
             'status' => 'Ready', 'delivery_date' => now()->addDay(), 'items' => [['name' => 'Shirt', 'qty' => 1, 'price' => 100]]])->load('customer');
     }
 
-    public function test_meta_constructs_all_six_approved_event_payloads_and_logs_ids(): void
+    public function test_every_event_dispatches_one_sms_with_recipient_content_and_log(): void
     {
-        Settings::put(['whatsapp_enabled' => true]);
-        $this->fakeMeta();
         $order = $this->order();
-        foreach (Settings::defaultTemplates() as $template) {
-            $result = WhatsAppService::sendTemplate($template['id'], $order);
-            $this->assertTrue($result['sent']);
-            $this->assertSame('accepted', $result['status']);
-            $this->assertSame('wamid.test', $result['message_id']);
-        }
-        Http::assertSent(fn ($r) => str_ends_with($r->url(), '/messages') && $r->hasHeader('Authorization', 'Bearer test-meta-secret')
-            && $r['type'] === 'template' && $r['to'] === '923001234567'
-            && $r['template']['components'][0]['parameters'][0]['text'] === 'Notification customer');
-        $this->assertSame(6, WhatsAppLog::where('order_id', $order->id)->where('provider_message_id', 'wamid.test')->count());
-    }
-
-    public function test_meta_connection_checks_real_endpoint_and_mapping_status(): void
-    {
-        $this->fakeMeta();
-        $r = WhatsAppService::testConnection();
-        $this->assertTrue($r['ok']);
-        $this->assertNull($r['templates'][0]['error']);
-        $this->assertSame('Shop', $r['sender']['name']);
-    }
-
-    public function test_meta_rejects_unapproved_wrong_language_unsupported_components_and_parameters(): void
-    {
-        $m = ['name' => 'ready', 'language' => 'en_US', 'parameters' => ['customerName']];
-        $t = ['name' => 'ready', 'language' => 'en_US', 'status' => 'APPROVED', 'components' => [['type' => 'BODY', 'text' => 'Hi {{1}}']]];
-        $this->assertNull(WhatsAppService::validateMapping($m, [$t]));
-        foreach ([array_replace($t, ['status' => 'PENDING']), array_replace($t, ['language' => 'ur']),
-            array_replace($t, ['parameter_format' => 'NAMED']), array_replace($t, ['components' => [['type' => 'HEADER', 'format' => 'IMAGE']]]),
-            array_replace($t, ['components' => [['type' => 'BODY', 'text' => 'Hi {{1}} {{2}}']]])] as $bad) {
-            $this->assertNotNull(WhatsAppService::validateMapping($m, [$bad]));
+        DB::commit();
+        try {
+            Settings::put(['sms_enabled' => true]);
+            foreach (Settings::defaultSmsTemplates() as $template) {
+                $this->fakeSms();
+                $extra = ['paidAmount' => '40', 'newDate' => '15/09/2026', 'reason' => 'Delay'];
+                $message = SmsService::renderTemplate($template['id'], \App\Services\NotificationVariables::variablesForOrder($order, $extra));
+                $result = CustomerNotificationDispatcher::dispatch($template['id'], $order, $extra);
+                $this->assertSame(['sms'], array_keys($result['channels']));
+                $this->assertTrue($result['sent']);
+                Http::assertSentCount(1);
+                Http::assertSent(fn ($r) => $r['receivernum'] === '+923001234567' && $r['textmessage'] === $message);
+                $this->assertSame(1, SmsLog::where('order_id', $order->id)->where('template_id', $template['id'])->count());
+                $this->assertDatabaseHas('sms_logs', ['order_id' => $order->id, 'customer_id' => $order->customer_id,
+                    'template_id' => $template['id'], 'message' => $message, 'provider' => 'veevo', 'status' => 'accepted']);
+            }
+        } finally {
+            Settings::put(['sms_enabled' => false]);
+            DB::beginTransaction();
         }
     }
 
-    public function test_meta_disabled_missing_credentials_invalid_phone_and_missing_values_do_not_send(): void
+    public function test_manual_customer_sms_validates_logs_and_preserves_original_phone(): void
     {
-        $this->assertFalse(WhatsAppService::sendMapped('order-ready', '03001234567', [])['sent']);
-        Settings::put(['whatsapp_enabled' => true, 'meta_access_token' => '']);
-        $this->assertFalse(WhatsAppService::sendMapped('order-ready', '03001234567', [])['sent']);
-        $this->assertFalse(WhatsAppService::sendMapped('order-ready', 'bad', [])['sent']);
+        Settings::put(['sms_enabled' => true]);
+        $customer = $this->order()->customer;
+        $url = route('customers.sms', $customer);
+        $this->fakeSms();
+        foreach (['', '   ', str_repeat('x', 2001)] as $message) {
+            $this->postJson($url, compact('message'))->assertUnprocessable();
+        }
         Http::assertNothingSent();
-        Settings::put(['meta_access_token' => 'test-meta-secret']);
-        $this->fakeMeta();
-        $this->assertFalse(WhatsAppService::sendMapped('order-ready', '03001234567', [])['sent']);
-        Http::assertNotSent(fn ($r) => str_ends_with($r->url(), '/messages'));
+        $this->postJson($url, ['message' => 'Your order is ready.'])->assertOk()->assertJsonPath('success', true);
+        Http::assertSentCount(1);
+        $this->assertDatabaseHas('sms_logs', ['customer_id' => $customer->id, 'message' => 'Your order is ready.', 'status' => 'accepted']);
+        $this->assertSame('03001234567', $customer->fresh()->phone);
+        $this->fakeHttp(['*' => Http::failedConnection()]);
+        $this->postJson($url, ['message' => 'Provider failure'])->assertUnprocessable();
+        Http::assertSentCount(1);
+        $this->actingAs(User::factory()->create(['role' => 'staff', 'is_active' => true]));
+        $this->postJson($url, ['message' => 'Forbidden'])->assertForbidden();
     }
 
-    public function test_meta_failure_is_sanitized_and_does_not_fallback(): void
+    public function test_invalid_inputs_disabled_templates_and_retired_configuration_cannot_send(): void
     {
-        Settings::put(['whatsapp_enabled' => true]);
-        $this->fakeMeta(['graph.facebook.com/v26.0/123/messages' => Http::response(['error' => ['message' => 'Invalid test-meta-secret', 'code' => 190]], 401)]);
-        $r = WhatsAppService::sendTemplate('order-ready', $this->order());
-        $this->assertFalse($r['sent']);
-        $this->assertArrayNotHasKey('url', $r);
-        $this->assertStringNotContainsString('test-meta-secret', json_encode($r));
-        $this->assertStringNotContainsString('test-meta-secret', WhatsAppLog::latest('id')->first()->toJson());
+        Settings::put(['sms_enabled' => true, 'whatsapp_enabled' => true, 'meta_access_token' => 'retired-secret']);
+        $this->fakeSms();
+        foreach (['bad', '', '0300123456', '+12345678901'] as $phone) {
+            $this->assertFalse(SmsService::send($phone, 'Test')['sent']);
+        }
+        foreach (['', '  ', str_repeat('x', 2001)] as $message) {
+            $this->assertFalse(SmsService::send('03001234567', $message)['sent']);
+        }
+        Settings::put(['sms_templates' => [['id' => 'order-ready', 'active' => false]]]);
+        $this->assertNull(SmsService::sendTemplate('order-ready', $this->order()));
+        $this->assertArrayNotHasKey('whatsapp_enabled', Settings::forClient());
+        $this->assertArrayNotHasKey('meta_access_token', Settings::forClient());
+        foreach (['test', 'test-template', 'send-test', 'gateway', 'gateway.logout'] as $suffix) {
+            $this->assertFalse(app('router')->has('settings.whatsapp.'.$suffix));
+        }
+        Http::assertNothingSent();
+    }
+
+    public function test_rollback_discards_deferred_sms(): void
+    {
+        Settings::put(['sms_enabled' => true]);
+        $order = $this->order();
+        $this->fakeSms();
+        DB::beginTransaction();
+        CustomerNotificationDispatcher::dispatch('order-created', $order);
+        DB::rollBack();
+        Http::assertNothingSent();
+        $this->assertSame(0, SmsLog::where('order_id', $order->id)->count());
+    }
+
+    public function test_core_pages_render_with_sms_only_controls(): void
+    {
+        foreach (['dashboard', 'customers.index', 'orders.index', 'measurements.index', 'payments-billing.index',
+            'expenses.index', 'reports.index', 'settings.index', 'delivery.index', 'notifications.index',
+            'cloth-store.dashboard', 'cloth-store.checkout.index', 'cloth-store.settings.index'] as $name) {
+            $response = $this->get(route($name));
+            $response->assertOk()->assertDontSee('wa.me', false)->assertDontSee('data-type="whatsapp"', false);
+            if (getenv('SMS_RENDER_CHECK') === '1') {
+                $directory = base_path('dev/artifacts/sms-ui');
+                if (! is_dir($directory)) mkdir($directory, 0755, true);
+                file_put_contents($directory.'/'.$name.'.html', $response->getContent());
+            }
+        }
     }
 
     public function test_veevo_payload_message_id_and_logs(): void
     {
         Settings::put(['sms_enabled' => true]);
-        $this->fakeMeta();
+        $this->fakeSms();
         $r = SmsService::send('0300-1234567', 'Test SMS');
         $this->assertTrue($r['sent']);
         $this->assertSame('veevo-1', $r['message_id']);
@@ -205,38 +226,32 @@ final class OfficialNotificationTest extends TestCase
         $this->assertSame('test-veevo-secret', Settings::str('veevo_api_key'));
         $this->assertSame('test-sendpk-secret', Settings::str('sendpk_api_key'));
         $this->assertStringStartsWith('enc:v1:', DB::table('settings')->where('key', 'veevo_api_key')->value('value'));
-        $this->assertStringNotContainsString('test-meta-secret', json_encode(Settings::forClient()));
+        $this->assertStringNotContainsString('test-veevo-secret', json_encode(Settings::forClient()));
         $this->putJson(route('settings.update'), ['sms_provider' => 'unknown'])->assertUnprocessable();
-        $this->putJson(route('settings.update'), ['meta_templates' => [['id' => 'bad', 'active' => true, 'name' => 'Bad name', 'language' => 'en_US', 'parameters' => ['unknown']]]])->assertUnprocessable();
-        $this->putJson(route('settings.update'), ['meta_templates' => [['id' => 'order-ready', 'active' => true, 'name' => 'static', 'language' => 'en_US', 'parameters' => []]]])->assertOk();
     }
 
     public function test_settings_require_admin_and_removed_routes_are_absent(): void
     {
         $this->actingAs(User::factory()->create(['role' => 'staff', 'is_active' => true]));
-        $this->postJson(route('settings.whatsapp.test'))->assertForbidden();
+        $this->postJson(route('settings.sms.test'))->assertForbidden();
         $this->putJson(route('settings.update'), ['sms_provider' => 'sendpk'])->assertForbidden();
         $this->assertFalse(app('router')->has('settings.whatsapp.gateway'));
         $this->assertFalse(app('router')->has('settings.whatsapp.gateway.logout'));
     }
 
-    public function test_all_four_channel_combinations_and_after_commit_failure_isolation(): void
+    public function test_sms_only_and_after_commit_failure_isolation(): void
     {
         $order = $this->order();
         DB::commit();
         try {
-            foreach ([[false, false], [true, false], [false, true], [true, true]] as [$wa,$sms]) {
-                Settings::put(['whatsapp_enabled' => $wa, 'sms_enabled' => $sms]);
-                $this->fakeMeta();
+            foreach ([false, true] as $enabled) {
+                Settings::put(['sms_enabled' => $enabled]);
+                $this->fakeSms();
                 $r = CustomerNotificationDispatcher::dispatch('order-ready', $order);
-                $this->assertSame($wa, $r['channels']['whatsapp']['sent']);
-                $this->assertSame($sms, $r['channels']['sms']['sent']);
+                $this->assertSame(['sms'], array_keys($r['channels']));
+                $this->assertSame($enabled, $r['channels']['sms']['sent']);
+                Http::assertSentCount($enabled ? 1 : 0);
             }
-            Settings::put(['whatsapp_enabled' => true, 'sms_enabled' => true]);
-            $this->fakeMeta(['graph.facebook.com/v26.0/123/messages' => Http::response(['error' => ['message' => 'Unavailable']], 503)]);
-            $r = CustomerNotificationDispatcher::dispatch('order-ready', $order);
-            $this->assertTrue($r['channels']['sms']['sent']);
-            $this->assertFalse($r['channels']['whatsapp']['sent']);
             $this->fakeHttp(['*' => Http::failedConnection()]);
             DB::transaction(function () use ($order) {
                 $order->update(['fabric' => 'Notification transaction test']);
@@ -245,9 +260,9 @@ final class OfficialNotificationTest extends TestCase
                 Http::assertNothingSent();
             });
             $this->assertSame('Notification transaction test', $order->fresh()->fabric);
-            Http::assertSentCount(2);
+            Http::assertSentCount(1);
         } finally {
-            Settings::put(['whatsapp_enabled' => false, 'sms_enabled' => false]);
+            Settings::put(['sms_enabled' => false]);
             DB::beginTransaction();
         }
     }
@@ -255,7 +270,7 @@ final class OfficialNotificationTest extends TestCase
     public function test_logging_failure_does_not_change_api_acceptance(): void
     {
         Settings::put(['sms_enabled' => true]);
-        $this->fakeMeta();
+        $this->fakeSms();
         SmsLog::creating(function () {
             throw new \RuntimeException('Simulated log failure');
         });
@@ -279,24 +294,24 @@ final class OfficialNotificationTest extends TestCase
     {
         $r = $this->get(route('settings.index'));
         $r->assertOk();
-        $r->assertSee('Meta Access Token', false)->assertSee('Veevo Tech / SPEXT', false)
-            ->assertDontSee('test-meta-secret', false)->assertDontSee('gateway-status', false)->assertDontSee('UltraMsg', false);
+        $r->assertDontSee('WhatsApp', false)->assertDontSee('Meta Access Token', false)->assertSee('Veevo Tech / SPEXT', false)
+            ->assertDontSee('test-veevo-secret', false)->assertDontSee('gateway-status', false)->assertDontSee('UltraMsg', false);
     }
 
-    public function test_bulk_extension_and_delivery_attempt_sms_once_even_when_meta_fails(): void
+    public function test_bulk_extension_and_delivery_attempt_sms_once(): void
     {
         $order = $this->order();
         $delivery = Delivery::create(['order_id' => $order->id, 'status' => 'Ready']);
         DB::commit();
         try {
-            Settings::put(['sms_enabled' => true, 'whatsapp_enabled' => true]);
-            $this->fakeMeta(['graph.facebook.com/v26.0/123/messages' => Http::response(['error' => ['message' => 'Failed']], 503)]);
+            Settings::put(['sms_enabled' => true]);
+            $this->fakeSms();
             $this->postJson(route('orders.bulk-extend'), ['order_ids' => [$order->id], 'days' => 2, 'reason' => 'Delay'])->assertOk();
             $this->assertSame(1, SmsLog::where('order_id', $order->id)->where('template_id', 'due-extended')->count());
             $this->postJson(route('delivery.bulk-notify'), ['delivery_ids' => [$delivery->id]])->assertOk()->assertJsonPath('sent', 1);
             $this->assertSame(1, SmsLog::where('order_id', $order->id)->where('template_id', 'order-ready')->count());
         } finally {
-            Settings::put(['whatsapp_enabled' => false, 'sms_enabled' => false]);
+            Settings::put(['sms_enabled' => false]);
             DB::beginTransaction();
         }
     }
@@ -307,7 +322,7 @@ final class OfficialNotificationTest extends TestCase
         DB::commit();
         try {
             Settings::put(['sms_enabled' => true]);
-            $this->fakeMeta();
+            $this->fakeSms();
             app(OrderService::class)->changeStatus($order, 'Ready');
             Http::assertNothingSent();
             foreach ([1, 2] as $count) {
@@ -315,18 +330,18 @@ final class OfficialNotificationTest extends TestCase
                 $this->assertSame($count, SmsLog::where('order_id', $order->id)->where('template_id', 'order-ready')->count());
             }
         } finally {
-            Settings::put(['whatsapp_enabled' => false, 'sms_enabled' => false]);
+            Settings::put(['sms_enabled' => false]);
             DB::beginTransaction();
         }
     }
 
     public function test_notification_tests_are_rate_limited_and_csrf_protected(): void
     {
-        $this->fakeMeta();
+        $this->fakeSms();
         for ($i = 0; $i < 6; $i++) {
-            $this->postJson(route('settings.whatsapp.test'))->assertOk();
+            $this->postJson(route('settings.sms.test'))->assertOk();
         }
-        $this->postJson(route('settings.whatsapp.test'))->assertStatus(429);
+        $this->postJson(route('settings.sms.test'))->assertStatus(429);
         app()->detectEnvironment(fn () => 'local');
         try {
             $this->putJson(route('settings.update'), ['sms_provider' => 'sendpk'])->assertStatus(419);
@@ -347,14 +362,15 @@ final class OfficialNotificationTest extends TestCase
         $customer = Customer::create(['name' => 'Order flow customer', 'phone' => '03001234567']);
         DB::commit();
         try {
-            Settings::put(['whatsapp_enabled' => true, 'sms_enabled' => true]);
+            Settings::put(['sms_enabled' => true]);
             $this->fakeHttp(['*' => Http::failedConnection()]);
             $this->postJson(route('orders.store'), ['customer_id' => $customer->id, 'garment' => 'Shirt', 'total' => '100.00', 'advance' => '0.00',
+                'measurements' => ['length'=>40,'chest'=>38,'waist'=>34,'chest_losing'=>2,'waist_losing'=>2,'hip_losing'=>2],
                 'delivery_date' => now()->addDay()->toDateString()])->assertCreated();
             $order = Order::where('customer_id', $customer->id)->firstOrFail();
             $this->assertSame('100.00', $order->total);
             $this->assertDatabaseHas('sms_logs', ['order_id' => $order->id, 'template_id' => 'order-created', 'status' => 'failed']);
-            $this->fakeMeta();
+            $this->fakeSms();
             $this->postJson(route('payments-billing.record', $order), ['amount' => '40.00', 'payment_method' => 'Cash', 'operation_key' => 'notify-partial-'.$order->id])->assertCreated();
             $this->assertDatabaseHas('sms_logs', ['order_id' => $order->id, 'template_id' => 'payment-received', 'status' => 'accepted']);
             $key = 'notify-final-'.$order->id;
@@ -363,7 +379,7 @@ final class OfficialNotificationTest extends TestCase
             $this->postJson(route('payments-billing.record', $order), ['amount' => '60.00', 'payment_method' => 'Cash', 'operation_key' => $key])->assertUnprocessable();
             $this->assertSame(1, SmsLog::where('order_id', $order->id)->where('template_id', 'final-receipt')->count());
         } finally {
-            Settings::put(['whatsapp_enabled' => false, 'sms_enabled' => false]);
+            Settings::put(['sms_enabled' => false]);
             DB::beginTransaction();
         }
     }
@@ -373,14 +389,14 @@ final class OfficialNotificationTest extends TestCase
         $order = $this->order();
         DB::commit();
         try {
-            Settings::put(['sms_enabled' => true, 'whatsapp_enabled' => false, 'alert_days_before' => 2]);
-            $this->fakeMeta();
+            Settings::put(['sms_enabled' => true, 'alert_days_before' => 2]);
+            $this->fakeSms();
             NotificationService::sweepDueOrders();
             NotificationService::sweepDueOrders();
             $this->assertSame(1,SmsLog::where('order_id',$order->id)->where('template_id','due-reminder')->where('status','accepted')->count());
             $this->assertDatabaseHas('sms_logs',['order_id' => $order->id, 'phone' => '+923001234567']);
         } finally {
-            Settings::put(['whatsapp_enabled' => false, 'sms_enabled' => false]);
+            Settings::put(['sms_enabled' => false]);
             DB::beginTransaction();
         }
     }

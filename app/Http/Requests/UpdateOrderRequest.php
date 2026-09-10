@@ -14,7 +14,7 @@ class UpdateOrderRequest extends FormRequest
 
     public function rules(): array
     {
-        return [
+        $rules = [
             'product_service_id' => ['nullable', 'integer', 'exists:product_services,id'],
             'staff_id'           => ['nullable', 'integer', 'exists:staff,id'],
             'garment'            => ['nullable', 'string', 'max:255'],
@@ -28,6 +28,15 @@ class UpdateOrderRequest extends FormRequest
             'time_slot'          => ['nullable', 'string', 'max:100'],
             'notes'              => ['nullable', 'string', 'max:2000'],
         ];
+        if ($this->has('garments')) {
+            $rules['total'] = ['nullable'];
+            $rules['advance'] = ['sometimes','numeric','min:0'];
+        }
+        if (!$this->has('total')) {
+            $rules['total'] = ['sometimes','numeric','min:0','max:99999999'];
+            $rules['advance'] = ['sometimes','numeric','min:0'];
+        }
+        return array_merge($rules, \App\Services\OrderItemsService::rules());
     }
 
     public function messages(): array

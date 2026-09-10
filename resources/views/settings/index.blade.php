@@ -21,8 +21,6 @@
   .pro-input { transition: all 0.2s; }
   .pro-input:focus { border-color: var(--brand); box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand) 18%, transparent); outline: none; }
 
-  .wa-bubble { background-color: #DCF8C6; border-radius: 10px 10px 10px 0; padding: 10px 12px; font-size: 13px; color: #111B21; position: relative; max-width: 95%; margin-left: 10px; box-shadow: 0 1px 0.5px rgba(0,0,0,.13); white-space: pre-wrap; word-break: break-word; }
-  .wa-bubble::after { content: ''; position: absolute; top: 0; left: -8px; width: 0; height: 0; border-right: 8px solid #DCF8C6; border-top: 8px solid transparent; border-bottom: 8px solid transparent; }
 
   .set-card { background: var(--bg-subtle); border: 1px solid var(--border-soft); border-radius: 12px; padding: 20px; }
   .set-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px; background: var(--bg-surface); border: 1px solid var(--border-soft); border-radius: 8px; }
@@ -80,8 +78,8 @@
   var DATA_COUNTS       = @json($dataCounts);
   var BACKUP_TYPES      = @json($backupTypes);
   var TEMPLATE_VARS     = @json($templateVariables);
-  var DEFAULT_TEMPLATES = @json($defaultTemplates);
   var PREVIEW_VARS      = @json($previewVariables);
+  var SMS_PREVIEW_VARS  = @json($smsPreviewVariables);
   var HAS_PREVIEW_ORDER = @json((bool) $previewOrder);
   var DEFAULT_SMS_TEMPLATES = @json($defaultSmsTemplates);
 
@@ -96,9 +94,6 @@
     restore:       @json(route('settings.backup.restore')),
     purge:         @json(route('settings.purge')),
     clearNotifs:   @json(route('settings.clear-notifications')),
-    testWhatsapp:  @json(route('settings.whatsapp.test')),
-    testTemplate:  @json(route('settings.whatsapp.test-template')),
-    sendTest:      @json(route('settings.whatsapp.send-test')),
     reportsExport: @json(route('reports.export')),
     testSms:       @json(route('settings.sms.test')),
     sendTestSms:   @json(route('settings.sms.send-test')),
@@ -110,7 +105,6 @@
   var SAVED_SETTINGS = JSON.parse(JSON.stringify(DB_SETTINGS));
 
   /* Working copy of the templates; edits here are saved with the panel. */
-  var messageTemplates = JSON.parse(JSON.stringify(DB_SETTINGS.message_templates || []));
 
   /* Working copy of SMS templates. */
   var smsTemplates = JSON.parse(JSON.stringify(DB_SETTINGS.sms_templates || []));
@@ -125,8 +119,6 @@
     { name: 'Notifications',     icon: 'fa-solid fa-bell',                 group: 'notifications', render: panelNotifications },
     { name: 'Backup & Data',     icon: 'fa-solid fa-database',             group: null,           render: panelBackup },
     { name: 'Theme & Display',   icon: 'fa-solid fa-palette',              group: 'theme',        render: panelTheme },
-    { name: 'WhatsApp & Alerts', icon: 'fa-brands fa-whatsapp',            group: 'whatsapp',     render: panelWhatsApp },
-    { name: 'WhatsApp Business API', icon: 'fa-brands fa-whatsapp', group: 'meta', render: panelMeta },
     { name: 'SMS Settings',      icon: 'fa-solid fa-comment-sms',           group: 'sms',          render: panelSms },
   ];
 
@@ -144,9 +136,7 @@
   var STRUCTURED = {
     'General':           () => ({ business_hours: collectBusinessHours() }),
     'Measurements':      () => ({ measurement_required: collectRequiredFields() }),
-    'WhatsApp & Alerts': () => ({ message_templates: messageTemplates }),
     'SMS Settings':      () => ({ sms_templates: smsTemplates }),
-    'WhatsApp Business API': () => ({ meta_templates: collectMetaMappings() }),
   };
 
   /* ============================================================
@@ -223,7 +213,6 @@
         SAVED_SETTINGS = JSON.parse(JSON.stringify(DB_SETTINGS));
 
         // Templates live outside the DOM, so refresh the working copy too.
-        messageTemplates = JSON.parse(JSON.stringify(DB_SETTINGS.message_templates || []));
         smsTemplates = JSON.parse(JSON.stringify(DB_SETTINGS.sms_templates || []));
 
         markClean(currentPanel);
@@ -324,7 +313,6 @@
           // Roll back to the last confirmed server state, including any theme
           // choices that were only being previewed.
           DB_SETTINGS = JSON.parse(JSON.stringify(SAVED_SETTINGS));
-          messageTemplates = JSON.parse(JSON.stringify(DB_SETTINGS.message_templates || []));
           smsTemplates = JSON.parse(JSON.stringify(DB_SETTINGS.sms_templates || []));
 
           markClean(currentPanel);
@@ -350,7 +338,6 @@
   }
 
   function afterRender(name) {
-    if (name === 'WhatsApp & Alerts') renderTemplates();
     if (name === 'Thermal Printer') updateReceiptPreview();
     if (name === 'SMS Settings')    renderSmsTemplates();
   }
@@ -568,7 +555,7 @@
     return `
       <div class="p-6">
         <h3 class="text-lg font-semibold text-slate-900 mb-1 tracking-tight">Business Profile</h3>
-        <p class="text-sm text-slate-500 mb-6">Your shop identity, used on receipts, invoices and every WhatsApp message.</p>
+        <p class="text-sm text-slate-500 mb-6">Your shop identity, used on receipts, invoices and customer SMS messages.</p>
 
         <div class="grid grid-cols-2 gap-6 mb-6 set-card">
           ${['logo', 'stamp'].map(kind => {
@@ -609,12 +596,10 @@
           <h4 class="set-legend">Contact &amp; Address</h4>
           <div class="grid grid-cols-2 gap-4">
             ${field('phone', 'Primary Phone', 'tel')}
-            ${field('whatsapp_number', 'WhatsApp Number', 'tel')}
             ${field('email', 'Email', 'email')}
             ${field('website', 'Website', 'url')}
             ${field('address', 'Address', 'text', 'col-span-2')}
           </div>
-          <p class="set-hint mt-3">The WhatsApp number is where test messages are sent and what customers see as the sender.</p>
         </div>
 
         ${panelFooter()}
@@ -1146,11 +1131,9 @@
         <div class="set-card">
           <h4 class="set-legend">Delivery Channels</h4>
           <div class="space-y-3">
-            ${row('whatsapp_enabled', 'WhatsApp', 'Enables the WhatsApp buttons on orders and automatic sends')}
-            ${row('email_enabled',    'Email',    'Requires mail credentials in your .env')}
-            ${row('sms_enabled',      'SMS',      'Send text messages via SendPK — configure under SMS Settings')}
+            ${row('sms_enabled',      'SMS',      'Send text SMS through the selected provider — configure under SMS Settings')}
           </div>
-          <p class="set-hint mt-3">Configure WhatsApp templates under <span class="font-semibold">WhatsApp &amp; Alerts</span>, and SMS templates under <span class="font-semibold">SMS Settings</span>.</p>
+          <p class="set-hint mt-3">Configure SMS templates under SMS Settings.</p>
         </div>
 
         ${panelFooter()}
@@ -1615,25 +1598,6 @@
     switchSettingsPanel('Theme & Display');
   };
 
-  /* ============================================================
-     PANEL 9 — WHATSAPP & ALERTS
-     ============================================================ */
-  function panelWhatsApp() {
-    return `<div class="p-6">
-      <h3 class="text-lg font-semibold text-slate-900 mb-1 tracking-tight">WhatsApp & Alerts</h3>
-      <p class="text-sm text-slate-500 mb-6">Local message previews. Automated sending uses approved templates configured under WhatsApp Business API.</p>
-      <div class="set-card mb-4"><p class="set-hint">Editing these previews does not create or change an approved Meta template. SMS has its own editor.</p>
-      <div class="flex flex-wrap gap-1.5 mt-3">${Object.entries(TEMPLATE_VARS).map(([name, desc]) => `<button onclick="insertVariable('${name}')" title="${esc(desc)}" class="bg-white border border-slate-200 px-2 py-0.5 rounded text-[11px] text-slate-600">{${name}}</button>`).join('')}</div></div>
-      <div id="templates-container" class="space-y-6"></div>${panelFooter()}</div>`;
-  }
-
-  /* ================================================================
-     PANEL — SMS SETTINGS
-     ================================================================
-     Mirrors the WhatsApp & Alerts panel layout but for text SMS.
-     Separate templates, separate provider credentials, same variable
-     system. Nothing here touches any WhatsApp code.
-     ================================================================ */
   function panelSms() {
     const provider = val('sms_provider', 'veevo');
 
@@ -1642,7 +1606,7 @@
         <div class="flex justify-between items-start mb-6">
           <div>
             <h3 class="text-lg font-semibold text-slate-900 mb-1 tracking-tight">SMS Settings</h3>
-            <p class="text-sm text-slate-500">Send text messages to your customers alongside or instead of WhatsApp.</p>
+            <p class="text-sm text-slate-500">Send text SMS messages to your customers.</p>
           </div>
           <span class="badge ${isOn('sms_enabled') ? 'badge-delivered' : 'badge-overdue'}">${isOn('sms_enabled') ? 'Enabled' : 'Disabled'}</span>
         </div>
@@ -1686,7 +1650,7 @@
           <div class="grid grid-cols-2 gap-4">
             <div>
               <label class="set-label">To this number</label>
-              <input id="sms-test-phone" class="set-field pro-input" value="${esc(val('whatsapp_number') || val('phone'))}" placeholder="03001234567">
+              <input id="sms-test-phone" class="set-field pro-input" value="${esc(val('phone'))}" placeholder="03001234567">
             </div>
             <div>
               <label class="set-label">Message</label>
@@ -1713,7 +1677,7 @@
                 {${name}}
               </button>`).join('')}
           </div>
-          <p class="set-hint mt-2">Click a variable to insert it at the cursor. SMS messages should be kept short (160 chars for English).</p>
+          <p class="set-hint mt-2">Click a variable to insert it at the cursor. Keep SMS concise. Longer messages or characters outside GSM-7 may require multiple SMS segments.</p>
         </div>
 
         <div id="sms-templates-container" class="space-y-6"></div>
@@ -1755,7 +1719,7 @@
                       onfocus="lastFocusedSmsTemplate='${t.id}'"
                       oninput="updateSmsPreview('${t.id}')"
                       class="pro-input w-full h-32 p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono focus:bg-white transition-colors">${esc(t.text)}</textarea>
-            <div class="text-right text-xs text-slate-400 mt-1" id="sms-count-${t.id}">${(t.text || '').length} / 500</div>
+            <div class="text-right text-xs text-slate-400 mt-1" id="sms-count-${t.id}">${(t.text || '').length} / 500 · Preview: ${Array.from(renderSmsPreview(t.text)).length} characters</div>
           </div>
           <div class="p-4 bg-slate-100 flex items-start">
             <div class="bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 max-w-full whitespace-pre-wrap break-words shadow-sm" id="sms-prev-${t.id}">${esc(renderSmsPreview(t.text))}</div>
@@ -1778,10 +1742,18 @@
 
   function renderSmsPreview(text) {
     let preview = String(text ?? '');
-    Object.entries(PREVIEW_VARS).forEach(([key, value]) => {
-      preview = preview.split('{' + key + '}').join(value ?? '');
-    });
-    return preview.replace(/\{[a-zA-Z]+\}/g, '');
+    const values = SMS_PREVIEW_VARS;
+    if (!values.shopPhone) {
+      preview = preview.replace(' For assistance, call {shopPhone}.', '').replace(' Contact: {shopPhone}.', '');
+    }
+    if (!values.reason) preview = preview.replace(' Reason: {reason}.', '');
+    if (!values.oldDate || values.oldDate === values.newDate) {
+      preview = preview.replace('from {oldDate} to {newDate}', 'to {newDate}');
+    }
+    preview = preview.replace(/\{([a-zA-Z]+)\}/g, (_, key) => values[key] ?? '').replace(/\{[a-zA-Z]+\}/g, '');
+    const decoder = document.createElement('textarea');
+    decoder.innerHTML = preview;
+    return decoder.value.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
   }
 
   window.updateSmsPreview = function (id) {
@@ -1792,10 +1764,11 @@
 
     const text = textarea.value;
     if (preview) preview.innerText = renderSmsPreview(text);
-    if (count)   count.innerText = `${text.length} / 500`;
+    if (count)   count.innerText = `${text.length} / 500 · Preview: ${Array.from(renderSmsPreview(text)).length} characters`;
 
     const tpl = smsTemplates.find(t => t.id === id);
     if (tpl) tpl.text = text;
+    markDirty();
   };
 
   window.toggleSmsTemplate = function (id) {
@@ -1842,27 +1815,21 @@
 
   window.testSendSmsTemplate = async function (id, btn) {
     if (!requireSavedMessaging()) return;
-    const tpl = smsTemplates.find(t => t.id === id);
+    const tpl = (SAVED_SETTINGS.sms_templates || []).find(t => t.id === id);
     if (!tpl) return;
 
     const phone = window.prompt(
       'Send this test SMS to which number?\n(Leave blank to use your shop phone number.)',
-      val('whatsapp_number') || val('phone') || ''
+      val('phone') || ''
     );
     if (phone === null) return;
 
     Atelier.setBusy(btn, true);
     try {
-      const text = document.getElementById(`sms-tpl-${id}`)?.value ?? tpl.text;
-      // Render preview variables into the text for the test
-      let rendered = text;
-      Object.entries(PREVIEW_VARS).forEach(([key, value]) => {
-        rendered = rendered.split('{' + key + '}').join(value ?? '');
-      });
-      rendered = rendered.replace(/\{[a-zA-Z]+\}/g, '');
+      const rendered = renderSmsPreview(tpl.text);
 
       const res = await Atelier.api.post(SETTINGS_ROUTES.sendTestSms, {
-        phone: phone.trim() || val('whatsapp_number') || val('phone'),
+        phone: phone.trim() || val('phone'),
         message: rendered,
       });
 
@@ -1957,202 +1924,6 @@
     });
     markDirty();
   };
-  function metaMappings() {
-    return DEFAULT_TEMPLATES.map(t => Object.assign({id:t.id, active:false, name:'', language:'en_US', parameters:[]}, (DB_SETTINGS.meta_templates || []).find(m => m.id === t.id) || {}));
-  }
-  function collectMetaMappings() {
-    return Array.from(document.querySelectorAll('[data-meta-event]')).map(el => ({
-      id: el.dataset.metaEvent,
-      active: el.querySelector('[data-meta-active]').checked,
-      name: el.querySelector('[data-meta-name]').value.trim(),
-      language: el.querySelector('[data-meta-language]').value.trim(),
-      parameters: el.querySelector('[data-meta-parameters]').value.split(',').map(v => v.trim()).filter(Boolean)
-    }));
-  }
-  function panelMeta() {
-    return `<div class="p-6">
-      <div class="flex justify-between items-start mb-6"><div><h3 class="text-lg font-semibold text-slate-900 mb-1 tracking-tight">WhatsApp Business API</h3>
-      <p class="text-sm text-slate-500">Meta WhatsApp Cloud API · approved customer notification templates.</p></div>
-      <span class="badge ${isOn('whatsapp_enabled') ? 'badge-delivered' : 'badge-overdue'}">${isOn('whatsapp_enabled') ? 'Enabled' : 'Disabled'}</span></div>
-      <div class="set-card mb-6"><h4 class="set-legend">Official Meta configuration</h4>
-        <p class="set-hint mb-4">Delivery is controlled under Notifications → Delivery Channels. Saved credentials are not proof of connection.</p>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div><label class="set-label">Meta Access Token</label><input type="password" autocomplete="new-password" data-setting="meta_access_token" class="set-field pro-input" value="${esc(val('meta_access_token'))}"><p class="set-hint">Saved dots mean unchanged. Use a token authorized for your WhatsApp business.</p></div>
-          <div><label class="set-label">Phone Number ID</label><input data-setting="meta_phone_number_id" class="set-field pro-input" value="${esc(val('meta_phone_number_id'))}"></div>
-          <div><label class="set-label">WhatsApp Business Account ID (WABA)</label><input data-setting="meta_waba_id" class="set-field pro-input" value="${esc(val('meta_waba_id'))}"><p class="set-hint">Used to verify your approved templates.</p></div>
-        </div>
-        <button onclick="testWhatsappConnection(this)" class="mt-4 bg-white border border-slate-200 text-slate-600 px-3 py-1.5 rounded-lg text-xs font-medium">Test Connection & Templates</button>
-        <div id="meta-status" class="set-hint mt-3" role="status">Not verified in this session.</div>
-      </div>
-      <h4 class="set-legend">Approved event templates</h4>
-      <p class="set-hint mb-4">Create and approve text-body templates in Meta first. Enter ordered Tailor variable names separated by commas, matching @{{1}}, @{{2}}, and so on. Optional static footers are supported; headers and buttons are not.</p>
-      <p class="set-hint mb-4">Variables: ${Object.keys(TEMPLATE_VARS).map(esc).join(', ')}</p>
-      ${metaMappings().map(m => `<div class="set-card mb-4" data-meta-event="${m.id}">
-        <div class="flex items-center justify-between mb-3"><h4 class="set-legend mb-0">${esc(DEFAULT_TEMPLATES.find(t=>t.id===m.id).name)}</h4><label class="text-xs text-slate-600"><input type="checkbox" data-meta-active ${m.active ? 'checked' : ''}> Enabled</label></div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4"><div><label class="set-label">Approved template name</label><input data-meta-name class="set-field pro-input" value="${esc(m.name)}" placeholder="bst_${m.id.replaceAll('-', '_')}"></div>
-        <div><label class="set-label">Language code</label><input data-meta-language class="set-field pro-input" value="${esc(m.language)}"></div></div>
-        <label class="set-label mt-3">Body variables in order</label><input data-meta-parameters class="set-field pro-input" value="${esc(m.parameters.join(', '))}" placeholder="customerName, orderID, shopName">
-        <p class="set-hint mt-2" data-meta-status="${m.id}">Save and test the configuration to verify this mapping.</p>
-      </div>`).join('')}
-      <div class="set-card mb-6"><h4 class="set-legend">Send Test Message</h4>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4"><div><label class="set-label">Recipient</label><input id="meta-test-phone" class="set-field pro-input" placeholder="03001234567"></div>
-        <div><label class="set-label">Approved event mapping</label><select id="meta-test-event" class="set-field pro-input">${DEFAULT_TEMPLATES.map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join('')}</select></div></div>
-        <p class="set-hint mt-3">Uses the saved mapping and most recent order for variables. This sends a real message and may incur provider charges.</p>
-        <button onclick="sendMetaTest(this)" class="mt-3 bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-600">Send Test Message</button>
-      </div>${panelFooter()}</div>`;
-  }
-  window.testWhatsappConnection = async function (btn) {
-    if (!requireSavedMessaging()) return;
-    Atelier.setBusy(btn, true);
-    const host = document.getElementById('meta-status');
-    try {
-      const res = await Atelier.api.post(SETTINGS_ROUTES.testWhatsapp, {});
-      if (host) host.textContent = res.message + (res.sender ? ' Sender: '+res.sender.name+' '+res.sender.phone : '');
-      (res.templates || []).forEach(t => {
-        const el = document.querySelector('[data-meta-status="'+t.id+'"]');
-        if (el) el.textContent = (t.active ? '' : 'Disabled. ') + (t.error || 'Approved template and parameter mapping verified.');
-      });
-      toast(res.message, 'success');
-    } catch (err) {
-      if (host) host.textContent = 'Verification failed. Review the error and saved configuration.';
-      Atelier.reportError(err, 'Could not verify Meta configuration');
-    } finally { Atelier.setBusy(btn, false); }
-  };
-  window.sendMetaTest = async function (btn) {
-    if (!requireSavedMessaging()) return;
-    Atelier.setBusy(btn, true);
-    try {
-      const res = await Atelier.api.post(SETTINGS_ROUTES.sendTest, {phone:document.getElementById('meta-test-phone').value, template_id:document.getElementById('meta-test-event').value});
-      toast(res.message, res.success ? 'success' : 'warning');
-    } catch (err) { Atelier.reportError(err, 'Meta test message failed'); }
-    finally { Atelier.setBusy(btn, false); }
-  };
-
-  /* ------------------------ Templates ------------------------ */
-  var lastFocusedTemplate = null;
-
-  function renderTemplates() {
-    const container = document.getElementById('templates-container');
-    if (!container) return;
-
-    if (!messageTemplates.length) {
-      container.innerHTML = Atelier.emptyState({ icon: 'fa-comment-slash', title: 'No templates', message: 'Restore this panel to bring back the defaults.' });
-      return;
-    }
-
-    container.innerHTML = messageTemplates.map(t => `
-      <div class="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-        <div class="flex justify-between items-center p-4 border-b border-slate-200 bg-slate-50">
-          <div class="flex items-center gap-3">
-            <div class="toggle ${t.active ? 'on' : ''}" onclick="toggleTemplate('${t.id}')" title="${t.active ? 'Active' : 'Switched off'}"></div>
-            <div>
-              <h5 class="text-sm font-bold text-slate-900 tracking-tight">${esc(t.name)}</h5>
-              <div class="text-[11px] text-slate-500">${esc(templateTrigger(t.id))}</div>
-            </div>
-          </div>
-          <div class="flex gap-3">
-            <button onclick="resetTemplate('${t.id}')" class="text-xs text-slate-500 hover:text-slate-900 transition-colors">Reset</button>
-
-          </div>
-        </div>
-        <div class="grid grid-cols-2 gap-0">
-          <div class="p-4 border-r border-slate-200">
-            <textarea id="tpl-${t.id}" maxlength="1000"
-                      onfocus="lastFocusedTemplate='${t.id}'"
-                      oninput="updateTemplatePreview('${t.id}')"
-                      class="pro-input w-full h-48 p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono focus:bg-white transition-colors">${esc(t.text)}</textarea>
-            <div class="text-right text-xs text-slate-400 mt-1" id="count-${t.id}">${(t.text || '').length} / 1000</div>
-          </div>
-          <div class="p-4 bg-slate-100 flex items-start">
-            <div class="wa-bubble" id="prev-${t.id}">${esc(renderTemplatePreview(t.text))}</div>
-          </div>
-        </div>
-      </div>
-    `).join('');
-  }
-
-  /** Explains when each template fires, so the list is self-documenting. */
-  function templateTrigger(id) {
-    return {
-      'order-created':    'Sent automatically when an order is created',
-      'order-ready':      'Sent when you notify a customer their order is ready',
-      'payment-received': 'Sent when a partial payment is recorded',
-      'due-reminder':     'Sent when an order enters its reminder window',
-      'due-extended':     'Sent when a delivery date is pushed back',
-      'final-receipt':    'Sent when the balance reaches zero',
-    }[id] || 'Sent manually';
-  }
-
-  function renderTemplatePreview(text) {
-    let preview = String(text ?? '');
-
-    Object.entries(PREVIEW_VARS).forEach(([key, value]) => {
-      preview = preview.split('{' + key + '}').join(value ?? '');
-    });
-
-    // Anything still unresolved is not a real variable.
-    return preview.replace(/\{[a-zA-Z]+\}/g, '');
-  }
-
-  window.updateTemplatePreview = function (id) {
-    const textarea = document.getElementById(`tpl-${id}`);
-    const preview  = document.getElementById(`prev-${id}`);
-    const count    = document.getElementById(`count-${id}`);
-    if (!textarea) return;
-
-    const text = textarea.value;
-    preview.innerText = renderTemplatePreview(text);
-    count.innerText = `${text.length} / 1000`;
-
-    const tpl = messageTemplates.find(t => t.id === id);
-    if (tpl) tpl.text = text;
-  };
-
-  window.toggleTemplate = function (id) {
-    const tpl = messageTemplates.find(t => t.id === id);
-    if (!tpl) return;
-
-    tpl.active = !tpl.active;
-    renderTemplates();
-    markDirty();
-  };
-
-  /** Inserts a variable at the cursor in whichever template was last edited. */
-  window.insertVariable = function (name) {
-    const id = lastFocusedTemplate || messageTemplates[0]?.id;
-    const textarea = id ? document.getElementById(`tpl-${id}`) : null;
-
-    if (!textarea) {
-      navigator.clipboard?.writeText('{' + name + '}');
-      toast(`{${name}} copied — paste it into a template`, 'info');
-      return;
-    }
-
-    const token = '{' + name + '}';
-    const start = textarea.selectionStart ?? textarea.value.length;
-    const end   = textarea.selectionEnd ?? start;
-
-    textarea.value = textarea.value.slice(0, start) + token + textarea.value.slice(end);
-    textarea.focus();
-    textarea.selectionStart = textarea.selectionEnd = start + token.length;
-
-    updateTemplatePreview(id);
-    markDirty();
-  };
-
-  /** Restores one template to the shipped default without touching the others. */
-  window.resetTemplate = function (id) {
-    const original = DEFAULT_TEMPLATES.find(t => t.id === id);
-    if (!original) { toast('No default exists for this template', 'info'); return; }
-
-    const index = messageTemplates.findIndex(t => t.id === id);
-    if (index > -1) messageTemplates[index] = JSON.parse(JSON.stringify(original));
-
-    renderTemplates();
-    markDirty();
-    toast('Template reset — press Save to keep it', 'info');
-  };
-
   /* ============================================================
      INIT
      ============================================================ */

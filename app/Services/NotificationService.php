@@ -154,7 +154,7 @@ class NotificationService
         );
     }
 
-    public static function whatsappSent(Order $order): ?Notification
+    public static function smsSent(Order $order): ?Notification
     {
         return self::push(
             'Customer Notice Accepted',
@@ -163,8 +163,8 @@ class NotificationService
                 $order->customer?->name ?? 'Customer',
                 $order->display_number,
             ),
-            'whatsapp',
-            'fa-brands fa-whatsapp',
+            'sms',
+            'fa-solid fa-comment-sms',
             'success',
             $order,
             actionUrl: route('orders.index'),
@@ -310,7 +310,7 @@ class NotificationService
             'orders'   => 'fa-solid fa-box',
             'payments' => 'fa-solid fa-indian-rupee-sign',
             'stock'    => 'fa-solid fa-boxes-stacked',
-            'whatsapp' => 'fa-brands fa-whatsapp',
+            'sms' => 'fa-solid fa-comment-sms',
             'alerts'   => 'fa-solid fa-triangle-exclamation',
             default    => 'fa-solid fa-circle-info',
         };
@@ -322,7 +322,7 @@ class NotificationService
             'orders'   => 'primary',
             'payments' => 'success',
             'stock'    => 'warning',
-            'whatsapp' => 'success',
+            'sms' => 'success',
             'alerts'   => 'danger',
             default    => 'info',
         };

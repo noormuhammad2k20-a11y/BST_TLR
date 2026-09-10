@@ -13,6 +13,17 @@ use Illuminate\Validation\Rule;
 
 class CustomerController extends Controller
 {
+    public function sendSms(Request $request, Customer $customer): JsonResponse
+    {
+        $validated = $request->validate(['message' => ['required', 'string', 'max:2000']]);
+        $result = \App\Services\SmsService::send($customer->phone, $validated['message'], customerId: $customer->id);
+
+        return response()->json([
+            'success' => $result['sent'],
+            'message' => $result['sent'] ? 'SMS accepted for sending. Delivery is not yet confirmed.' : $result['error'],
+        ], $result['sent'] ? 200 : 422);
+    }
+
     public function index()
     {
         $customers = Customer::query()

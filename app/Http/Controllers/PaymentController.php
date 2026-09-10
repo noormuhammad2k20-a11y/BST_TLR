@@ -91,13 +91,13 @@ class PaymentController extends Controller
             $order->balance_due <= 0 ? 'final-receipt' : 'payment-received',
             $order, ['paidAmount' => Money::format($validated['amount'])]
         );
-        $whatsapp = $delivery['channels']['whatsapp'] ?? null;
+        $sms = $delivery['channels']['sms'] ?? null;
 
         return response()->json([
             'success'  => true,
             'message'  => Money::format($validated['amount']) . ' recorded successfully.',
             'invoice'  => $this->serialize($order),
-            'whatsapp' => $whatsapp,
+            'sms' => $sms,
             // The client only pops a payment toast when the shop asked for one.
             'toast'    => Settings::bool('payment_toasts'),
         ], 201);
@@ -114,7 +114,7 @@ class PaymentController extends Controller
 
         // Tax and service charge come entirely from Invoice & Billing settings:
         // whether they apply, what they are called and how they are calculated.
-        $pricing = PricingService::breakdown($total);
+        $pricing = PricingService::forOrder($order);
         $receipt = Settings::receipt();
 
         return response()->json([
@@ -139,12 +139,7 @@ class PaymentController extends Controller
                     'city'  => $order->customer?->city,
                     'code'  => $order->customer?->display_code,
                 ],
-                'items'     => [[
-                    'name'  => $order->primary_item_name,
-                    'desc'  => $order->fabric,
-                    'qty'   => $order->items[0]['qty'] ?? 1,
-                    'price' => $pricing['subtotal'],
-                ]],
+                'items' => PricingService::invoiceItems($order),
                 'subtotal'  => $pricing['subtotal'],
                 'tax_rate'  => $pricing['tax_rate'],
                 'tax_label' => $pricing['tax_label'],
@@ -154,7 +149,7 @@ class PaymentController extends Controller
                 'service_charge_label' => $pricing['service_charge_label'],
                 'service_charge_rate'  => $pricing['service_charge_rate'],
                 'service_charge_enabled' => $pricing['service_charge_enabled'],
-                'lines'     => PricingService::lines($total),
+                'lines'     => PricingService::orderLines($order),
                 'total'     => $pricing['total'],
                 'paid'      => $receipt['show_advance'] ? $order->paid_amount : null,
                 'balance'   => $receipt['show_balance'] ? $order->balance_due : null,

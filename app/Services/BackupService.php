@@ -34,13 +34,15 @@ class BackupService
         'products'     => ['label' => 'Products',     'model' => ProductService::class, 'icon' => 'fa-tags',           'color' => 'text-violet-500'],
         'measurements' => ['label' => 'Measurements', 'model' => Measurement::class,   'icon' => 'fa-ruler-combined',  'color' => 'text-teal-500'],
         'orders'       => ['label' => 'Orders',       'model' => Order::class,         'icon' => 'fa-box',             'color' => 'text-sky-500'],
+        'order_items' => ['label' => 'Order items', 'model' => \App\Models\OrderItem::class, 'icon' => 'fa-box', 'color' => 'text-sky-500'],
+        'order_item_pieces' => ['label' => 'Order pieces', 'model' => \App\Models\OrderItemPiece::class, 'icon' => 'fa-ruler', 'color' => 'text-teal-500'],
         'payments'     => ['label' => 'Payments',     'model' => Payment::class,       'icon' => 'fa-file-invoice',    'color' => 'text-emerald-500'],
         'expenses'     => ['label' => 'Expenses',     'model' => Expense::class,       'icon' => 'fa-receipt',         'color' => 'text-amber-500'],
         'notifications' => ['label' => 'Notifications', 'model' => Notification::class, 'icon' => 'fa-bell',           'color' => 'text-rose-500'],
         'activity'     => ['label' => 'Activity Log', 'model' => ActivityLog::class,   'icon' => 'fa-clock-rotate-left', 'color' => 'text-slate-500'],
     ];
 
-    public const FORMAT_VERSION = 1;
+    public const FORMAT_VERSION = 2;
 
     /**
      * The type list as the browser needs it — label, icon and colour only.
@@ -88,7 +90,7 @@ class BackupService
         foreach (self::TYPES as $key => $meta) {
             /** @var class-string<Model> $model */
             $model = $meta['model'];
-            $data[$key] = $model::query()->orderBy('id')->get()->map->getAttributes()->all();
+            $data[$key] = $model::withoutGlobalScopes()->orderBy('id')->get()->map->getAttributes()->all();
         }
 
         return [
@@ -143,7 +145,7 @@ class BackupService
                 fputcsv($handle, ['## ' . strtoupper($meta['label'])]);
                 fputcsv($handle, $columns);
 
-                $model::query()->orderBy('id')->chunk(500, function ($rows) use ($handle, $columns) {
+                $model::withoutGlobalScopes()->orderBy('id')->chunk(500, function ($rows) use ($handle, $columns) {
                     foreach ($rows as $row) {
                         $attributes = $row->getAttributes();
                         fputcsv($handle, array_map(
@@ -225,6 +227,7 @@ class BackupService
         $payload = json_decode(file_get_contents($path), true);
 
         // Keep the declared order so parents land before their children.
+        if (in_array('orders', $types)) $types = array_merge($types, ['measurements','order_items','order_item_pieces']);
         $types = array_values(array_intersect(array_keys(self::TYPES), $types));
 
         $imported = [];
@@ -232,7 +235,8 @@ class BackupService
 
         try {
             DB::transaction(function () use ($payload, $types, $mode, &$imported, &$skipped) {
-
+                $deferred = [];
+                $newOrders = [];
 
                 foreach ($types as $type) {
                     $meta = self::TYPES[$type];
@@ -275,6 +279,18 @@ class BackupService
                             if (isset($filtered['id']) && DB::table($table)->where('id',$filtered['id'])->exists()) {
                                 $skipped[$type]++; continue;
                             }
+                            // Break the order/sheet/piece cycle only for newly imported rows.
+                            $links = match ($type) {
+                                'measurements' => ['order_id','order_item_piece_id'],
+                                'orders' => ['measurement_id'],
+                                'products' => ['canonical_id'],
+                                default => [],
+                            };
+                            foreach ($links as $link) if (!empty($filtered[$link])) {
+                                $deferred[] = [$table,$filtered['id'],$link,$filtered[$link]];
+                                $filtered[$link] = null;
+                            }
+                            if ($type === 'orders') $newOrders[] = $filtered['id'];
                             $clean[] = $filtered;
                         }
 
@@ -291,6 +307,13 @@ class BackupService
 
                         $imported[$type] += count($clean);
                     }
+                }
+
+                foreach ($deferred as [$table,$id,$column,$value]) DB::table($table)->where('id',$id)->update([$column=>$value]);
+                foreach ($newOrders as $id) {
+                    $order = Order::withTrashed()->findOrFail($id);
+                    if (!$order->items_migrated_at) app(OrderItemsBackfill::class)->run($order,true);
+                    elseif (!$order->lineItems()->withTrashed()->exists()) throw new \RuntimeException('Relational order backup is missing its items.');
                 }
 
                 // Settings come last: restoring them changes how everything above

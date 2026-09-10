@@ -5,7 +5,7 @@ Har step number wise hai. Upar se neeche, ek ek karke follow karein. Koi step sk
 na karein.
 
 Project ka naam: **Atelier** — Tailor Shop + Cloth Store management system
-(Laravel 12 + MySQL + Tailwind + Meta WhatsApp Cloud API).
+(Laravel 12 + MySQL + Tailwind + Text SMS).
 
 ---
 
@@ -42,11 +42,11 @@ Project ka naam: **Atelier** — Tailor Shop + Cloth Store management system
 | Operating System | Windows 10 (64-bit) | Windows 11 |
 | RAM | 4 GB | 8 GB |
 | Disk space | 5 GB khali | 10 GB khali |
-| Internet | Sirf install ke waqt zaroori | WhatsApp ke liye hamesha |
+| Internet | Sirf install ke waqt zaroori | SMS ke liye hamesha |
 
 > **Note:** Project chalane ke liye internet zaroori NAHI hai. Sab kuch computer ke
 > andar chalta hai. Internet sirf 2 kaamon ke liye chahiye — (a) shuru mein software
-> download karne ke liye, (b) WhatsApp messages bhejne ke liye.
+> download karne ke liye, (b) SMS messages bhejne ke liye.
 
 ## 0.2 Kya kya install karna hoga (kul 3 cheezein)
 
@@ -639,7 +639,7 @@ Roles: **admin** (sab kuch), **staff** (orders/customers), **tailor** (sirf apne
 
 # Section 11 — Official customer notifications
 
-Follow [NOTIFICATION-SETUP.md](NOTIFICATION-SETUP.md) for Meta WhatsApp, Veevo/SPEXT and SendPK setup. Configure approved templates before enabling automated WhatsApp.
+Follow [SMS setup](NOTIFICATION-SETUP.md) for Veevo/SPEXT and SendPK configuration. Save the selected provider credentials, then enable SMS.
 
 # Section 12 — Sab kuch auto-start karna
 
@@ -940,9 +940,9 @@ Phir `http://localhost:8080` kholein.
 | Login karte hi wapis login page | Session ka masla → `php artisan optimize:clear` aur browser ke cookies clear karein |
 | "Your account is inactive" | Account band hai → doosre admin se Settings → Team mein activate karwayein |
 
-## 15.12 WhatsApp message nahi ja raha
+## 15.12 SMS message nahi ja raha
 
-Check Notifications → Delivery Channels, then WhatsApp Business API → Test Connection & Templates. Check the approved template name, language, ordered variables, and provider error. An accepted message is not proof of delivery. See [notification setup](NOTIFICATION-SETUP.md).
+Check Notifications → Delivery Channels → SMS, then SMS Settings. Verify the selected provider, saved credentials, approved sender and credit. See [SMS setup](NOTIFICATION-SETUP.md).
 
 ## 15.13 Sab kuch reset karke naya shuru karna
 
@@ -1086,7 +1086,7 @@ php artisan optimize:clear
 3. 🔴 **Hafte mein ek baar backup.** Computer kharab hone ka koi waqt nahi hota.
 4. 🔴 **Server wali black window band na karein.** Band = website band.
 5. 🔴 **MySQL hamesha chalna chahiye.** Iske bagair "Connection refused" aayega.
-6. ⚠️ **WhatsApp ke liye alag SIM.** Zaati number istemal na karein.
+6. **SMS:** Configure approved sender details and available credit with the selected provider.
 7. ⚠️ **`.env` file kisi ko na dein.** Isme database ke passwords hain.
 9. 💡 **`.env` badalne ke baad hamesha `php artisan config:clear`.**
 10. 💡 **`storage\logs\laravel.log`** — har error ka asli sabab yahan milta hai.

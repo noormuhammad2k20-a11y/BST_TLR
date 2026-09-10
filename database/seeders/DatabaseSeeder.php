@@ -111,14 +111,15 @@ class DatabaseSeeder extends Seeder
             ['Trouser Stitching','Men',1800],['School Uniform Stitching','Uniform',2200],
             ['Bridal Dress Stitching','Ladies',22000],['Alteration and Fitting','Alteration',900],
         ];
+        $serviceIds = [];
         foreach ($services as $i => [$name,$category,$price]) {
-            DB::table('product_services')->updateOrInsert(['sku'=>'TAIL-SVC-'.str_pad((string)($i+1),2,'0',STR_PAD_LEFT)], [
+            $seededService = \App\Services\CatalogueIdentity::seed($name, ['sku'=>'TAIL-SVC-'.str_pad((string)($i+1),2,'0',STR_PAD_LEFT),
                 'name'=>$name,'category'=>$category,'type'=>'Service','price'=>$price,'cost_price'=>null,
                 'stock_quantity'=>null,'low_stock_threshold'=>0,'unit'=>'piece','duration_days'=>5+$i,
                 'status'=>'Active','description'=>'Professional '.$name,'created_at'=>now(),'updated_at'=>now(),
             ]);
         }
-        $serviceIds = DB::table('product_services')->where('sku','like','TAIL-SVC-%')->orderBy('sku')->pluck('id');
+        $serviceIds = array_map(fn($service) => \App\Models\ProductService::where('normalized_name', \App\Services\CatalogueIdentity::normalize($service[0]))->value('id') ?? \App\Models\ProductService::where('name',$service[0])->orderBy('id')->value('id'), $services);
 
         $customers = [
             ['Faisal Khan','03001234567','Gulshan-e-Iqbal'],['Saad Ahmed','03012345678','North Nazimabad'],
@@ -141,6 +142,7 @@ class DatabaseSeeder extends Seeder
         $statuses=['Delivered','Delivered','Ready','Ready for Verification','In Progress','Delivered','Ready','Ready','Delivered','Ready'];
         foreach (range(0,9) as $i) {
             $number='SEED-ORD-'.str_pad((string)($i+1),3,'0',STR_PAD_LEFT);
+            if (DB::table('orders')->where('order_number',$number)->exists()) continue;
             $tailor=$tailors[$i % $tailors->count()];
             $customerId=$customerIds[$i];
             $total=(float) $services[$i][2] * (($i%3)+1);

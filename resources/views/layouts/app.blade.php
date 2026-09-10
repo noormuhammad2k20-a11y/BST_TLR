@@ -9,7 +9,6 @@
       'tagline'  => $appSettings['tagline'],
       'address'  => $appSettings['address'],
       'phone'    => $appSettings['phone'],
-      'whatsapp' => $appSettings['whatsapp_number'] ?: $appSettings['phone'],
       'email'    => $appSettings['email'],
       'website'  => $appSettings['website'],
       'logo'     => $appSettings['logo_path'],
@@ -40,8 +39,6 @@
       ],
       'deliverySlots'    => \App\Services\Settings::list('delivery_slots'),
       'extensionReasons' => \App\Services\Settings::list('extension_reasons'),
-      'whatsappEnabled'  => (bool) $appSettings['whatsapp_enabled'],
-      'emailEnabled'     => (bool) $appSettings['email_enabled'],
       'smsEnabled'       => (bool) $appSettings['sms_enabled'],
   ];
 @endphp

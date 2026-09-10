@@ -85,18 +85,18 @@ final class WorkflowCoverageTest extends BusinessIntegrityTest
         $this->assertSame('110.00',PricingService::grandTotal('100.00'));
         Settings::put(['tax_inclusive'=>true]);$this->assertSame('100.00',PricingService::grandTotal('100.00'));
     }
-    public function test_unconfigured_meta_does_not_send(): void
+    public function test_unconfigured_sms_does_not_send(): void
     {
-        Settings::put(['whatsapp_enabled'=>true]);
+        Settings::put(['sms_enabled'=>true,'veevo_api_key'=>'','sms_provider'=>'veevo']);
         \Illuminate\Support\Facades\Http::preventStrayRequests();
-        $result=\App\Services\WhatsAppService::sendMapped('order-ready','03001234567',[]);
+        $result=\App\Services\SmsService::send('03001234567','Test SMS');
         $this->assertFalse($result['sent']);
     }
     public function test_json_backup_redacts_secret_settings(): void
     {
-        Settings::put(['meta_access_token'=>str_repeat('s',40),'store_name'=>'Backup shop']);
+        Settings::put(['veevo_api_key'=>str_repeat('s',40),'store_name'=>'Backup shop']);
         $settings=BackupService::payload()['settings'];
-        $this->assertSame('[redacted]',$settings['meta_access_token']);
+        $this->assertSame('[redacted]',$settings['veevo_api_key']);
         $this->assertSame('Backup shop',$settings['store_name']);
     }
     public function test_staff_payment_reversal_retains_linked_history(): void

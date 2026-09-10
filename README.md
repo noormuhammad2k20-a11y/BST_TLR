@@ -80,7 +80,7 @@ conservative grants.
 
 ## Customer notifications
 
-Automated WhatsApp uses Meta WhatsApp Cloud API directly. SMS supports Veevo Tech / SPEXT (recommended) and SendPK. See [Notification setup](NOTIFICATION-SETUP.md) for credentials, approved templates, upgrade steps, and provider limitations.
+Customer notifications use Text SMS only. Veevo Tech / SPEXT is the default provider; SendPK is an alternative selected manually. See [SMS setup](NOTIFICATION-SETUP.md) for configuration, testing and operational limitations.
 
 ## Testing
 

@@ -25,9 +25,10 @@ class NotificationVariables
             'customerID' => $order->customer?->display_code ?? '',
             'orderID' => $order->display_number,
             'invoiceID' => $order->display_invoice,
-            'garmentType' => $order->primary_item_name,
+            'garmentType' => ($order->items_migrated_at ? $order->lineItems->count() : count($order->items ?? [])) > 1 ? $order->garmentSummary() : $order->primary_item_name,
+            'garmentSummary' => $order->garmentSummary(),
             'fabric' => $order->fabric ?? '',
-            'quantity' => (string) ($order->items[0]['qty'] ?? 1),
+            'quantity' => (string) $order->quantity,
             'dueDate' => $due,
             'dueTime' => $order->time_slot ?? '',
             'totalAmount' => Money::format($order->total),
@@ -36,11 +37,11 @@ class NotificationVariables
             'paidAmount' => Money::format($lastPayment ?: $order->advance),
             'status' => $order->status,
 
-            // Only meaningful when a date is actually being changed, but given
-            // sensible values here so no template ever renders a blank hole.
+            // The extension event supplies the actual previous date and reason.
+            // Leave absent context empty so optional SMS clauses can be omitted.
             'newDate' => $due,
-            'oldDate' => $due,
-            'reason' => 'Schedule change',
+            'oldDate' => '',
+            'reason' => '',
         ], self::shopVariables(), $extra);
     }
 
@@ -63,7 +64,7 @@ class NotificationVariables
     {
         return [
             'shopName' => Settings::str('store_name') ?: 'Atelier',
-            'shopPhone' => Settings::str('whatsapp_number') ?: Settings::str('phone'),
+            'shopPhone' => Settings::str('phone'),
             'shopAddress' => Settings::str('address'),
             'todayDate' => Dates::format(now()),
         ];
@@ -77,10 +78,6 @@ class NotificationVariables
      */
     public static function render(string $text, array $variables): string
     {
-        foreach ($variables as $key => $value) {
-            $text = str_replace('{'.$key.'}', (string) $value, $text);
-        }
-
-        return trim(preg_replace('/\{[a-zA-Z]+\}/', '', $text));
+        return SmsTemplateContent::render($text, $variables);
     }
 }

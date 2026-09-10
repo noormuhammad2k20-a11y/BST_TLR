@@ -1,43 +1,10 @@
-# Official customer notification setup
+# Text SMS setup
 
-## Safe upgrade
+Customer messages use the centralized `SmsService` through `CustomerNotificationDispatcher`. Six existing event templates remain editable under Settings → SMS Settings. The customer detail SMS action uses the same service. Browser alerts remain internal application notifications.
 
-Back up the working database and application encryption key securely. Deploy code, run `php artisan migrate --force`, `php artisan optimize:clear`, then `npm run build`. Do not regenerate APP_KEY: it decrypts existing credentials. Do not reset/reseed a client database. Review all other pending migrations separately before deployment; this checkout includes pre-existing inventory changes.
+No SMS credentials belong in `.env`: save `sms_enabled`, `sms_provider` (`veevo` or `sendpk`), `veevo_api_key`, optional `veevo_sender_id`, `sendpk_api_key`, required `sendpk_sender_id`, and `sms_templates` through Settings. API keys are encrypted with the existing Laravel `APP_KEY` and masked in responses. Preserve that key when moving the application. HTTP timeouts are in `config/messaging.php`.
 
-This update adds `sms_logs.provider_message_id` and `whats_app_logs`. It selects SendPK when existing credentials have no saved provider selection; genuinely new installations default to Veevo. Explicit provider selection, SMS templates, local WhatsApp previews and historical records survive. Retired provider settings remain inert and are excluded from settings responses and portable exports.
-
-Disable any previously installed local WhatsApp startup task/service on the host. The old process/scripts are no longer part of the application. Revoke obsolete provider tokens and linked sessions through the relevant account. Rotate any credential previously shared or committed. New secrets must be entered in Settings, never source code.
-
-## Meta WhatsApp Cloud API
-
-1. Set up a Meta business portfolio, app with WhatsApp, WABA, and registered business phone number. Complete the verification, billing and sender activation requested by Meta for your account.
-2. Obtain a system-user access token with `whatsapp_business_messaging` and `whatsapp_business_management` permissions and access to the relevant WABA/phone. Store it securely; manage expiry and rotation in Meta.
-3. In Settings → WhatsApp Business API enter **Meta Access Token**, **Phone Number ID**, and **WhatsApp Business Account ID (WABA)**. Saved dots mean unchanged. Save.
-4. Create the following positional text-body utility templates in WhatsApp Manager. These are suggested names/text, not already-approved templates. Request approval and use the exact approved language code (`en_US` for the examples). An optional static footer is supported; headers, media, buttons and named parameters are not supported in this version.
-5. Map each event to its approved name/language and enter the ordered variables below. Enable only complete mappings. Save and click **Test Connection & Templates**. Credentials and each mapping have separate verification results.
-6. Enable WhatsApp under Notifications → Delivery Channels. Use **Send Test Message** only with a recipient authorized to receive the test. Tests use saved mappings and the most recent order; missing variable data prevents sending. Follow Meta recipient permission/opt-in requirements for live customer messaging.
-
-| Event | Suggested name | Ordered Tailor variables |
-|---|---|---|
-| ORDER CREATED | bst_order_created | customerName, orderID, garmentType, dueDate, totalAmount, advancePaid, remainingBalance, shopName |
-| ORDER READY | bst_order_ready | customerName, orderID, garmentType, remainingBalance, shopName |
-| PAYMENT RECEIVED | bst_payment_received | customerName, orderID, paidAmount, remainingBalance, shopName |
-| DUE DATE REMINDER | bst_due_reminder | customerName, orderID, dueDate, remainingBalance, shopName |
-| DUE DATE EXTENDED | bst_due_extended | customerName, orderID, oldDate, newDate, reason, shopName |
-| FINAL RECEIPT | bst_final_receipt | customerName, orderID, totalAmount, shopName |
-
-### Template body examples (submit for approval)
-
-- **bst_order_created:** Hello {{1}}, order {{2}} for {{3}} has been received. Due: {{4}}. Total: {{5}}, advance: {{6}}, balance: {{7}}. Thank you from {{8}}.
-- **bst_order_ready:** Hello {{1}}, order {{2}} for {{3}} is ready for collection. Balance: {{4}}. Thank you from {{5}}.
-- **bst_payment_received:** Hello {{1}}, payment for order {{2}} received: {{3}}. Remaining balance: {{4}}. Thank you from {{5}}.
-- **bst_due_reminder:** Hello {{1}}, order {{2}} is due on {{3}}. Remaining balance: {{4}}. Thank you from {{5}}.
-- **bst_due_extended:** Hello {{1}}, the due date for order {{2}} changed from {{3}} to {{4}}. Reason: {{5}}. Thank you from {{6}}.
-- **bst_final_receipt:** Hello {{1}}, order {{2}} is fully paid. Total: {{3}}. Thank you from {{4}}.
-
-Local WhatsApp preview text does not create or update Meta approvals. Final receipt retains the existing fully-paid payment trigger. Re-saving an order does not automatically resend a ready notice; explicit notify actions can resend.
-
-The API version defaults to `v26.0` in `config/messaging.php`, optionally set through `META_GRAPH_VERSION`. All requests originate from Laravel over HTTPS. No inbound chat or delivery webhook is installed. An API message ID proves acceptance, not delivery/read status. Check Meta diagnostics for subsequent delivery problems.
+No database schema cleanup is needed for this change. Historical tables and records remain unchanged. No data reset is required.
 
 ## Veevo Tech / SPEXT
 
@@ -53,10 +20,15 @@ Send endpoint: `https://sendpk.com/api/sms.php`. Balance endpoint: `https://send
 
 ## Operations and verification
 
-WhatsApp and SMS toggles are independent. Provider errors do not roll back orders/payments and do not trigger another provider or automatic retries. Check unknown-outcome failures before manually resending. Logs store acceptance/failure, provider message IDs, event, order/customer references and sanitized metadata. A logging outage cannot invalidate a completed transaction.
+SMS is the only outbound customer message channel. Provider errors do not roll back orders/payments and do not trigger another provider or automatic retries. Check unknown-outcome failures before manually resending. Logs store acceptance/failure, provider message IDs, event, order/customer references and sanitized metadata. A logging outage cannot invalidate a completed transaction.
 
 Run `php artisan schedule:run` every minute to execute the existing fifteen-minute order sweep and due-reminder checks. Page and scheduler reminder checks share an atomic cache repeat guard. Reminder timing follows Notifications settings. Keep the configured shared cache available.
 
 Run `php artisan test`, `npm run build`, `php artisan route:list`, and `php artisan view:cache`. MySQL integration tests require the fixed isolated database; run `php dev/tools/test-database.php`, then set `INTEGRITY_MYSQL=1` only for the test process. Automated tests mock all external sends. Never put real credentials in test fixtures.
 
-Official references: [Meta API examples](https://www.postman.com/meta/whatsapp-business-platform/documentation/wlk6lh4/whatsapp-cloud-api), [Meta v26 release](https://github.com/facebook/facebook-nodejs-business-sdk/releases/tag/v26.0.0), [Veevo SMS](https://www.veevotech.com/api-docs/sms), [SendPK](https://sendpk.com/api.php).
+
+Veevo is the default and SendPK is a manually selected alternative. Automatic fallback and automatic retry are not implemented. A timeout may mean a provider accepted a message; verify its status before choosing to resend. No worker is required for customer SMS: sends are synchronous after transactions commit. Use the existing scheduler for unattended due reminders.
+
+Phone numbers remain unchanged in customer records. Dispatch accepts common Pakistan mobile formats and sends `+923XXXXXXXXX` to Veevo and `923XXXXXXXXX` to SendPK, using the existing provider adapters. Malformed numbers, empty messages and messages exceeding 2000 characters fail without an HTTP send. The Settings test field has a 1000-character request limit. Long/Unicode SMS can span multiple chargeable segments.
+
+`SmsLog`/`sms_logs` identifies the SMS channel and records provider, normalized recipient, event, order/customer IDs, acceptance/failure, provider message ID, timestamp and sanitized error metadata. Acceptance is not proof of handset delivery. Missing/disabled templates make no provider request. Explicit manual notify can resend; saving a Ready order does not. Payment operation keys and the shared reminder guard protect their existing workflows from repeats.

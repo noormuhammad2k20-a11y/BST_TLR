@@ -383,22 +383,18 @@ class ReportAnalytics
      */
     public static function garments(Carbon $start, Carbon $end, int $limit = 12): array
     {
-        return Order::query()
-            ->whereBetween('orders.created_at', [$start, $end])
-            ->leftJoin('product_services', 'orders.product_service_id', '=', 'product_services.id')
-            ->selectRaw("COALESCE(NULLIF(product_services.name, ''), NULLIF(orders.garment, ''), 'Unspecified') as garment_label")
-            ->selectRaw('COUNT(*) as orders, COALESCE(SUM(orders.total), 0) as value')
-            ->groupBy('garment_label')
-            ->orderByDesc('value')
-            ->limit($limit)
-            ->get()
-            ->map(fn ($r) => [
-                'garment' => (string) $r->garment_label,
-                'orders'  => (int) $r->orders,
-                'value'   => (float) $r->value,
-                'avg'     => $r->orders > 0 ? round($r->value / $r->orders, 2) : 0.0,
-            ])
-            ->all();
+        $groups = [];
+        foreach (Order::with('lineItems')->whereBetween('created_at', [$start,$end])->get() as $order) {
+            foreach (PricingService::allocatedItems($order) as $item) {
+                $name = $item['name'];
+                $groups[$name] ??= ['garment' => $name, 'ids' => [], 'quantity' => 0, 'value' => '0.00'];
+                $groups[$name]['ids'][$order->id] = true;
+                $groups[$name]['quantity'] += $item['qty'];
+                $groups[$name]['value'] = Decimal::add($groups[$name]['value'], $item['revenue']);
+            }
+        }
+        return collect($groups)->map(fn($g) => ['garment' => $g['garment'], 'orders' => count($g['ids']), 'quantity' => $g['quantity'],
+            'value' => (float)$g['value'], 'avg' => round((float)$g['value']/count($g['ids']),2)])->sortByDesc('value')->take($limit)->values()->all();
     }
 
     /* ------------------------------------------------------------------ */

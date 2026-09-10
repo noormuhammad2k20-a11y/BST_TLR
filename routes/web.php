@@ -76,6 +76,8 @@ Route::middleware(['auth', 'active', 'business'])->group(function () {
 
     Route::get('customers/{customer}/summary', [CustomerController::class, 'summary'])
         ->name('customers.summary');
+    Route::post('customers/{customer}/sms', [CustomerController::class, 'sendSms'])
+        ->middleware('throttle:6,1')->name('customers.sms');
     Route::resource('customers', CustomerController::class)
         ->only(['index', 'store', 'update', 'destroy']);
 
@@ -173,10 +175,6 @@ Route::middleware(['auth', 'active', 'business'])->group(function () {
         Route::post('settings/upload/remove', [SettingController::class, 'removeUpload'])->name('settings.upload.remove');
         Route::post('settings/reset', [SettingController::class, 'reset'])->name('settings.reset');
 
-        /* WhatsApp */
-        Route::post('settings/whatsapp/test', [SettingController::class, 'testWhatsapp'])->middleware('throttle:6,1')->name('settings.whatsapp.test');
-        Route::post('settings/whatsapp/test-template', [SettingController::class, 'testTemplate'])->middleware('throttle:6,1')->name('settings.whatsapp.test-template');
-        Route::post('settings/whatsapp/send-test', [SettingController::class, 'sendTest'])->middleware('throttle:6,1')->name('settings.whatsapp.send-test');
 
         /* SMS */
         Route::post('settings/sms/test', [SettingController::class, 'testSms'])->middleware('throttle:6,1')->name('settings.sms.test');

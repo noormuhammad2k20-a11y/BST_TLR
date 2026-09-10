@@ -161,11 +161,11 @@ class BusinessIntegrityTest extends TestCase
     }
     public function test_secret_settings_are_encrypted_and_masked(): void
     {
-        Settings::put(['meta_access_token'=>'a-secret-that-must-not-be-cached-plaintext']);
-        $raw=DB::table('settings')->where('key','meta_access_token')->value('value');
+        Settings::put(['veevo_api_key'=>'a-secret-that-must-not-be-cached-plaintext']);
+        $raw=DB::table('settings')->where('key','veevo_api_key')->value('value');
         $this->assertStringStartsWith('enc:v1:',$raw);
-        $this->assertSame('a-secret-that-must-not-be-cached-plaintext',Settings::str('meta_access_token'));
-        $this->assertNotSame(Settings::str('meta_access_token'),Settings::forClient()['meta_access_token']);
+        $this->assertSame('a-secret-that-must-not-be-cached-plaintext',Settings::str('veevo_api_key'));
+        $this->assertNotSame(Settings::str('veevo_api_key'),Settings::forClient()['veevo_api_key']);
     }
     public function test_discounted_invoice_full_refund_is_exact(): void
     {

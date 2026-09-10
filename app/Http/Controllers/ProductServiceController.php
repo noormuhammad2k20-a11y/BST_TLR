@@ -12,7 +12,7 @@ use Illuminate\Validation\Rule;
 
 class ProductServiceController extends Controller
 {
-    public const CATEGORIES = ['Suit', 'Shirt', 'Men', 'Ladies', 'Service', 'Fabric', 'Other'];
+    public const CATEGORIES = ['Suit', 'Shirt', 'Men', 'Ladies', 'Service', 'Formal', 'Uniform', 'Alteration', 'Fabric', 'Other'];
 
     public function index()
     {
@@ -64,7 +64,7 @@ class ProductServiceController extends Controller
         $service = $productsService;
 
         // Orders reference this record; deactivate rather than orphan history.
-        if ($service->orders()->exists()) {
+        if ($service->orders()->withTrashed()->exists() || $service->lineItems()->withTrashed()->exists() || ProductService::where('canonical_id', $service->id)->exists()) {
             return response()->json([
                 'message' => 'This item is used by existing orders. Set it to Inactive instead.',
             ], 422);
@@ -91,7 +91,11 @@ class ProductServiceController extends Controller
 
     private function validated(Request $request, ?ProductService $service = null): array
     {
+        $request->merge(['normalized_name' => \App\Services\CatalogueIdentity::normalize((string)$request->input('name'))]);
         $validated = $request->validate([
+            'normalized_name' => ['required', Rule::unique('product_services', 'normalized_name')->ignore($service?->id)],
+            'measurement_profile' => ['nullable', Rule::in(array_keys(\App\Services\MeasurementProfiles::all()))],
+            'requires_measurements' => ['nullable','boolean'],
             'name'                => [
                 'required', 'string', 'max:255',
                 Rule::unique('product_services')->ignore($service?->id),
@@ -125,6 +129,9 @@ class ProductServiceController extends Controller
     {
         return [
             'id'                  => $s->id,
+            'canonical_id' => $s->canonical_id,
+            'measurement_profile' => $s->measurement_profile,
+            'requires_measurements' => $s->requires_measurements,
             'name'                => $s->name,
             'sku'                 => $s->sku,
             'category'            => $s->category,
@@ -137,7 +144,7 @@ class ProductServiceController extends Controller
             'low_stock_threshold' => $s->low_stock_threshold,
             'unit'                => $s->unit,
             'duration_days'       => $s->duration_days,
-            'orders_count'        => (int) ($s->orders_count ?? 0),
+            'orders_count' => \App\Models\Order::where(fn($q) => $q->where('product_service_id',$s->id)->orWhereHas('lineItems',fn($i)=>$i->where('product_service_id',$s->id)))->count(),
             'is_low_stock'        => $s->is_low_stock,
         ];
     }

@@ -115,7 +115,7 @@ class PrintingController extends Controller
         $order = Order::with('customer')
             ->findOrFail($validated['order_id'] ?? Order::latest()->value('id'));
 
-        $pricing = PricingService::breakdown((float) $order->total);
+        $pricing = PricingService::forOrder($order);
 
         return response()->json([
             'success' => true,
@@ -130,8 +130,9 @@ class PrintingController extends Controller
                 'customer' => $order->customer?->name ?? 'Walk-in',
                 'phone'    => $receipt['show_phone'] ? ($order->customer?->phone ?? '') : null,
                 'garment'  => $order->primary_item_name,
+                'items' => PricingService::invoiceItems($order),
                 'fabric'   => $order->fabric ?? '',
-                'lines'    => collect(PricingService::lines((float) $order->total))
+                'lines'    => collect(PricingService::orderLines($order))
                     ->map(fn (array $l) => [
                         'label'  => $l['label'],
                         'amount' => Money::format($l['amount']),

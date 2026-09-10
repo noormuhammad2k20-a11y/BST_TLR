@@ -187,6 +187,24 @@
   /* ============= DATA STORE ============= */
   /* `var` throughout: the SPA router re-evaluates this script per navigation,
      and `let`/`const` cannot legally be redeclared at global scope. */
+  window.sendCustomerSms = async function (btn) {
+    const customer = selectedCustomerFor360;
+    if (!customer) return;
+    const message = window.prompt('SMS message for ' + customer.name + ' (maximum 2000 characters):');
+    if (message === null) return;
+    if (!message.trim() || message.length > 2000) {
+      toast('Enter a message of 1–2000 characters.', 'warning'); return;
+    }
+    Atelier.setBusy(btn, true);
+    try {
+      const url = @json(route('customers.sms', ['customer' => '__CUSTOMER__'])).replace('__CUSTOMER__', customer.db_id);
+      const res = await Atelier.api.post(url, { message: message.trim() });
+      toast(res.message, 'success');
+    } catch (err) {
+      Atelier.reportError(err, 'Could not send the SMS');
+    } finally { Atelier.setBusy(btn, false); }
+  };
+
   var customers = @json($customers);
   var orders = @json($orders);
 
@@ -526,7 +544,7 @@
         </div>
         <div class="flex gap-2">
           <a href="tel:${selectedCustomerFor360.phone}" class="w-9 h-9 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-900 flex items-center justify-center transition-colors"><i class="fa-solid fa-phone text-sm"></i></a>
-          <a href="https://wa.me/${(selectedCustomerFor360.phone || '').replace(/\D/g, '')}" target="_blank" rel="noopener" class="w-9 h-9 rounded-lg border border-slate-200 text-emerald-500 hover:bg-emerald-50 flex items-center justify-center transition-colors"><i class="fa-brands fa-whatsapp text-sm"></i></a>
+          <button type="button" onclick="sendCustomerSms(this)" title="Send SMS" class="w-9 h-9 rounded-lg border border-slate-200 text-emerald-500 hover:bg-emerald-50 flex items-center justify-center"><i class="fa-solid fa-comment-sms text-sm"></i></button>
           <button class="w-9 h-9 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 flex items-center justify-center transition-colors" onclick="closeModal()"><i class="fa-solid fa-xmark text-sm"></i></button>
         </div>
       </div>

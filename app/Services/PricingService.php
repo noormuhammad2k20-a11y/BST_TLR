@@ -19,6 +19,47 @@ namespace App\Services;
  */
 class PricingService
 {
+    public static function forOrder(\App\Models\Order $order): array
+    {
+        $snapshot = $order->billing_snapshot;
+        if (!$snapshot) return self::breakdown((float)$order->total);
+        return array_merge(['subtotal' => (float)$order->total, 'tax' => 0, 'tax_rate' => 0, 'tax_label' => 'Tax',
+            'tax_enabled' => false, 'tax_inclusive' => true, 'service_charge' => 0, 'service_charge_rate' => 0,
+            'service_charge_label' => 'Service Charge', 'service_charge_enabled' => false, 'total' => (float)$order->total,
+            'currency' => Settings::currency()], $snapshot);
+    }
+
+    public static function orderLines(\App\Models\Order $order): array
+    {
+        $b = self::forOrder($order);
+        $rows = [['label' => 'Subtotal', 'amount' => (float)$b['subtotal'], 'muted' => true]];
+        foreach (['tax' => 'tax_label', 'service_charge' => 'service_charge_label'] as $key => $label) {
+            if ($b[$key.'_enabled']) $rows[] = ['label' => $b[$label], 'amount' => (float)$b[$key], 'muted' => true];
+        }
+        if (!empty($b['adjustment']) && Decimal::cmp((string)$b['adjustment'], '0') !== 0) $rows[] = ['label' => 'Historical adjustment', 'amount' => (float)$b['adjustment'], 'muted' => true];
+        $rows[] = ['label' => 'Total', 'amount' => (float)$b['total']];
+        return $rows;
+    }
+
+    public static function invoiceItems(\App\Models\Order $order): array
+    {
+        if ($order->items_migrated_at) return $order->lineItems->map(fn($i) => ['name' => $i->name, 'desc' => $i->fabric,
+            'qty' => $i->quantity, 'unit_price' => (float)$i->unit_price, 'price' => (float)$i->subtotal])->all();
+        return array_map(fn($i) => ['name' => $i['name'] ?? $order->garment, 'desc' => $i['fabric'] ?? $order->fabric,
+            'qty' => max(1,(int)($i['qty'] ?? 1)), 'price' => (float)($i['price'] ?? $order->total)], $order->items ?: [['name' => $order->primary_item_name, 'qty' => 1, 'price' => $order->total]]);
+    }
+
+    public static function allocatedItems(\App\Models\Order $order): array
+    {
+        $items = self::invoiceItems($order); $weight = '0.00';
+        foreach ($items as $item) $weight = Decimal::add($weight, (string)$item['price']);
+        $remaining = (string)$order->total;
+        foreach ($items as $i => &$item) {
+            $amount = $i === count($items)-1 ? $remaining : Decimal::ratio((string)$order->total, Decimal::cmp($weight,'0') ? (string)$item['price'] : '1', Decimal::cmp($weight,'0') ? $weight : (string)count($items));
+            $item['revenue'] = $amount; $remaining = Decimal::sub($remaining,$amount);
+        }
+        return $items;
+    }
     /** Combined tax + service charge as a multiplier, e.g. 1.17. */
     private static function multiplier(): float
     {

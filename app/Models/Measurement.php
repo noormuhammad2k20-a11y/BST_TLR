@@ -65,6 +65,11 @@ class Measurement extends Model
         return $this->belongsTo(Customer::class);
     }
 
+    public function piece(): BelongsTo
+    {
+        return $this->belongsTo(OrderItemPiece::class, 'order_item_piece_id')->withTrashed();
+    }
+
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');

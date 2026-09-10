@@ -59,6 +59,8 @@
   /* ============= SAVE LOGIC ============= */
   async function saveService(id = null, btn = null) {
     const payload = {
+      measurement_profile: document.getElementById('service-profile').value || null,
+      requires_measurements: document.getElementById('service-requires').checked,
       name:                document.getElementById('service-name').value.trim(),
       price:               document.getElementById('service-price').value,
       cost_price:          document.getElementById('service-cost')?.value || null,
@@ -173,7 +175,7 @@
             </div>
             <div>
               <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Category *</label>
-              <select id="service-category" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-colors">
+              <select id="service-profile" class="w-full px-3 py-2 border rounded-lg mb-2"><option value="">Automatic measurement profile</option>${['shalwar_kameez','sherwani','trouser','waistcoat','kurta_pajama','generic','alteration','accessory'].map(p=>`<option value="${p}" ${isEdit&&data.measurement_profile===p?'selected':''}>${p.replaceAll('_',' ')}</option>`).join('')}</select><label class="block mb-2"><input id="service-requires" type="checkbox" ${!isEdit||data.requires_measurements!==false?'checked':''}> Requires measurements</label><select id="service-category" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-colors">
                 ${SERVICE_CATEGORIES.map(c => `<option ${isEdit && data.category === c ? 'selected' : ''}>${c}</option>`).join('')}
               </select>
             </div>

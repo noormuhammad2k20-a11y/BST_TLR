@@ -363,19 +363,19 @@ class StatsService
      */
     private static function salesByCategory(Carbon $start, Carbon $end): array
     {
-        $rows = Order::query()
-            ->leftJoin('product_services', 'orders.product_service_id', '=', 'product_services.id')
-            ->whereBetween('orders.created_at', [$start, $end])
-            ->selectRaw('COALESCE(product_services.category, orders.garment, "Others") as label, COUNT(*) as total')
-            ->groupBy('label')
-            ->orderByDesc('total')
-            ->limit(6)
-            ->get();
-
-        return [
-            'labels' => $rows->pluck('label')->all(),
-            'data'   => $rows->pluck('total')->map(fn ($v) => (int) $v)->all(),
-        ];
+        $categories = [];
+        foreach (Order::with('lineItems')->whereBetween('created_at',[$start,$end])->get() as $order) {
+            if ($order->items_migrated_at) foreach ($order->lineItems as $item) {
+                $key = $item->category ?: 'Others';
+                $categories[$key] = ($categories[$key] ?? 0) + $item->quantity;
+            } else {
+                $key = $order->garment ?: 'Others';
+                $categories[$key] = ($categories[$key] ?? 0) + $order->quantity;
+            }
+        }
+        arsort($categories);
+        $categories = array_slice($categories,0,6,true);
+        return ['labels' => array_keys($categories), 'data' => array_values($categories)];
     }
 
     private static function orderStatusBreakdown(): array

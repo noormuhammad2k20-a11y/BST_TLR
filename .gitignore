@@ -27,9 +27,5 @@ Thumbs.db
 *.sql.gz
 /backups/
 /tmp/
-# Upgrade protection: never commit retired local credentials or sessions.
-/whatsapp-gateway/config.json
-/whatsapp-gateway/session/
-/whatsapp-gateway/node_modules/
 /dev/artifacts/
 .env.testing

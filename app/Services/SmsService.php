@@ -65,6 +65,9 @@ class SmsService
             if (trim($message) === '') {
                 return $result = DeliveryResult::make($provider, error: 'The SMS message is empty.');
             }
+            if (mb_strlen($message) > 2000) {
+                return $result = DeliveryResult::make($provider, error: 'SMS must be 2000 characters or fewer.');
+            }
             $result = match ($provider) {
                 'veevo' => self::veevo($phone, $message),
                 'sendpk' => self::sendpk($phone, $message),
@@ -127,7 +130,7 @@ class SmsService
         $ok = $response->successful() && preg_match('/^OK\s+ID:([a-zA-Z0-9_-]+)\s*$/D', trim($response->body()), $matches);
 
         return DeliveryResult::make('sendpk', (bool) $ok, $ok ? null : self::sendpkError(trim($response->body())), $ok ? $matches[1] : null,
-            ['http_status' => $response->status(), 'response' => DeliveryResult::safeText($response->body())]);
+            ['http_status' => $response->status()]);
     }
 
     private static function sendpkError(string $code): string

@@ -14,12 +14,23 @@ class Order extends Model
 
     protected $guarded = ['id'];
 
+    protected static function booted(): void
+    {
+        static::updating(function ($order) {
+            $order->edit_version = ((int)$order->getRawOriginal('edit_version')) + 1;
+        });
+    }
+
     protected $casts = [
         'delivery_date' => 'datetime',
         'notified_at'   => 'datetime',
         'completed_at'  => 'datetime',
         'delivered_at'  => 'datetime',
         'items'         => 'array',
+        'legacy_items' => 'array',
+        'billing_snapshot' => 'array',
+        'edit_version' => 'integer',
+        'items_migrated_at' => 'datetime',
         'total'         => 'decimal:2',
         'advance'       => 'decimal:2',
         'balance'       => 'decimal:2',
@@ -110,6 +121,32 @@ class Order extends Model
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);
+    }
+
+    public function lineItems(): HasMany
+    {
+        return $this->hasMany(OrderItem::class)->orderBy('position')->orderBy('id');
+    }
+
+    public function getItemsLockedAttribute(): bool
+    {
+        return in_array($this->status, ['Completed', 'Delivered'], true)
+            || $this->completed_at !== null || $this->delivered_at !== null
+            || StaffWorkLog::where('order_id', $this->id)->exists();
+    }
+
+    public function garmentSummary(int $limit = 180): string
+    {
+        $items = $this->items_migrated_at ? $this->lineItems->map(fn($i) => ['name' => $i->name, 'qty' => $i->quantity])->all() : ($this->items ?: [['name' => $this->garment ?: 'Custom Order', 'qty' => 1]]);
+        if (count($items) === 1 && (int)($items[0]['qty'] ?? 1) === 1) return mb_strimwidth($items[0]['name'], 0, $limit, '…');
+        $parts = []; $remaining = array_sum(array_map(fn($i) => max(1, (int)($i['qty'] ?? 1)), $items));
+        foreach ($items as $item) {
+            $part = max(1, (int)($item['qty'] ?? 1)).' × '.$item['name'];
+            if (mb_strlen(implode(', ', array_merge($parts, [$part]))) > $limit - 30) break;
+            $parts[] = $part; $remaining -= max(1, (int)($item['qty'] ?? 1));
+        }
+        if ($remaining) $parts[] = 'and '.$remaining.' more pieces';
+        return implode(', ', $parts);
     }
 
     public function payments(): HasMany
@@ -209,6 +246,7 @@ class Order extends Model
                 ->orWhere('invoice_number', 'like', "%{$term}%")
                 ->orWhere('garment', 'like', "%{$term}%")
                 ->orWhere('fabric', 'like', "%{$term}%")
+                ->orWhereHas('lineItems', fn($items) => $items->where('name','like',"%{$term}%")->orWhere('fabric','like',"%{$term}%"))
                 ->orWhereHas('customer', function (Builder $c) use ($term) {
                     $c->where('name', 'like', "%{$term}%")
                       ->orWhere('phone', 'like', "%{$term}%");
@@ -511,7 +549,7 @@ class Order extends Model
      */
     public function getQuantityAttribute(): int
     {
-        return max((int) ($this->items[0]['qty'] ?? 1), 1);
+        return $this->items_migrated_at ? (int)$this->lineItems->sum('quantity') : max(1, array_sum(array_map(fn($item) => max(1, (int)($item['qty'] ?? 1)), $this->items ?: [])));
     }
 
     /**
@@ -531,6 +569,8 @@ class Order extends Model
 
     public function getPrimaryItemNameAttribute(): string
     {
+        if ($this->items_migrated_at) return $this->lineItems->count() === 1 ? $this->lineItems->first()->name : $this->garmentSummary(10000);
+        if (count($this->items ?? []) > 1) return $this->garmentSummary(10000);
         if (filled($this->garment)) {
             return $this->garment;
         }
