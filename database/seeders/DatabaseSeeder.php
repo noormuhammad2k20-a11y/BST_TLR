@@ -139,7 +139,7 @@ class DatabaseSeeder extends Seeder
             $customerIds[] = DB::table('customers')->where('phone',$phone)->value('id');
         }
 
-        $statuses=['Delivered','Delivered','Ready','Ready for Verification','In Progress','Delivered','Ready','Ready','Delivered','Ready'];
+        $statuses=['Delivered','Delivered','Ready','Ready for Verification','Stitching','Delivered','Ready','Ready','Delivered','Ready'];
         foreach (range(0,9) as $i) {
             $number='SEED-ORD-'.str_pad((string)($i+1),3,'0',STR_PAD_LEFT);
             if (DB::table('orders')->where('order_number',$number)->exists()) continue;
@@ -169,7 +169,7 @@ class DatabaseSeeder extends Seeder
             ]);
             $measurementId=DB::table('measurements')->where('order_id',$order->id)->value('id');
             DB::table('orders')->where('id',$order->id)->update(['measurement_id'=>$measurementId]);
-            if ($statuses[$i] !== 'In Progress') {
+            if ($statuses[$i] !== 'Stitching') {
                 DB::table('staff_work_logs')->updateOrInsert(['order_id'=>$order->id], [
                     'staff_id'=>$tailor->id,'garment'=>$services[$i][0],'quantity'=>($i%3)+1,
                     'rate'=>$tailor->per_suit_rate,'amount'=>$tailor->per_suit_rate*(($i%3)+1),

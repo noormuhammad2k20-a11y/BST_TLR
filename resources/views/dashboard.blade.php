@@ -423,8 +423,8 @@
             $colors = ['slate', 'pink', 'green', 'orange', 'blue', 'purple'];
             $color = $colors[$index % count($colors)];
             $badgeColor = match($order->status) {
-                'Pending' => 'badge-pending',
-                'In Progress' => 'badge-progress',
+                'Received', 'Pending' => 'badge-pending',
+                'Stitching' => 'badge-progress',
                 'Trial' => 'badge-trial',
                 'Ready' => 'badge-ready',
                 'Delivered', 'Completed' => 'badge-delivered',

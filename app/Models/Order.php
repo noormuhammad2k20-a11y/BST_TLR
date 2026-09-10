@@ -14,6 +14,8 @@ class Order extends Model
 
     protected $guarded = ['id'];
 
+    protected $attributes = ['status' => 'Received', 'progress' => 0];
+
     protected static function booted(): void
     {
         static::updating(function ($order) {
@@ -37,72 +39,27 @@ class Order extends Model
         'progress'      => 'integer',
     ];
 
-    /**
-     * The shop's actual workflow, in order.
-     *
-     *   Pending → In Progress → Ready for Verification → Ready → Delivered
-     *
-     * The timeline renders one step per entry plus a leading "Received" step,
-     * which is not a stored status: an order row existing at all means the
-     * material was received, so it is always complete.
-     *
-     * "Overdue" is deliberately absent. It is a condition of an order, not a
-     * stage of it — a garment can be overdue while it is still being stitched,
-     * and overwriting the real status with "Overdue" destroys the information
-     * the workshop actually needs. Read `is_overdue` for that instead.
-     */
-    public const WORKFLOW = ['Pending', 'In Progress', 'Ready for Verification', 'Ready', 'Delivered'];
-
-    /**
-     * Statuses that mean the order is still moving through the workshop.
-     */
-    public const OPEN_STATUSES = ['Pending', 'In Progress', 'Ready for Verification', 'Ready'];
-
+    /** Persisted stages; verification and collection always require staff. */
+    public const WORKFLOW = ['Received', 'Pending', 'Stitching', 'Ready for Verification', 'Ready', 'Delivered'];
+    public const ALL_STATUSES = self::WORKFLOW;
+    public const OPEN_STATUSES = ['Received', 'Pending', 'Stitching', 'Ready for Verification', 'Ready'];
+    // Retain closed legacy records without offering retired statuses for new work.
     public const CLOSED_STATUSES = ['Delivered', 'Completed', 'Cancelled'];
-
-    /**
-     * Which status each status is allowed to move to.
-     *
-     * Until now any status could jump to any other, so a garment nobody had
-     * touched could be marked Delivered, and a delivered order could silently
-     * fall back to Pending. The workshop's real sequence is one step at a time,
-     * with two exits that are always available — a step back to correct a
-     * mistake, and Cancelled.
-     *
-     * Backward moves are allowed on purpose: staff mis-click, and forcing them
-     * to live with a wrong status is worse than letting them undo it. What a
-     * backward move now costs is a written reason (see `transitionNeedsNote`).
-     */
     public const TRANSITIONS = [
-        'Pending'                => ['In Progress', 'Cancelled'],
-        'In Progress'            => ['Ready for Verification', 'Pending', 'Cancelled'],
-        'Ready for Verification' => ['Ready', 'In Progress', 'Cancelled'],
-        'Ready'                  => ['Delivered', 'Ready for Verification', 'Cancelled'],
-        'Delivered'              => ['Completed', 'Ready'],
-        'Completed'              => ['Delivered'],
-        'Cancelled'              => ['Pending'],
-
-        // Legacy rows written before Overdue stopped being a status. Without
-        // this the bulk "extend delivery" action, which rescues exactly those
-        // rows, would be locked out of the only status it can move them to.
-        'Overdue'                => ['In Progress', 'Pending', 'Ready for Verification', 'Ready', 'Cancelled'],
+        'Received' => ['Pending'],
+        'Pending' => ['Stitching'],
+        'Stitching' => ['Ready for Verification'],
+        'Ready for Verification' => ['Ready'],
+        'Ready' => ['Delivered'],
+        'Delivered' => [],
+        'Completed' => [],
+        'Cancelled' => [],
     ];
 
-    /**
-     * Every status a row is allowed to hold, including the terminal ones.
-     */
-    public const ALL_STATUSES = [
-        'Pending', 'In Progress', 'Ready for Verification',
-        'Ready', 'Delivered', 'Completed', 'Cancelled',
-    ];
-
-    /**
-     * Canonical progress percentage for each status. Used everywhere so the
-     * kanban bar, table and details modal can never drift apart.
-     */
     public const PROGRESS_MAP = [
+        'Received'               => 0,
         'Pending'                => 10,
-        'In Progress'            => 40,
+        'Stitching'            => 40,
         'Ready for Verification' => 70,
         'Ready'                  => 100,
         'Delivered'              => 100,
@@ -229,7 +186,7 @@ class Order extends Model
     public function scopeOverdue(Builder $q): Builder
     {
         return $q->whereNotNull('delivery_date')
-                 ->where('delivery_date', '<', now())
+                 ->where('delivery_date', '<', today())
                  ->whereNotIn('status', self::CLOSED_STATUSES);
     }
 
@@ -406,11 +363,30 @@ class Order extends Model
      * The settings key holds the delay; a delay of zero switches that hop off.
      */
     public const AUTO_ADVANCE = [
-        'Pending'                => ['to' => 'In Progress',            'setting' => 'auto_status_pending_hours'],
-        'In Progress'            => ['to' => 'Ready for Verification', 'setting' => 'auto_status_progress_delay'],
-        'Ready for Verification' => ['to' => 'Ready',                  'setting' => 'auto_status_verify_delay'],
-        'Ready'                  => ['to' => 'Delivered',              'setting' => 'auto_status_ready_delay'],
+        'Received' => ['to' => 'Pending', 'setting' => 'auto_status_received_delay'],
+        'Pending' => ['to' => 'Stitching', 'setting' => 'auto_status_pending_hours'],
+        'Stitching' => ['to' => 'Ready for Verification', 'setting' => 'auto_status_progress_delay'],
     ];
+
+    /** Elapsed stages, using effective timestamps rather than the time of a page visit. */
+    public function elapsedTransitions(\Illuminate\Support\Carbon $asOf): array
+    {
+        if (!\App\Services\Settings::bool('auto_status_enabled')) return [];
+        $status = $this->status;
+        $since = $this->stage_since_at->copy();
+        $minutes = \App\Services\Settings::str('auto_status_unit') === 'minutes';
+        $transitions = [];
+        while ($stage = self::AUTO_ADVANCE[$status] ?? null) {
+            $delay = \App\Services\Settings::int($stage['setting']);
+            if ($delay < 1) break;
+            $due = $minutes ? $since->copy()->addMinutes($delay) : $since->copy()->addHours($delay);
+            if ($due->gt($asOf)) break;
+            $transitions[] = ['from' => $status, 'to' => $stage['to'], 'at' => $due];
+            $status = $stage['to'];
+            $since = $due;
+        }
+        return $transitions;
+    }
 
     /**
      * Select the moment this order entered its current status, as `stage_since`.
@@ -515,7 +491,7 @@ class Order extends Model
     public function getIsOverdueAttribute(): bool
     {
         return $this->delivery_date
-            && $this->delivery_date->isPast()
+            && $this->delivery_date->lt(today())
             && !in_array($this->status, self::CLOSED_STATUSES, true);
     }
 

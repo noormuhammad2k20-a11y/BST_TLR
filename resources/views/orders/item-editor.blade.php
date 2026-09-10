@@ -396,7 +396,7 @@
             <div class="text-xs text-slate-500">${isEdit ? 'Editing Order' : 'Order ID'}</div>
             <div class="text-lg font-bold text-slate-900">${isEdit ? itemEsc(s.customerName) : 'Auto-Generated'}</div>
           </div>
-          <span class="badge badge-pending">${isEdit ? itemEsc(s.status) : 'Pending'}</span>
+          <span class="badge badge-pending">${isEdit ? itemEsc(s.status) : 'Received'}</span>
         </div>
 
         ${!isEdit ? `

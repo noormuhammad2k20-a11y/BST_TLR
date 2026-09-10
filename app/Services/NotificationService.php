@@ -91,6 +91,12 @@ class NotificationService
 
     public static function orderStatusChanged(Order $order, string $from, string $to): ?Notification
     {
+        if ($to === 'Ready for Verification') {
+            return self::push('Garments Ready for Verification',
+                sprintf('%s (%s): garments have been stitched and are available at the shop for staff verification.', $order->display_number, $order->customer?->name ?? 'Customer'),
+                'system', 'fa-solid fa-arrows-rotate', 'info', $order, actionUrl: route('orders.index'));
+        }
+
         if (!Settings::bool('notify_status_changed')) {
             return null;
         }
@@ -217,8 +223,7 @@ class NotificationService
             ->open()
             ->whereNotNull('delivery_date')
             ->whereDate('delivery_date', '<=', now()->addDays($days)->toDateString())
-            ->limit(100)
-            ->get();
+            ->lazyById(100);
 
         foreach ($orders as $order) {
             if ($order->is_overdue) {

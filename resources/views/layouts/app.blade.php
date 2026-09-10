@@ -1229,7 +1229,7 @@
         .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
       const badgeClass = (status) => ({
-        'Pending': 'badge-pending', 'In Progress': 'badge-progress', 'Ready for Verification': 'badge-trial',
+        'Received': 'badge-pending', 'Pending': 'badge-pending', 'Stitching': 'badge-progress', 'Ready for Verification': 'badge-trial',
         'Ready': 'badge-ready', 'Delivered': 'badge-delivered', 'Completed': 'badge-delivered',
       }[status] || 'badge-overdue');
 

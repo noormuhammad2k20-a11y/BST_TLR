@@ -29,7 +29,7 @@ class StoreOrderRequest extends FormRequest
             'unit'               => ['nullable', Rule::in(['cm', 'in'])],
             'total'              => ['required', 'numeric', 'min:0.01', 'max:99999999'],
             'advance'            => ['required', 'numeric', 'min:0', 'lte:total'],
-            'status'             => ['nullable', Rule::in(\App\Models\Order::ALL_STATUSES)],
+            'status'             => ['nullable', Rule::in(['Received'])],
             'priority'           => ['nullable', Rule::in(['Normal', 'High', 'Express'])],
             // The browser blocks past dates too, but that is a convenience, not
             // a guarantee — this is the rule that actually holds.

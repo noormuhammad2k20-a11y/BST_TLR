@@ -467,23 +467,23 @@
 
             <div class="grid grid-cols-2 gap-4">
               <div>
-                <label class="set-label">Pending &rarr; In Progress</label>
+                <label class="set-label">Received &rarr; Pending</label>
+                <input type="number" min="0" max="10080" data-setting="auto_status_received_delay" value="${esc(val('auto_status_received_delay'))}" class="set-field pro-input">
+              </div>
+              <div>
+                <label class="set-label">Pending &rarr; Stitching</label>
                 <input type="number" min="0" max="10080" data-setting="auto_status_pending_hours" value="${esc(val('auto_status_pending_hours'))}" class="set-field pro-input">
               </div>
               <div>
-                <label class="set-label">In Progress &rarr; Ready for Verification</label>
+                <label class="set-label">Stitching &rarr; Ready for Verification</label>
                 <input type="number" min="0" max="10080" data-setting="auto_status_progress_delay" value="${esc(val('auto_status_progress_delay'))}" class="set-field pro-input">
               </div>
               <div>
-                <label class="set-label">Ready for Verification &rarr; Ready</label>
-                <input type="number" min="0" max="10080" data-setting="auto_status_verify_delay" value="${esc(val('auto_status_verify_delay'))}" class="set-field pro-input">
-              </div>
-              <div>
-                <label class="set-label">Ready &rarr; Delivered</label>
-                <input type="number" min="0" max="10080" data-setting="auto_status_ready_delay" value="${esc(val('auto_status_ready_delay'))}" class="set-field pro-input">
+                <label class="set-label">Verification / Collection</label>
+                <input type="text" value="Staff confirmation required" disabled class="set-field pro-input">
               </div>
             </div>
-            <p class="set-hint"><b>0 switches that step off.</b> Only the first step is on by default, and that is deliberate: a timer that moves a garment to &ldquo;Ready&rdquo; is telling your customer it is on the shelf whether anyone has touched it or not. Switch the later steps on only if that matches how your shop really works.</p>
+            <p class="set-hint"><b>0 switches that step off.</b> Timers stop at Ready for Verification. Staff must verify garments before Ready and confirm collection before Delivered.</p>
 
             <div>
               <label class="set-label">Warn &ldquo;At Risk&rdquo; this many hours before delivery</label>
@@ -493,10 +493,10 @@
 
             <div class="set-row">
               <div>
-                <div class="text-sm font-semibold text-slate-800">Auto-deliver on full payment</div>
-                <div class="text-xs text-slate-500">Close the order once the balance reaches zero</div>
+                <div class="text-sm font-semibold text-slate-800">Confirm delivery manually</div>
+                <div class="text-xs text-slate-500">Staff confirms collection, including fully paid orders</div>
               </div>
-              <div data-setting="auto_delivery_update" class="toggle ${isOn('auto_delivery_update') ? 'on' : ''}" onclick="this.classList.toggle('on')"></div>
+              <div class="toggle on" aria-disabled="true"></div>
             </div>
           </div>
         </div>

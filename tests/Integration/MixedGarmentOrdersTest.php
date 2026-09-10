@@ -210,7 +210,7 @@ class MixedGarmentOrdersTest extends TestCase
         $variables=\App\Services\NotificationVariables::variablesForOrder($order);
         $this->assertSame('3',$variables['quantity']);
         foreach($order->lineItems as $item) $this->assertStringContainsString($item->name,$variables['garmentSummary']);
-        $edit=$this->edit($order);$edit['status']='Completed';app(OrderService::class)->update($order,$edit);
+        foreach (array_slice(Order::WORKFLOW, 1) as $status) app(OrderService::class)->changeStatus($order, $status);
         $this->assertDatabaseHas('staff_work_logs',['order_id'=>$order->id,'quantity'=>2,'amount'=>'40.00']);
         app(OrderService::class)->update($order,['notes'=>'Keep original work credit']);
         $this->assertSame(1,\App\Models\StaffWorkLog::where('order_id',$order->id)->count());

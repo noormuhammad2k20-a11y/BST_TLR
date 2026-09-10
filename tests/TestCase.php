@@ -10,6 +10,13 @@ abstract class TestCase extends BaseTestCase
     {
         parent::setUp();
         \Illuminate\Support\Facades\Http::preventStrayRequests();
+        if (getenv('INTEGRITY_MYSQL') === '1') {
+            // Service fixtures and HTTP requests must use the same shop timezone.
+            \App\Services\Settings::flush();
+            $timezone = \App\Services\Settings::timezone();
+            config(['app.timezone' => $timezone]);
+            date_default_timezone_set($timezone);
+        }
     }
 
     public function createApplication()

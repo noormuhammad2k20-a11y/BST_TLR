@@ -165,7 +165,7 @@ class DeliveryController extends Controller
                 continue;
             }
 
-            $this->orders->markNotified($order);
+            if ($result['status'] !== 'duplicate') $this->orders->markNotified($order);
 
             $sent[] = [
                 'order'    => $order->display_number,

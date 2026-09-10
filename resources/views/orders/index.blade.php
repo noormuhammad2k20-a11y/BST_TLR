@@ -256,7 +256,7 @@
   var blankOrderState;
   var extensionReasons = @json($extensionReasons);
   var autoStatus = @json($autoStatus);
-  var WORKFLOW = ['Pending', 'In Progress', 'Ready for Verification', 'Ready', 'Delivered'];
+  var WORKFLOW = ['Received', 'Pending', 'Stitching', 'Ready for Verification', 'Ready', 'Delivered'];
   var viewMode = 'table';
   var wizardStep = 1;
   var orderFilterStatus = 'All';
@@ -1042,7 +1042,7 @@
       <div class="p-5 border-b border-slate-200 flex justify-between items-center">
         <div class="flex items-center gap-3">
           <div class="text-lg font-bold text-slate-900 tracking-tight">Order ${d ? d.id : 'Details'}</div>
-          <span class="badge ${d.status === 'Pending' ? 'badge-pending' : d.status === 'In Progress' ? 'badge-progress' : d.status === 'Ready for Verification' ? 'badge-trial' : d.status === 'Ready' ? 'badge-ready' : d.status === 'Delivered' ? 'badge-delivered' : 'badge-overdue'}">${d.status}</span>
+          <span class="badge ${['Received', 'Pending'].includes(d.status) ? 'badge-pending' : d.status === 'Stitching' ? 'badge-progress' : d.status === 'Ready for Verification' ? 'badge-trial' : d.status === 'Ready' ? 'badge-ready' : d.status === 'Delivered' ? 'badge-delivered' : 'badge-overdue'}">${d.status}</span>
         </div>
         <button class="w-8 h-8 rounded-lg text-slate-400 hover:bg-slate-100 flex items-center justify-center" onclick="closeModal()"><i class="fa-solid fa-xmark text-sm"></i></button>
       </div>
@@ -1054,17 +1054,11 @@
           <div class="bg-slate-50 rounded-lg p-4 mb-6">
             <div class="flex items-center justify-between">
               ${(() => {
-                /* The shop's workflow, in order. Index 0 is "Received", which is
-                   not a stored status — an order row existing at all means the
-                   material came in, so it is always complete.
-
-                   `done` is derived from the order's position rather than being
-                   hardcoded, which is what makes the trail behind the current
-                   step fill in green as the order progresses. */
+                /* Each timeline step is a persisted workflow status. */
                 const STEPS = [
-                  { label: 'Received', icon: 'fa-box', status: null },
+                  { label: 'Received', icon: 'fa-box', status: 'Received' },
                   { label: 'Pending', icon: 'fa-clock', status: 'Pending' },
-                  { label: 'Stitching', icon: 'fa-scissors', status: 'In Progress' },
+                  { label: 'Stitching', icon: 'fa-scissors', status: 'Stitching' },
                   { label: 'Ready for Verification', icon: 'fa-clipboard-check', status: 'Ready for Verification' },
                   { label: 'Ready', icon: 'fa-check', status: 'Ready' },
                   { label: 'Delivered', icon: 'fa-truck', status: 'Delivered' },
@@ -1140,7 +1134,7 @@
       <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">
         <button class="bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-100 flex items-center gap-2 transition-colors" onclick="closeModal(); window.openReceipt(${d.db_id})"><i class="fa-solid fa-print text-xs"></i> Print Receipt</button>
         <button class="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-800 flex items-center gap-2 transition-colors shadow-sm" onclick="closeModal(); openModal('edit-order', ${JSON.stringify(d).replace(/"/g, '&quot;')})"><i class="fa-solid fa-pen-to-square text-xs"></i> Edit Details</button>
-        <button class="bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-600 flex items-center gap-2 transition-colors shadow-sm shadow-emerald-500/30" onclick="confirmReadyAndSend(${d.db_id})"><i class="fa-solid fa-comment-sms text-xs"></i> Mark Ready & Send SMS</button>
+        <button class="bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-600 flex items-center gap-2 transition-colors shadow-sm shadow-emerald-500/30" ${d.status === 'Ready for Verification' ? '' : 'disabled title="Staff can verify garments once stitching is complete."'} onclick="confirmReadyAndSend(${d.db_id})"><i class="fa-solid fa-comment-sms text-xs"></i> Mark Ready & Send SMS</button>
       </div>
     `,
     'bulk-sms-confirm': () => `
@@ -1156,7 +1150,7 @@
             <i class="fa-solid fa-paper-plane"></i>
           </div>
           <div class="flex-1">
-            <p class="text-sm text-slate-700">You are about to notify every selected customer whose order is <span class="font-bold text-emerald-600">Ready for Verification</span>. Once the notice goes out, those orders are marked <span class="font-bold text-emerald-600">Ready</span> automatically. Do you want to continue?</p>
+            <p class="text-sm text-slate-700">Confirm that you have physically checked all garments for the selected orders at <span class="font-bold text-emerald-600">Ready for Verification</span>. Continuing marks them <span class="font-bold text-emerald-600">Ready</span> and sends each customer one pickup SMS.</p>
           </div>
         </div>
       </div>
@@ -1401,8 +1395,12 @@
       const filteredOrders = getFilteredOrders();
       const counts = {
         'All': orders.length,
+        'Received': orders.filter(o => o.status === 'Received').length,
+        'Ready for Verification': orders.filter(o => o.status === 'Ready for Verification').length,
+        'Ready': orders.filter(o => o.status === 'Ready').length,
+        'Delivered': orders.filter(o => o.status === 'Delivered').length,
         'Pending': orders.filter(o => o.status === 'Pending').length,
-        'In Progress': orders.filter(o => o.status === 'In Progress').length,
+        'Stitching': orders.filter(o => o.status === 'Stitching').length,
         /* Overdue is a condition, not a status: an order can be overdue while
            it is still being stitched. Counted from the date, never the column. */
         'Overdue': orders.filter(o => o.overdue).length,
@@ -1434,7 +1432,7 @@
         </div>
         
         <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6 page">
-          ${['All', 'Pending', 'In Progress', 'Overdue', 'Due Today'].map(status => `
+          ${['All', ...WORKFLOW, 'Overdue', 'Due Today'].map(status => `
             <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all ${orderFilterStatus === status ? 'border-slate-900 ring-2 ring-slate-100' : ''}" onclick="filterOrders('${status}')">
               <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">${status}</p>
               <h3 class="text-xl font-bold text-slate-900 mt-1 tracking-tight">${counts[status]}</h3>
@@ -1454,7 +1452,7 @@
                 <span class="text-xs text-slate-500 mr-2" id="selected-count-text"></span>
                 <select id="bulkStatusSelect" class="h-8 px-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
                   <option value="">Move selected to…</option>
-                  ${['In Progress', 'Ready for Verification', 'Ready', 'Delivered', 'Completed', 'Cancelled'].map(st => `<option value="${st}">${st}</option>`).join('')}
+                  ${WORKFLOW.map(st => `<option value="${st}">${st}</option>`).join('')}
                 </select>
                 <button id="bulkStatusBtn" class="bg-slate-900 text-white px-4 py-2 rounded-lg text-xs font-medium hover:bg-slate-800 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm" onclick="confirmBulkStatus(this)" disabled>
                   <i class="fa-solid fa-arrow-right-arrow-left text-[10px]"></i> Move
@@ -1502,7 +1500,7 @@
                       <td class="px-5 py-3 text-slate-600 ${dueToday && o.status !== 'Delivered' ? 'text-red-500 font-semibold' : ''}">${o.due}</td>
                       <td class="px-5 py-3">
                         <div class="flex flex-col gap-1">
-                          <span class="badge ${o.status === 'Pending' ? 'badge-pending' : o.status === 'In Progress' ? 'badge-progress' : o.status === 'Ready for Verification' ? 'badge-trial' : o.status === 'Ready' ? 'badge-ready' : o.status === 'Delivered' ? 'badge-delivered' : 'badge-overdue'}">${o.status}</span>
+                          <span class="badge ${['Received', 'Pending'].includes(o.status) ? 'badge-pending' : o.status === 'Stitching' ? 'badge-progress' : o.status === 'Ready for Verification' ? 'badge-trial' : o.status === 'Ready' ? 'badge-ready' : o.status === 'Delivered' ? 'badge-delivered' : 'badge-overdue'}">${o.status}</span>
                           ${o.overdue ? '<span class="badge badge-overdue text-[9px]">Overdue</span>' : o.atRisk ? '<span class="badge badge-pending text-[9px]"><i class="fa-solid fa-triangle-exclamation mr-1"></i>At Risk</span>' : ''}
                           ${autoCD ? `<span class="text-[9px] text-slate-400" data-countdown="${o.id}">${autoCD}</span>` : ''}
                           ${o.notified ? '<span class="badge badge-notified text-[9px]"><i class="fa-solid fa-comment-sms mr-1"></i>Notified</span>' : ''}
@@ -1533,7 +1531,7 @@
           </div>
         ` : `
           <div class="page grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-            ${['Pending', 'In Progress', 'Ready for Verification', 'Ready', 'Delivered'].map(status => {
+            ${['Received', 'Pending', 'Stitching', 'Ready for Verification', 'Ready', 'Delivered'].map(status => {
               const columnOrders = filteredOrders.filter(o => o.status === status);
               return `
               <div class="bg-white rounded-xl border border-slate-200 p-3 min-h-[400px] kanban-col shadow-sm" data-status="${status}">
@@ -1692,8 +1690,7 @@
     renderPage();
     handleIncomingIntent();
 
-    // Live sync: statuses change from other devices and auto-transitions.
-    Atelier.poll(refreshOrders, 45000);
+    // Statuses reconcile on navigation, refresh, and user actions; no timed AJAX.
   });
 </script>
 @endpush

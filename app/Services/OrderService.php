@@ -52,7 +52,7 @@ class OrderService
 
             $priced  = Decimal::value((string)($data['total'] ?? '0'));
             $advance = Decimal::value((string)($data['advance'] ?? '0'));
-            $status  = $data['status'] ?? 'Pending';
+            $status  = 'Received';
 
             // Tax and service charge that are configured as *exclusive* are
             // added here, so the stored total is always what the customer
@@ -171,6 +171,9 @@ class OrderService
             }
             $previousStatus = $order->status;
             $newStatus      = $data['status'] ?? $previousStatus;
+            if ($newStatus !== $previousStatus && !$order->canMoveTo($newStatus)) {
+                throw ValidationException::withMessages(['status' => 'Follow the order workflow one stage at a time.']);
+            }
 
             // A re-priced order goes through the same tax rules as a new one;
             // an untouched total is already inclusive and must not be re-taxed.
@@ -244,6 +247,7 @@ class OrderService
             if ($previousStatus !== $newStatus) {
                 $this->recordHistory($order, $previousStatus, $newStatus);
                 NotificationService::orderStatusChanged($order, $previousStatus, $newStatus);
+                if ($newStatus === 'Ready') CustomerNotificationDispatcher::dispatch('order-ready', $order);
             }
 
             $this->syncDelivery($order);
@@ -308,6 +312,7 @@ class OrderService
             $this->syncDelivery($order);
 
             NotificationService::orderStatusChanged($order, $from, $status);
+            if ($status === 'Ready') CustomerNotificationDispatcher::dispatch('order-ready', $order);
             ActivityLogger::log(
                 'Order status changed',
                 sprintf('%s moved from %s to %s', $order->display_number, $from, $status),
@@ -373,125 +378,59 @@ class OrderService
         $paid = app(TailoringFinanceService::class)->paid($order);
         $order->forceFill(['balance' => Decimal::max(Decimal::sub((string)$order->total, $paid))])->save();
 
-        // Auto-deliver on full payment when the shop has opted in.
-        if ($order->balance <= 0
-            && Settings::bool('auto_delivery_update')
-            && $order->status === 'Ready') {
-            $this->changeStatus($order, 'Delivered', 'Auto-delivered after full payment');
-        }
-
+        // Collection is confirmed manually, regardless of payment balance.
         StatsService::flush();
 
         return $order;
     }
 
     /**
-     * Walk every order that has waited out its stage's delay on to the next
-     * status.
-     *
-     * Each hop in `Order::AUTO_ADVANCE` has its own delay in Settings, counted
-     * in `auto_status_unit` (hours by default, minutes for a shop that wants a
-     * fast turnaround or is testing the flow). A delay of zero leaves that hop
-     * alone, which is the default for everything past Pending → In Progress.
-     *
-     * A word of caution worth keeping next to this code: automating the later
-     * hops makes the software *claim* physical work has happened. An order that
-     * reaches "Ready" on a timer tells the customer their garment is on the
-     * shelf whether or not anyone has touched it. That is the shop's call to
-     * make deliberately — hence zero by default — not something to switch on
-     * because it looks tidy.
+     * Resolve elapsed stages on normal requests. A long absence catches up all
+     * eligible hops at their original deadlines, never at the page-open time.
      */
-    public function autoAdvanceOrders(bool $force = false): int
+    public function reconcileElapsedOrders(): int
     {
-        if (!Settings::bool('auto_status_enabled')) {
-            return 0;
-        }
-
-        $unit = $this->autoStatusUnit();
-
-        // A shop testing this in minutes cannot wait five of them to see the
-        // sweep run, so the guard window follows the unit it is measuring.
-        if (!$force && !$this->shouldSweep('orders.sweep.auto_status', $unit === 'minutes' ? 30 : 300)) {
-            return 0;
-        }
-
+        $asOf = now();
         $moved = 0;
-
-        foreach (Order::AUTO_ADVANCE as $from => $stage) {
-            $moved += $this->autoAdvanceStage($from, $stage['to'], $stage['setting'], $unit);
+        if (Settings::bool('auto_status_enabled')) {
+            Order::whereIn('status', array_keys(Order::AUTO_ADVANCE))->withStageSince()
+                ->chunkById(200, function ($orders) use ($asOf, &$moved) {
+                    foreach ($orders as $candidate) {
+                        if (!$candidate->elapsedTransitions($asOf)) continue;
+                        $moved += DB::transaction(function () use ($candidate, $asOf) {
+                            $order = Order::whereKey($candidate->id)->lockForUpdate()->first();
+                            if (!$order) return 0;
+                            $order->setAttribute('stage_since', $order->statusHistories()->reorder()->latest('id')->value('created_at'));
+                            $transitions = $order->elapsedTransitions($asOf);
+                            foreach ($transitions as $transition) {
+                                $from = $transition['from'];
+                                $to = $transition['to'];
+                                $order->status = $to;
+                                $order->progress = Order::progressFor($to);
+                                // stage_since is a query-only value, never an orders column.
+                                $order->offsetUnset('stage_since');
+                                $order->save();
+                                $note = 'Automatic timestamp transition; reconciled at '.$asOf->toIso8601String();
+                                $this->recordHistory($order, $from, $to, $note, $transition['at']);
+                                NotificationService::orderStatusChanged($order, $from, $to);
+                                ActivityLogger::log('Order status changed', "{$order->display_number} moved from {$from} to {$to}",
+                                    'orders', $order, ['from' => $from, 'to' => $to, 'effective_at' => $transition['at']->toIso8601String()], 'status_changed');
+                            }
+                            if ($transitions) $this->syncDelivery($order);
+                            return count($transitions);
+                        });
+                    }
+                });
         }
+        if ($moved) StatsService::flush();
 
-        if ($moved > 0) {
-            StatsService::flush();
-        }
-
-        return $moved;
-    }
-
-    /**
-     * Backwards-compatible alias for the first hop's old name.
-     *
-     * @deprecated Use autoAdvanceOrders(); kept so nothing calling the old name breaks.
-     */
-    public function autoStartPendingOrders(bool $force = false): int
-    {
-        return $this->autoAdvanceOrders($force);
-    }
-
-    /** 'minutes' or 'hours' — the unit every auto-advance delay is counted in. */
-    private function autoStatusUnit(): string
-    {
-        return Settings::str('auto_status_unit') === 'minutes' ? 'minutes' : 'hours';
-    }
-
-    /**
-     * Move every order that has waited out its delay in one particular status.
-     *
-     * "Waited" is measured from when the order *entered* the status, not from
-     * when it was created — otherwise the second hop would fire the instant the
-     * first one did, and an order would race through the whole workflow in a
-     * single sweep.
-     */
-    private function autoAdvanceStage(string $from, string $to, string $settingKey, string $unit): int
-    {
-        $delay = Settings::int($settingKey);
-
-        // Zero means this hop is not automated. That is the default for every
-        // stage past the first, and it is how the shop opts in one at a time.
-        if ($delay < 1) {
-            return 0;
-        }
-
-        $cutoff = $unit === 'minutes' ? now()->subMinutes($delay) : now()->subHours($delay);
-
-        $orders = Order::query()
-            ->withStageSince()
-            ->where('status', $from)
-            ->with('customer')
-            ->orderBy('created_at')
-            ->limit(200)
-            ->get()
-            ->filter(fn (Order $o) => $o->stage_since_at->lte($cutoff));
-
-        $note = sprintf(
-            'Auto-advanced to %s after %d %s in %s',
-            $to,
-            $delay,
-            $delay === 1 ? rtrim($unit, 's') : $unit,
-            $from
-        );
-
-        $moved = 0;
-
-        foreach ($orders as $order) {
-            if (!$order->canMoveTo($to)) {
-                continue;
-            }
-
-            $this->changeStatus($order, $to, $note);
-            $moved++;
-        }
-
+        // Recover a committed manual Ready transition if its HTTP callback was
+        // interrupted before claiming the SMS. The existing atomic claim deduplicates.
+        Order::where('status', 'Ready')->whereNull('ready_sms_attempted_at')->whereNull('notified_at')
+            ->whereHas('statusHistories', fn ($q) => $q->where('from_status', 'Ready for Verification')->where('to_status', 'Ready'))
+            ->chunkById(200, function ($ready) {
+                foreach ($ready as $order) CustomerNotificationDispatcher::dispatch('order-ready', $order);
+            });
         return $moved;
     }
 
@@ -518,8 +457,7 @@ class OrderService
             ->where('delivery_date', '<', now()->startOfDay())
             ->whereIn('status', Order::OPEN_STATUSES)
             ->with('customer')
-            ->limit(200)
-            ->get();
+            ->lazyById(200);
 
         $raised = 0;
 
@@ -639,7 +577,7 @@ class OrderService
         ]);
     }
 
-    private function recordHistory(Order $order, ?string $from, string $to, ?string $note = null): void
+    private function recordHistory(Order $order, ?string $from, string $to, ?string $note = null, ?\Illuminate\Support\Carbon $effectiveAt = null): void
     {
         OrderStatusHistory::create([
             'order_id'    => $order->id,
@@ -647,8 +585,10 @@ class OrderService
             'to_status'   => $to,
             'label'       => $note ?: ($from ? "Status changed to {$to}" : "Order {$to}"),
             'note'        => $note,
-            'user_id'     => Auth::id(),
-            'actor_name'  => Auth::user()?->name ?? 'System',
+            'user_id'     => $effectiveAt ? null : Auth::id(),
+            'actor_name'  => $effectiveAt ? 'System' : (Auth::user()?->name ?? 'System'),
+            'created_at'  => $effectiveAt ?? now(),
+            'updated_at'  => now(),
         ]);
     }
 

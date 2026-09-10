@@ -27,12 +27,6 @@ class OrderController extends Controller
 
     public function index()
     {
-        // Two rate-limited sweeps run off a page view, so the board is correct
-        // even on a shop that never runs `schedule:work`:
-        //   - the queue auto-start the orders screen counts down towards, and
-        //   - the overdue alert, which reports lateness without rewriting the
-        //     status (a garment can be late while still being stitched).
-        $this->service->autoAdvanceOrders();
         $this->service->flagOverdueOrders();
 
         $orders = Order::query()
@@ -117,7 +111,7 @@ class OrderController extends Controller
             'success' => true,
             'message' => 'Order created successfully.',
             'warning' => $warning,
-            'order'   => $this->serialize($order->loadPaymentTotals()),
+            'order'   => $this->serialize($order->refresh()->loadPaymentTotals()),
         ], 201);
     }
 
@@ -150,7 +144,7 @@ class OrderController extends Controller
         return response()->json([
             'success' => true,
             'message' => "Order {$order->display_number} updated successfully.",
-            'order'   => $this->serialize($order->loadPaymentTotals()),
+            'order'   => $this->serialize($order->refresh()->loadPaymentTotals()),
         ]);
     }
 
@@ -177,7 +171,7 @@ class OrderController extends Controller
         ]);
 
         $order = $this->service->changeStatus($order, $validated['status'], $validated['note'] ?? null);
-        $order->loadPaymentTotals();
+        $order->refresh()->loadPaymentTotals();
 
         // Handing over a garment that has not been paid for is the shop's call
         // to make, not the software's — so this reports, it does not refuse.
@@ -201,10 +195,10 @@ class OrderController extends Controller
             $order = $this->service->changeStatus($order, 'Ready', 'Marked ready before notifying the customer');
         }
         $result = $this->dispatchCustomerNotice($order->load('customer'), 'order-ready');
-        if ($result['sent']) $this->service->markNotified($order);
+        if ($result['sent'] && $result['status'] !== 'duplicate') $this->service->markNotified($order);
         return response()->json(['success' => true,
             'message' => $result['sent'] ? 'Collection notice accepted for sending.' : $result['error'],
-            'notification' => $result, 'order' => $this->serialize($order->loadPaymentTotals())]);
+            'notification' => $result, 'order' => $this->serialize($order->refresh()->loadPaymentTotals())]);
     }
 
     public function bulkNotify(Request $request): JsonResponse
@@ -217,15 +211,15 @@ class OrderController extends Controller
             'message' => 'None of the selected orders are awaiting verification.', 'sent' => 0], 422);
         $accepted = 0; $failed = [];
         foreach ($orders as $order) {
+            $order = $this->service->changeStatus($order, 'Ready', 'Garments manually verified by staff');
             $result = $this->dispatchCustomerNotice($order, 'order-ready');
             if (!$result['sent']) { $failed[] = $order->display_number; continue; }
-            $this->service->markNotified($order);
-            $this->service->changeStatus($order, 'Ready', 'Verified and collection notice accepted for sending');
+            if ($result['status'] !== 'duplicate') $this->service->markNotified($order);
             $accepted++;
         }
         return response()->json(['success' => true, 'sent' => $accepted, 'accepted' => $accepted,
-            'promoted' => $accepted, 'skipped' => count($validated['order_ids']) - $orders->count(),
-            'failed' => $failed, 'message' => sprintf('%d notice(s) accepted; %d failed. %d order(s) marked Ready.', $accepted, count($failed), $accepted)]);
+            'promoted' => $orders->count(), 'skipped' => count($validated['order_ids']) - $orders->count(),
+            'failed' => $failed, 'message' => sprintf('%d notice(s) accepted; %d failed. %d order(s) marked Ready.', $accepted, count($failed), $orders->count())]);
     }
 
     /**
@@ -260,7 +254,7 @@ class OrderController extends Controller
 
             $this->service->changeStatus(
                 $order,
-                $order->status === 'Overdue' ? 'In Progress' : $order->status,
+                $order->status === 'Overdue' ? 'Stitching' : $order->status,
                 sprintf('Delivery extended by %d day(s): %s', $validated['days'], $validated['reason'])
             );
 
@@ -386,10 +380,7 @@ class OrderController extends Controller
      */
     public function live(): JsonResponse
     {
-        // The board polls this endpoint, so the same rate-limited sweep runs
-        // here too: an order whose countdown reaches zero flips to "In
-        // Progress" on the next poll instead of waiting for a reload.
-        $this->service->autoAdvanceOrders();
+        // Statuses were reconciled on the normal page/action request.
 
         $orders = Order::query()
             ->with('customer:id,name,phone')
@@ -402,9 +393,13 @@ class OrderController extends Controller
             'orders' => $orders->map(fn (Order $o) => $this->serialize($o)),
             'counts' => [
                 'All'         => $orders->count(),
+                'Received' => $orders->where('status', 'Received')->count(),
+                'Ready for Verification' => $orders->where('status', 'Ready for Verification')->count(),
+                'Ready' => $orders->where('status', 'Ready')->count(),
+                'Delivered' => $orders->where('status', 'Delivered')->count(),
                 'Pending'     => $orders->where('status', 'Pending')->count(),
-                'In Progress' => $orders->where('status', 'In Progress')->count(),
-                'Overdue'     => $orders->where('status', 'Overdue')->count(),
+                'Stitching' => $orders->where('status', 'Stitching')->count(),
+                'Overdue'     => $orders->filter(fn (Order $o) => $o->is_overdue)->count(),
                 'Due Today'   => $orders->filter(fn (Order $o) => $o->is_due_today)->count(),
             ],
             'timestamp' => now()->toIso8601String(),

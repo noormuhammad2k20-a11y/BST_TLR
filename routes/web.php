@@ -49,7 +49,7 @@ Route::post('logout', [LoginController::class, 'logout'])
 | Authenticated application
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth', 'active', 'business'])->group(function () {
+Route::middleware(['auth', 'active', 'business', \App\Http\Middleware\ReconcileOrderTimestamps::class])->group(function () {
 
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
 

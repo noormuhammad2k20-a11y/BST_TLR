@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\DB;
 /**
  * Brings existing order rows onto the new workflow.
  *
- *   Pending → In Progress → Ready for Verification → Ready → Delivered
+ *   Pending → Stitching → Ready for Verification → Ready → Delivered
  *
  * Two things changed and both left rows behind:
  *
@@ -86,10 +86,10 @@ class WorkflowStatusSeeder extends Seeder
             if ($previous && in_array($previous, Order::ALL_STATUSES, true)) {
                 $restored++;
             } else {
-                // No usable history. "In Progress" is the honest guess: the
+                // No usable history. "Stitching" is the honest guess: the
                 // order was open and past its date, so work had started but was
                 // not finished. Staff can correct it on the kanban board.
-                $previous = 'In Progress';
+                $previous = 'Stitching';
                 $guessed++;
             }
 
@@ -99,7 +99,7 @@ class WorkflowStatusSeeder extends Seeder
             ]);
         }
 
-        $this->command?->info("Overdue → real status: {$restored} restored from history, {$guessed} defaulted to In Progress");
+        $this->command?->info("Overdue → real status: {$restored} restored from history, {$guessed} defaulted to Stitching");
     }
 
     /** Percentages shifted with the new stage list; recompute them all. */

@@ -22,7 +22,7 @@ class UpdateOrderRequest extends FormRequest
             'style_notes'        => ['nullable', 'string', 'max:2000'],
             'total'              => ['required', 'numeric', 'min:0', 'max:99999999'],
             'advance'            => ['required', 'numeric', 'min:0', 'lte:total'],
-            'status'             => ['required', Rule::in(\App\Models\Order::ALL_STATUSES)],
+            'status'             => ['required', Rule::in(array_merge(\App\Models\Order::ALL_STATUSES, [$this->route('order')?->status]))],
             'priority'           => ['required', Rule::in(['Normal', 'High', 'Express'])],
             'delivery_date'      => ['nullable', 'date'],
             'time_slot'          => ['nullable', 'string', 'max:100'],

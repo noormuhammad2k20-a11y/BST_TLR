@@ -245,6 +245,7 @@ final class OfficialNotificationTest extends TestCase
         DB::commit();
         try {
             foreach ([false, true] as $enabled) {
+                $order = $this->order(); // Each pickup event receives one attempt.
                 Settings::put(['sms_enabled' => $enabled]);
                 $this->fakeSms();
                 $r = CustomerNotificationDispatcher::dispatch('order-ready', $order);
@@ -316,7 +317,7 @@ final class OfficialNotificationTest extends TestCase
         }
     }
 
-    public function test_saved_ready_order_is_not_resent_but_explicit_notify_can_resend(): void
+    public function test_saved_ready_order_and_explicit_notify_do_not_duplicate_pickup_sms(): void
     {
         $order = $this->order();
         DB::commit();
@@ -325,7 +326,7 @@ final class OfficialNotificationTest extends TestCase
             $this->fakeSms();
             app(OrderService::class)->changeStatus($order, 'Ready');
             Http::assertNothingSent();
-            foreach ([1, 2] as $count) {
+            foreach ([1, 1] as $count) {
                 $this->postJson(route('orders.notify', $order), [])->assertOk()->assertJsonPath('notification.sent', true);
                 $this->assertSame($count, SmsLog::where('order_id', $order->id)->where('template_id', 'order-ready')->count());
             }

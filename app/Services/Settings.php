@@ -87,20 +87,14 @@ class Settings
 
         /* -------------------------------- Workflow ------------------------ */
         'auto_status_enabled'       => ['rule' => 'boolean', 'default' => '1', 'group' => 'workflow'],
-        /*
-         * Auto-advance delays. Each one is "how long an order sits in this
-         * status before the shop's own clock moves it on", counted in
-         * `auto_status_unit`. Zero means that hop is not automated at all,
-         * which is the default for every stage past the first — moving a
-         * garment to Ready is a claim about physical work, and only the three
-         * stages a shop explicitly opts into should ever be claimed by a timer.
-         */
+        // Three timed stages only. Zero pauses a hop; verification/collection remain manual.
         'auto_status_unit'          => ['rule' => 'nullable|in:hours,minutes', 'default' => 'hours', 'group' => 'workflow'],
+        'auto_status_received_delay'=> ['rule' => 'nullable|integer|min:0|max:10080', 'default' => '1', 'group' => 'workflow'],
         'auto_status_pending_hours' => ['rule' => 'nullable|integer|min:0|max:10080', 'default' => '1', 'group' => 'workflow'],
-        'auto_status_progress_delay'=> ['rule' => 'nullable|integer|min:0|max:10080', 'default' => '0', 'group' => 'workflow'],
+        'auto_status_progress_delay'=> ['rule' => 'nullable|integer|min:0|max:10080', 'default' => '24', 'group' => 'workflow'],
         'auto_status_verify_delay'  => ['rule' => 'nullable|integer|min:0|max:10080', 'default' => '0', 'group' => 'workflow'],
         'auto_status_ready_delay'   => ['rule' => 'nullable|integer|min:0|max:10080', 'default' => '0', 'group' => 'workflow'],
-        'auto_delivery_update'      => ['rule' => 'boolean', 'default' => '1', 'group' => 'workflow'],
+        'auto_delivery_update'      => ['rule' => 'boolean', 'default' => '0', 'group' => 'workflow'],
         // How long before the delivery date an unfinished order starts warning.
         'at_risk_hours'             => ['rule' => 'nullable|integer|min:1|max:336', 'default' => '24', 'group' => 'workflow'],
         'delivery_slots'    => ['rule' => 'nullable|string|max:500', 'default' => '11:00 AM - 12:00 PM|3:00 PM - 4:00 PM|5:00 PM - 6:00 PM', 'group' => 'workflow'],
