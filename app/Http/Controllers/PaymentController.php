@@ -66,6 +66,10 @@ class PaymentController extends Controller
         ]);
 
         $payment = app(\App\Services\TailoringFinanceService::class)->record($order->id, $validated);
+        if (!$payment->wasRecentlyCreated) {
+            return response()->json(['success'=>true,'message'=>'Payment already recorded.',
+                'invoice'=>$this->serialize($order->fresh()->load('customer')->loadPaymentTotals()),'sms'=>null,'toast'=>Settings::bool('payment_toasts')]);
+        }
 
         NotificationService::paymentReceived($order, (float) $validated['amount'], $validated['payment_method']);
         ActivityLogger::log(

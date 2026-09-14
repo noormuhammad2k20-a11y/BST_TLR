@@ -33,7 +33,7 @@ class NotificationVariables
             'dueTime' => $order->time_slot ?? '',
             'totalAmount' => Money::format($order->total),
             'advancePaid' => Money::format($order->advance),
-            'remainingBalance' => Money::format($order->balance_due),
+            'remainingBalance' => number_format($order->balance_due, 0),
             'paidAmount' => Money::format($lastPayment ?: $order->advance),
             'status' => $order->status,
 

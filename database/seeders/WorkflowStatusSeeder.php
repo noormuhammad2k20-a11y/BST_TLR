@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\DB;
 /**
  * Brings existing order rows onto the new workflow.
  *
- *   Pending → Stitching → Ready for Verification → Ready → Delivered
+ *   Pending → In Progress → In Progress → Ready → Delivered
  *
  * Two things changed and both left rows behind:
  *
@@ -48,14 +48,14 @@ class WorkflowStatusSeeder extends Seeder
     {
         $count = DB::table('orders')
             ->where('status', 'Trial')
-            ->update(['status' => 'Ready for Verification']);
+            ->update(['status' => 'In Progress']);
 
         DB::table('order_status_histories')->where('to_status', 'Trial')
-            ->update(['to_status' => 'Ready for Verification']);
+            ->update(['to_status' => 'In Progress']);
         DB::table('order_status_histories')->where('from_status', 'Trial')
-            ->update(['from_status' => 'Ready for Verification']);
+            ->update(['from_status' => 'In Progress']);
 
-        $this->command?->info("Trial → Ready for Verification: {$count} order(s)");
+        $this->command?->info("Trial → In Progress: {$count} order(s)");
     }
 
     /**
@@ -86,10 +86,10 @@ class WorkflowStatusSeeder extends Seeder
             if ($previous && in_array($previous, Order::ALL_STATUSES, true)) {
                 $restored++;
             } else {
-                // No usable history. "Stitching" is the honest guess: the
+                // No usable history. "In Progress" is the honest guess: the
                 // order was open and past its date, so work had started but was
                 // not finished. Staff can correct it on the kanban board.
-                $previous = 'Stitching';
+                $previous = 'In Progress';
                 $guessed++;
             }
 
@@ -99,7 +99,7 @@ class WorkflowStatusSeeder extends Seeder
             ]);
         }
 
-        $this->command?->info("Overdue → real status: {$restored} restored from history, {$guessed} defaulted to Stitching");
+        $this->command?->info("Overdue → real status: {$restored} restored from history, {$guessed} defaulted to In Progress");
     }
 
     /** Percentages shifted with the new stage list; recompute them all. */

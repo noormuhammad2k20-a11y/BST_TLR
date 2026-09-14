@@ -53,6 +53,10 @@
 </div>
 
 <div class="page bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+  <div class="px-5 pt-4 flex gap-4 border-b border-slate-200">
+    <button id="active-customers-tab" class="pb-3 text-sm font-semibold text-slate-900 border-b-2 border-slate-900" onclick="setCustomerArchiveView(false)">Customers</button>
+    <button id="archived-customers-tab" class="pb-3 text-sm font-medium text-slate-500" onclick="setCustomerArchiveView(true)">Archived Customers (<span id="archived-customers-count">{{ $archivedCustomers->count() }}</span>)</button>
+  </div>
   <div class="p-5 border-b border-slate-200 flex justify-between items-center flex-wrap gap-2">
     <div class="flex gap-1 bg-slate-100 p-1 rounded-lg" id="customer-type-tabs">
       <span data-type="All" class="px-3 py-1.5 rounded-md bg-white text-slate-900 text-xs font-medium cursor-pointer shadow-sm" onclick="setCustomerType('All')">All ({{ $stats['total'] }})</span>
@@ -75,7 +79,7 @@
           <th class="px-5 py-3 text-left font-bold">Type</th>
           <th class="px-5 py-3 text-left font-bold">Loyalty</th>
           <th class="px-5 py-3 text-left font-bold">Payment Behavior</th>
-          <th class="px-5 py-3 text-left font-bold">Total Spent</th>
+          <th class="px-5 py-3 text-left font-bold">Lifetime Sales</th>
           <th class="px-5 py-3 text-left font-bold"></th>
         </tr>
       </thead>
@@ -206,6 +210,8 @@
   };
 
   var customers = @json($customers);
+  var archivedCustomers = @json($archivedCustomers);
+  var showingArchivedCustomers = false;
   var orders = @json($orders);
 
   var selectedCustomerFor360 = null;
@@ -223,7 +229,7 @@
   var avatarClasses = ['slate', 'pink', 'green', 'orange', 'blue', 'purple'];
 
   function getFilteredCustomers() {
-    let list = customers;
+    let list = showingArchivedCustomers ? archivedCustomers : customers;
 
     if (customerType !== 'All') list = list.filter(c => c.type === customerType);
 
@@ -310,7 +316,7 @@
   }
 
   window.exportCustomers = function() {
-    const rows = [['Code', 'Name', 'Phone', 'Email', 'Type', 'City', 'Orders', 'Total Spent', 'Outstanding', 'Since']];
+    const rows = [['Code', 'Name', 'Phone', 'Email', 'Type', 'City', 'Orders', 'Lifetime Sales', 'Outstanding', 'Since']];
     getFilteredCustomers().forEach(c => rows.push([
       c.id, c.name, c.phone, c.email || '', c.type, c.city || '', c.orders, c.spent, c.due, c.since
     ]));
@@ -332,7 +338,7 @@
     const typeBadge = c.type === 'VIP' ? `<span class="badge badge-vip"><i class="fa-solid fa-crown text-[9px] mr-1"></i>VIP</span>` :
                       c.type === 'Premium' ? `<span class="badge badge-ready">Premium</span>` :
                       `<span class="badge badge-delivered">Regular</span>`;
-    const behaviorColor = c.behavior === 'Always Pays' ? 'text-emerald-600' :
+    const behaviorColor = ['Always Pays','Paid'].includes(c.behavior) ? 'text-emerald-600' :
                           c.behavior === 'Payment Pending' ? 'text-red-500' :
                           c.behavior === 'New Customer' ? 'text-slate-500' : 'text-amber-600';
 
@@ -361,13 +367,19 @@
         <td class="px-5 py-3">
           <span class="${behaviorColor} text-xs font-semibold">${c.behavior}</span>
         </td>
-        <td class="px-5 py-3 font-semibold text-slate-900">${Atelier.money(c.spent)}</td>
+        <td class="px-5 py-3 font-semibold text-slate-900">${Atelier.money(c.spent)}<div class="text-xs text-slate-500">Lifetime Paid: ${Atelier.money(c.paid)} · Current Due: ${Atelier.money(c.due)}</div></td>
         <td class="px-5 py-3 text-right whitespace-nowrap" onclick="event.stopPropagation()">
+          ${showingArchivedCustomers ? `
+          <button type="button" onclick="restoreCustomer(${c.db_id}, this)" class="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-600 hover:bg-slate-100">Restore</button>
+          <button type="button" onclick="confirmPermanentCustomerDelete(${c.db_id})" class="px-3 py-1.5 rounded-lg text-xs font-medium text-red-600 hover:bg-red-50">Delete Permanently</button>
+          ` : `
+          <a href="/customers/${c.db_id}/ledger" class="w-8 h-8 rounded-md text-slate-400 hover:bg-slate-100 inline-flex items-center justify-center" title="Customer Ledger / Receive Payment"><i class="fa-solid fa-book text-xs"></i></a>
           <button class="w-8 h-8 rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-900 inline-flex items-center justify-center transition-colors" title="View" onclick="openCustomer360('${c.id}')"><i class="fa-regular fa-eye text-xs"></i></button>
 
           <button class="w-8 h-8 rounded-md text-slate-400 hover:bg-amber-50 hover:text-amber-600 inline-flex items-center justify-center transition-colors" title="Edit" onclick="editCustomer('${c.id}')"><i class="fa-solid fa-pen text-xs"></i></button>
 
-          <button type="button" onclick="deleteCustomer(${c.db_id})" class="w-8 h-8 rounded-md text-slate-400 hover:bg-red-50 hover:text-red-600 inline-flex items-center justify-center transition-colors" title="Delete"><i class="fa-solid fa-trash text-xs"></i></button>
+          <button type="button" onclick="deleteCustomer(${c.db_id})" class="w-8 h-8 rounded-md text-slate-400 hover:bg-red-50 hover:text-red-600 inline-flex items-center justify-center transition-colors" title="Archive Customer"><i class="fa-solid fa-trash text-xs"></i></button>
+          `}
         </td>
       </tr>
     `;
@@ -378,16 +390,17 @@
     if (!c) return;
 
     Atelier.confirmAction({
-      title: `Delete ${c.name}?`,
-      message: c.orders > 0
-        ? `${c.name} has ${c.orders} order(s) on record. Customers with order history cannot be deleted.`
-        : 'This will permanently remove the customer from your directory. This action cannot be undone.',
-      confirmLabel: 'Delete Customer',
+      title: `Archive ${c.name}?`,
+      message: 'This customer will move to Archived Customers. Their measurements, orders and payment history will be kept. You can restore them later.',
+      confirmLabel: 'Archive Customer',
       danger: true,
       onConfirm: async () => {
         try {
           const res = await Atelier.api.delete(`/customers/${dbId}`);
           customers = customers.filter(x => x.db_id !== dbId);
+          archivedCustomers.unshift({...c, archived: true});
+          customer360Cache.delete(dbId);
+          updateArchivedCustomerCount();
           renderCustomerTable();
           recalcStats();
           toast(res.message, 'success');
@@ -397,6 +410,66 @@
       }
     });
   };
+
+  function updateArchivedCustomerCount() {
+    document.getElementById('archived-customers-count').textContent = archivedCustomers.length;
+  }
+
+  function setCustomerArchiveView(archived) {
+    showingArchivedCustomers = archived;
+    currentPage = 1;
+    customerType = 'All';
+    customerSearch = '';
+    document.getElementById('customer-search').value = '';
+    document.getElementById('customer-type-tabs').classList.toggle('hidden', archived);
+    ['active-customers-tab','archived-customers-tab'].forEach((id,i) => {
+      document.getElementById(id).className = 'pb-3 text-sm ' + ((i === 1) === archived
+        ? 'font-semibold text-slate-900 border-b-2 border-slate-900' : 'font-medium text-slate-500');
+    });
+    setCustomerType('All');
+  }
+
+  async function restoreCustomer(dbId, button = null) {
+    if (button?.disabled) return;
+    if (button) button.disabled = true;
+    try {
+      const res = await Atelier.api.post(`/customers/${dbId}/restore`, {});
+      archivedCustomers = archivedCustomers.filter(c => c.db_id !== dbId);
+      customers = customers.filter(c => c.db_id !== dbId);
+      customers.unshift(res.customer);
+      customer360Cache.delete(dbId);
+      updateArchivedCustomerCount();
+      renderCustomerTable(); recalcStats();
+      closeModal(); closeDrawers();
+      toast(res.message, 'success');
+    } catch (err) { Atelier.reportError(err, 'Could not restore the customer'); }
+    finally { if (button) button.disabled = false; }
+  }
+
+  function customerSaveError(err) {
+    const archived = err.payload?.archived_customer;
+    if (!archived) return Atelier.reportError(err, 'Could not save the customer');
+    openModal('restore-archived-customer', archived);
+  }
+
+  function confirmPermanentCustomerDelete(dbId) {
+    const customer = archivedCustomers.find(c => c.db_id === dbId);
+    if (customer) openModal('permanent-customer-delete', customer);
+  }
+
+  async function permanentlyDeleteCustomer(dbId, button) {
+    const confirmation = document.getElementById('customer-delete-confirmation').value;
+    if (confirmation !== 'DELETE' || button.disabled) return;
+    button.disabled = true;
+    try {
+      const res = await Atelier.api.delete(`/customers/${dbId}/permanent`, {body:{confirmation}});
+      archivedCustomers = archivedCustomers.filter(c => c.db_id !== dbId);
+      customer360Cache.delete(dbId);
+      updateArchivedCustomerCount(); renderCustomerTable();
+      closeModal(); toast(res.message, 'success');
+    } catch (err) { Atelier.reportError(err, 'Could not permanently delete the customer'); }
+    finally { button.disabled = false; }
+  }
 
   function renderCustomerTable() {
     const list = document.getElementById('customer-list');
@@ -415,10 +488,10 @@
     list.innerHTML = pageItems.map((c, idx) => getCustomerRowHTML(c, idx + start)).join('')
       || Atelier.emptyRow(8, {
         icon: 'fa-users',
-        title: customerSearch || customerType !== 'All' ? 'No matching customers' : 'No customers yet',
+        title: customerSearch || customerType !== 'All' ? 'No matching customers' : showingArchivedCustomers ? 'No archived customers' : 'No customers yet',
         message: customerSearch || customerType !== 'All'
           ? 'Try a different search term or switch the type filter.'
-          : 'Add your first customer to start building the directory.'
+          : showingArchivedCustomers ? 'Archived customers will appear here. You can restore them at any time.' : 'Add your first customer to start building the directory.'
       });
 
     const totalCustomersText = document.getElementById('total-customers-text');
@@ -532,6 +605,25 @@
 
   /* ============= MODALS ============= */
   window.modals = window.modals || {};
+  window.modals['restore-archived-customer'] = c => `
+    <div class="p-5 border-b border-slate-200"><h3 class="text-lg font-bold text-slate-900">Archived customer found</h3></div>
+    <div class="p-6 text-sm text-slate-600">This phone number belongs to <strong>${Atelier.escapeHtml(c.name)}</strong>, who is archived. Restore the existing customer to keep their history together.</div>
+    <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">
+      <button onclick="closeModal()" class="bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-lg text-sm">Cancel</button>
+      <button onclick="restoreCustomer(${Number(c.db_id)}, this)" class="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-medium">Restore Customer</button>
+    </div>`;
+  window.modals['permanent-customer-delete'] = c => `
+    <div class="p-5 border-b border-slate-200"><h3 class="text-lg font-bold text-slate-900">Delete Permanently</h3></div>
+    <div class="p-6 space-y-4 text-sm text-slate-600">
+      <p>Permanently remove <strong>${Atelier.escapeHtml(c.name)}</strong>? This cannot be undone or restored.</p>
+      <p>If there is business history, personal customer data will be removed and orders, payments, invoices and financial history will be preserved. A customer without history will be deleted completely.</p>
+      <div><label for="customer-delete-confirmation" class="block text-xs font-bold text-slate-500 mb-1.5">Type DELETE to confirm</label>
+      <input id="customer-delete-confirmation" autocomplete="off" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900" oninput="document.getElementById('permanent-customer-delete-btn').disabled = this.value !== 'DELETE'"></div>
+    </div>
+    <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">
+      <button onclick="closeModal()" class="bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-lg text-sm">Cancel</button>
+      <button id="permanent-customer-delete-btn" disabled onclick="permanentlyDeleteCustomer(${Number(c.db_id)}, this)" class="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50">Delete Permanently</button>
+    </div>`;
   window.modals['customer-360'] = () => `
     ${selectedCustomerFor360 ? `
       <div class="p-5 border-b border-slate-200 flex justify-between items-center">
@@ -582,7 +674,7 @@
               <div class="text-xl font-bold text-slate-900 mt-1">${selectedCustomerFor360.orders}</div>
             </div>
             <div class="bg-slate-50 p-3 rounded-lg text-center">
-              <div class="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Total Spent</div>
+              <div class="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Lifetime Sales</div>
               <div class="text-xl font-bold text-slate-900 mt-1">${Atelier.money(selectedCustomerFor360.spent)}</div>
             </div>
             <div class="bg-slate-50 p-3 rounded-lg text-center">
@@ -669,6 +761,7 @@
 
     // Add customer — saves, then hands straight over to a new order for them.
     Atelier.ajaxForm('#add-customer-form', {
+      onError: customerSaveError,
       onSuccess: (res) => {
         customers.unshift(res.customer);
         customerSearch = '';
@@ -690,6 +783,7 @@
 
     // Edit customer — updates the row in place.
     Atelier.ajaxForm('#edit-customer-form', {
+      onError: customerSaveError,
       reset: false,
       onSuccess: (res) => {
         const i = customers.findIndex(c => c.db_id === res.customer.db_id);

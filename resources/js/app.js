@@ -1,4 +1,5 @@
 import './bootstrap';
+import './sidebar-appearance';
 
 /**
  * Chart.js is used by the dashboard, reports and expenses pages via the global

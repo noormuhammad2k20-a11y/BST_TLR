@@ -9,6 +9,15 @@ abstract class TestCase extends BaseTestCase
     protected function setUp(): void
     {
         parent::setUp();
+        // Public-only fixtures: the signing key was discarded outside this project.
+        // Exercise real verification throughout business tests without a production bypass.
+        config([
+            'license.public_key' => base_path('tests/Fixtures/licenses/public.key'),
+            'license.path' => base_path('tests/Fixtures/licenses/lifetime.dat'),
+        ]);
+        $this->app->instance(\App\Services\Licensing\MachineIdentity::class, new class extends \App\Services\Licensing\MachineIdentity {
+            public function id(): string { return str_repeat('A', 64); }
+        });
         \Illuminate\Support\Facades\Http::preventStrayRequests();
         if (getenv('INTEGRITY_MYSQL') === '1') {
             // Service fixtures and HTTP requests must use the same shop timezone.

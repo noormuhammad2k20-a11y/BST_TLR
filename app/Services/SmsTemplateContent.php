@@ -20,6 +20,10 @@ final class SmsTemplateContent
         foreach (['totalAmount', 'advancePaid', 'remainingBalance', 'paidAmount'] as $key) {
             if (! isset($variables[$key]) || $variables[$key] === '') continue;
             $value = $variables[$key];
+            if ($key === 'remainingBalance') {
+                $variables[$key] = is_numeric($value) ? number_format((float)$value, 0) : preg_replace('/^(?:'.preg_quote(Settings::currency(), '/').'|Rs\.?|PKR)\s*/i', '', $value);
+                continue;
+            }
             if (is_numeric($value)) $value = Money::format($value);
             $symbol = Settings::currency();
             if (str_starts_with($value, $symbol)) {
@@ -39,12 +43,19 @@ final class SmsTemplateContent
         // Optional clauses disappear instead of producing "Contact: ." or a
         // made-up explanation. This also keeps empty-shop previews readable.
         if (empty($variables['shopPhone'])) {
-            $text = str_replace([' For assistance, call {shopPhone}.', ' Contact: {shopPhone}.'], '', $text);
+            $text = str_replace([' For assistance, call {shopPhone}.', ' Contact: {shopPhone}.', ' For assistance, contact us at {shopPhone}.', ' For assistance, contact {shopPhone}.'], '', $text);
         }
         if (empty($variables['reason'])) $text = str_replace(' Reason: {reason}.', '', $text);
         if (empty($variables['oldDate']) || ($variables['oldDate'] ?? null) === ($variables['newDate'] ?? null)) {
             $text = str_replace('from {oldDate} to {newDate}', 'to {newDate}', $text);
         }
+
+        // Client templates already supply Rs; avoid output such as Rs Rs 0.
+        $text = preg_replace_callback('/Rs\s+\{(remainingBalance|totalAmount|advancePaid|paidAmount)\}/', function ($match) use ($variables) {
+            $value = $variables[$match[1]] ?? '0';
+            $value = preg_replace('/^(?:'.preg_quote(Settings::currency(), '/').'|Rs\.?|PKR)\s*/i', '', $value);
+            return 'Rs '.$value;
+        }, $text);
 
         // One substitution pass: customer values cannot introduce template tokens.
         $text = preg_replace_callback('/\{([a-zA-Z]+)\}/', fn ($m) => $variables[$m[1]] ?? '', $text);

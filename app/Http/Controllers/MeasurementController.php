@@ -18,15 +18,15 @@ class MeasurementController extends Controller
 {
     public function index()
     {
-        $measurementsData = Measurement::with('customer:id,name,phone,code')
-            ->latest()
-            ->get();
+        $measurementsData = Measurement::savedSets()->with('customer:id,name,phone,code')
+            ->orderByDesc('updated_at')->orderByDesc('id')
+            ->get()->unique(fn ($m) => \App\Services\MeasurementLibrary::key($m))->values();
 
         $customers = Customer::select('id', 'name', 'phone')->orderBy('name')->get();
 
-        $garmentTypes = ProductService::active()
-            ->orderBy('name')
-            ->pluck('name');
+        $garmentTypes = ProductService::active()->where('type', 'Service')
+            ->where(fn ($q) => $q->whereNull('requires_measurements')->orWhere('requires_measurements', true))
+            ->orderBy('name')->pluck('name')->unique()->values();
 
         $tailors = User::tailors()->orderBy('name')->pluck('name');
 
@@ -57,14 +57,14 @@ class MeasurementController extends Controller
         $data = $this->payload($validated, $customer->id);
         $data['created_by'] = Auth::id();
 
-        $measurement = Measurement::create($data);
+        $measurement = app(\App\Services\MeasurementLibrary::class)->save($customer, $data);
         $measurement->load('customer');
 
-        ActivityLogger::created(
-            $measurement,
-            sprintf('%s measurements recorded for %s', $measurement->garment_type, $customer->name),
-            'customers'
-        );
+        if ($measurement->wasRecentlyCreated) {
+            ActivityLogger::created($measurement, sprintf('%s measurements recorded for %s', $measurement->garment_type, $customer->name), 'customers');
+        } else {
+            ActivityLogger::updated($measurement, sprintf('%s measurements updated for %s', $measurement->garment_type, $customer->name), 'customers');
+        }
 
         $this->flush();
 
@@ -72,7 +72,7 @@ class MeasurementController extends Controller
             'success'     => true,
             'message'     => 'Measurement saved successfully.',
             'measurement' => $measurement,
-        ], 201);
+        ], $measurement->wasRecentlyCreated ? 201 : 200);
     }
 
     public function show(Measurement $measurement): JsonResponse
@@ -88,13 +88,15 @@ class MeasurementController extends Controller
 
     public function update(Request $request, Measurement $measurement): JsonResponse
     {
-        if ($measurement->order_item_piece_id) return response()->json(['message'=>'Edit this piece through its order so ownership and completion locks are enforced.'],422);
         $validated = $this->validated($request);
 
-        $customer = $this->resolveCustomer($validated, $measurement);
-
-        $measurement->update($this->payload($validated, $customer->id));
-        $measurement->load('customer');
+        $measurement = \Illuminate\Support\Facades\DB::transaction(function () use ($validated, $measurement) {
+            $customer = $this->resolveCustomer($validated, $measurement);
+            return app(\App\Services\MeasurementLibrary::class)->save(
+                $customer, $this->payload($validated, $customer->id)
+            );
+        });
+        $customer = $measurement->customer;
 
         ActivityLogger::updated(
             $measurement,
@@ -181,7 +183,7 @@ class MeasurementController extends Controller
             $messages["{$field}.decimal"] = Measurement::label($field) . ' allows at most ' . $decimals . ' decimal place(s).';
         }
 
-        $validated = $request->validate($rules, $messages);
+        $validated = $request->validate($rules, $messages, Measurement::labels());
 
         // New records open in the shop's default unit unless one was sent.
         $validated['unit'] = $validated['unit'] ?? Settings::measurementUnit();
@@ -227,7 +229,7 @@ class MeasurementController extends Controller
      */
     private function stats($measurements): array
     {
-        return Cache::remember('measurements.stats', 60, function () use ($measurements) {
+        return (function () use ($measurements) {
             $total = $measurements->count();
 
             $completeness = $total > 0
@@ -237,10 +239,10 @@ class MeasurementController extends Controller
             return [
                 'total'            => $total,
                 'active_templates' => $measurements->pluck('garment_type')->filter()->unique()->count(),
-                'recent'           => $measurements->where('created_at', '>=', now()->subDays(30))->count(),
+                'recent'           => $measurements->where('updated_at', '>=', now()->subDays(30))->count(),
                 'accuracy'         => $completeness . '%',
             ];
-        });
+        })();
     }
 
     private function flush(): void

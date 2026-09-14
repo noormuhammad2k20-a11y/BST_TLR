@@ -1,6 +1,6 @@
 @extends('layouts.app')
 @section('spaPage', 'delivery')
-@section('title', 'Delivery Management')
+@section('title', 'Customer Collection Notifications')
 
 @push('styles')
 <style>
@@ -26,12 +26,12 @@
 @section('content')
 <div class="page flex justify-between items-center mb-6">
   <div>
-    <h1 class="text-xl font-bold text-slate-900 tracking-tight">Delivery Management</h1>
+    <h1 class="text-xl font-bold text-slate-900 tracking-tight">Customer Collection Notifications</h1>
     <p class="text-sm text-slate-500 mt-0.5" id="subheader">Loading deliveries...</p>
   </div>
   <div class="flex gap-2">
     <button class="bg-white border border-slate-200 text-slate-600 px-3.5 py-2 rounded-lg text-xs font-medium hover:bg-slate-50 hover:border-slate-300 flex items-center gap-2 transition-colors shadow-sm" onclick="openModal('bulk-extend')"><i class="fa-solid fa-calendar-day text-[10px]"></i> Extend Due Dates</button>
-    <button class="bg-slate-900 text-white px-3.5 py-2 rounded-lg text-xs font-medium hover:bg-slate-800 flex items-center gap-2 transition-colors shadow-sm" onclick="filterDelivery('Ready')"><i class="fa-solid fa-comment-sms text-[11px]"></i> Notify Ready Orders</button>
+    <button class="bg-slate-900 text-white px-3.5 py-2 rounded-lg text-xs font-medium hover:bg-slate-800 flex items-center gap-2 transition-colors shadow-sm" onclick="filterDelivery('Notification Needed')"><i class="fa-solid fa-comment-sms text-[11px]"></i> Notify Ready Orders</button>
   </div>
 </div>
 
@@ -53,11 +53,11 @@
 <div class="page grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
   <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5 cursor-pointer" onclick="filterDelivery('All')">
     <div class="flex items-center justify-between mb-3">
-      <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Total Deliveries</span>
+      <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Ready Customers</span>
       <div class="w-7 h-7 rounded-md bg-slate-100 text-slate-600 flex items-center justify-center"><i class="fa-solid fa-layer-group text-[11px]"></i></div>
     </div>
     <h3 class="text-2xl font-bold text-slate-900 tracking-tight" id="stat-total">0</h3>
-    <p class="text-[11px] text-slate-400 font-medium mt-1">All orders on the board</p>
+    <p class="text-[11px] text-slate-400 font-medium mt-1">Garments ready at the shop</p>
   </div>
   <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5 cursor-pointer" onclick="filterDelivery('Ready')">
     <div class="flex items-center justify-between mb-3">
@@ -75,13 +75,13 @@
     <h3 class="text-2xl font-bold text-slate-900 tracking-tight" id="stat-duetoday">0</h3>
     <p class="text-[11px] text-slate-400 font-medium mt-1">Promised for today</p>
   </div>
-  <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5 cursor-pointer" onclick="filterDelivery('Delivered')">
+  <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5 cursor-pointer" onclick="filterDelivery('Reminder Due')">
     <div class="flex items-center justify-between mb-3">
-      <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Delivered</span>
+      <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Reminder Due</span>
       <div class="w-7 h-7 rounded-md bg-emerald-50 text-emerald-600 flex items-center justify-center"><i class="fa-solid fa-circle-check text-[11px]"></i></div>
     </div>
     <h3 class="text-2xl font-bold text-slate-900 tracking-tight" id="stat-delivered">0</h3>
-    <p class="text-[11px] text-slate-400 font-medium mt-1">Handed to the customer</p>
+    <p class="text-[11px] text-slate-400 font-medium mt-1">Follow-up SMS available</p>
   </div>
   <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5 cursor-pointer" onclick="filterDelivery('Overdue')">
     <div class="flex items-center justify-between mb-3">
@@ -94,14 +94,19 @@
 </div>
 
 <!-- Table Section -->
+<div id="delivery-alerts" class="page grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-6"></div>
+<div id="sms-configuration-note" class="hidden page bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-xl mb-6 text-sm">SMS is disabled or not configured. Enable your provider in <a href="{{ route('settings.index') }}" class="font-semibold underline">SMS Settings</a> before sending. Orders remain unchanged when a send fails.</div>
 <div class="page bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden mb-6">
   <div class="p-5 border-b border-slate-200 flex gap-1 bg-slate-50 flex-wrap" id="deliveryPills">
     <span class="px-3 py-1.5 rounded-md bg-slate-900 text-white text-xs font-medium cursor-pointer" onclick="filterDelivery('All', this)">All</span>
     <span class="px-3 py-1.5 rounded-md text-slate-500 text-xs font-medium cursor-pointer hover:bg-slate-200 transition-colors" onclick="filterDelivery('Ready', this)">Ready</span>
     <span class="px-3 py-1.5 rounded-md text-slate-500 text-xs font-medium cursor-pointer hover:bg-slate-200 transition-colors" onclick="filterDelivery('Due Today', this)">Due Today</span>
-    <span class="px-3 py-1.5 rounded-md text-slate-500 text-xs font-medium cursor-pointer hover:bg-slate-200 transition-colors" onclick="filterDelivery('Scheduled', this)">Scheduled</span>
-    <span class="px-3 py-1.5 rounded-md text-slate-500 text-xs font-medium cursor-pointer hover:bg-slate-200 transition-colors" onclick="filterDelivery('Delivered', this)">Delivered</span>
+    <span class="px-3 py-1.5 rounded-md text-slate-500 text-xs font-medium cursor-pointer hover:bg-slate-200 transition-colors" onclick="filterDelivery('Notification Needed', this)">Notification Needed</span>
+    <span class="px-3 py-1.5 rounded-md text-slate-500 text-xs font-medium cursor-pointer hover:bg-slate-200 transition-colors" onclick="filterDelivery('Reminder Due', this)">Reminder Due</span>
+    <span class="px-3 py-1.5 rounded-md text-slate-500 text-xs font-medium cursor-pointer hover:bg-slate-200 transition-colors" onclick="filterDelivery('Upcoming', this)">Upcoming</span>
+    <span class="px-3 py-1.5 rounded-md text-slate-500 text-xs font-medium cursor-pointer hover:bg-slate-200 transition-colors" onclick="filterDelivery('SMS Failed', this)">SMS Failed</span>
     <span class="px-3 py-1.5 rounded-md text-slate-500 text-xs font-medium cursor-pointer hover:bg-slate-200 transition-colors" onclick="filterDelivery('Overdue', this)">Overdue</span>
+    <span class="px-3 py-1.5 rounded-md text-slate-500 text-xs font-medium cursor-pointer hover:bg-slate-200 transition-colors" onclick="filterDelivery('Delivered', this)">Delivered</span>
   </div>
 
   <!-- Bulk action bar: only takes up space once something is selected. -->
@@ -129,6 +134,8 @@
           <th class="px-5 py-3 text-left font-bold">Garment</th>
           <th class="px-5 py-3 text-left font-bold">Due Date</th>
           <th class="px-5 py-3 text-left font-bold">Status</th>
+          <th class="px-5 py-3 text-left font-bold">SMS History</th>
+          <th class="px-5 py-3 text-left font-bold">Reminder</th>
           <th class="px-5 py-3 text-right font-bold">Actions</th>
         </tr>
       </thead>
@@ -146,6 +153,8 @@
   /* ============= DATA STORE ============= */
   /* `var` throughout: the SPA router re-evaluates this script per navigation. */
   var deliveries = @json($deliveries);
+  var deliveryStats = @json($stats);
+  var collectionSettings = @json($settings);
   var DELIVERY_STATUSES = @json($statuses);
 
   var ROUTES = {
@@ -160,75 +169,26 @@
   var itemsPerPage = Atelier.rowsPerPage();
   var currentFilter = 'All';
   var selectedIds = new Set();
+  var notificationRunning = false;
+  function smsDate(value) {
+    return value ? new Date(value).toLocaleString('en-GB',{timeZone:collectionSettings.timezone,day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—';
+  }
 
   function upsertDelivery(payload) {
     const i = deliveries.findIndex(d => d.db_id === payload.db_id);
     if (i > -1) deliveries[i] = payload; else deliveries.unshift(payload);
   }
 
-  /**
-   * Whether a collection notice makes sense for this row.
-   *
-   * "Ready" is the obvious case — the garments are on the shelf. An overdue row
-   * qualifies too, because that is exactly the customer who needs chasing. A
-   * Scheduled order that is not yet late does not: the clothes are not finished,
-   * and telling someone to come in for them is how a customer arrives to an
-   * empty counter.
-   */
+  // Eligibility and cooldowns are supplied and rechecked by the server.
   function canNotify(d) {
-    return d.status !== 'Delivered' && (d.status === 'Ready' || d.overdue);
+    return d.canNotify === true;
   }
 
-  /* ============= DELETE LOGIC ============= */
-  var deleteContext = { id: '', dbId: null };
-
-  window.confirmDelete = function(id, dbId) {
-    deleteContext = { id, dbId };
-
-    Atelier.confirm({
-      variant: 'delete',
-      title: `Delete delivery ${id}?`,
-      message: 'This will permanently remove the delivery record. This action cannot be undone.',
-      confirmLabel: 'Confirm Delete',
-      onConfirm: executeDelete,
-    });
-  }
-
-  window.executeDelete = async function() {
-    const res = await Atelier.api.delete(`/delivery/${deleteContext.dbId}`);
-    deliveries = deliveries.filter(d => d.db_id !== deleteContext.dbId);
-    selectedIds.delete(deleteContext.dbId);
-    renderDeliveries();
-    updateStats();
-    toast(res.message, 'success');
-  }
-
-  /* ============= STATUS LOGIC ============= */
+  /* ============= COLLECTION CONFIRMATION ============= */
   window.confirmComplete = function(id, dbId) {
-    deleteContext = { id, dbId };
-
-    Atelier.confirm({
-      variant: 'approve',
-      title: `Mark ${id} as Delivered?`,
-      message: 'The customer has collected the garments and payment is settled.',
-      confirmLabel: 'Yes, Mark Delivered',
-      onConfirm: executeComplete,
-    });
-  }
-
-  window.executeComplete = async function() {
-    const res = await Atelier.api.patch(`/delivery/${deleteContext.dbId}/status`, {
-      status: 'Delivered',
-      note: 'Collected by the customer'
-    });
-    upsertDelivery(res.delivery);
-    selectedIds.delete(deleteContext.dbId);
-    renderDeliveries();
-    updateStats();
-    toast(`Order ${deleteContext.id} marked as Delivered`, 'success');
-    Atelier.refreshCounters();
-  }
-
+    if (!deliveries.some(d => d.db_id === dbId && d.status === 'Ready')) return toast('Only Ready orders can be collected.', 'error');
+    return collectWithPayment(dbId, async () => { await refreshFromServer(); selectedIds.delete(dbId); renderDeliveries(); updateStats(); });
+  };
   /**
    * Kept for completeness, but the table no longer offers "Mark Ready".
    * An order becomes Ready on the Orders page, after the garments are verified
@@ -237,7 +197,7 @@
   window.changeDeliveryStatus = async function(dbId, status) {
     try {
       const res = await Atelier.api.patch(`/delivery/${dbId}/status`, { status });
-      upsertDelivery(res.delivery);
+      await refreshFromServer();
       renderDeliveries();
       updateStats();
       toast(res.message, 'success');
@@ -259,7 +219,7 @@
    * state change however many clicks arrive, which is what we want.
    */
   window.toggleRow = function(dbId, checked) {
-    if (checked) selectedIds.add(dbId); else selectedIds.delete(dbId);
+    if (checked && deliveries.some(d=>d.db_id === dbId && canNotify(d))) selectedIds.add(dbId); else selectedIds.delete(dbId);
     syncBulkBar();
   }
 
@@ -283,7 +243,7 @@
     if (!bar) return;
 
     bar.classList.toggle('hidden', selectedIds.size === 0);
-    if (count) count.textContent = `${selectedIds.size} customer${selectedIds.size === 1 ? '' : 's'} selected`;
+    if (count) count.textContent = `${new Set(deliveries.filter(d=>selectedIds.has(d.db_id)).map(d=>d.customer_id)).size} customers selected · ${selectedIds.size} orders`;
 
     const all = document.getElementById('select-all-chk');
     if (all) {
@@ -301,19 +261,35 @@
   /* ============= BULK NOTIFY ============= */
   window.confirmBulkNotify = function() {
     if (selectedIds.size === 0) return;
-    openModal('notify-confirm', { count: selectedIds.size });
+    openModal('notify-confirm', { count: new Set(deliveries.filter(d=>selectedIds.has(d.db_id)).map(d=>d.customer_id)).size });
   }
 
   window.runBulkNotify = async function(btn) {
+    if (notificationRunning) return;
+    notificationRunning = true;
     Atelier.setBusy(btn, true);
 
     try {
-      const res = await Atelier.api.post(ROUTES.bulkNotify, {
-        delivery_ids: Array.from(selectedIds),
+      const groups = new Map();
+      deliveries.filter(d=>selectedIds.has(d.db_id) && canNotify(d)).forEach(d=>{
+        if (!groups.has(d.customer_id)) groups.set(d.customer_id,[]);
+        groups.get(d.customer_id).push(d.db_id);
       });
-
-
-
+      const res = {sent:0,failed:[],results:[],skipped:[]};
+      let completed = 0;
+      // One customer/request prevents large batches timing out and preserves
+      // one message for all that customer's selected orders.
+      for (const ids of groups.values()) {
+        btn.textContent = `Sending ${completed + 1} of ${groups.size}…`;
+        try {
+          const part = await Atelier.api.post(ROUTES.bulkNotify,{order_ids:ids});
+          res.sent += part.sent;
+          ['failed','results','skipped'].forEach(key=>res[key].push(...(part[key] || [])));
+        } catch (err) {
+          res.failed.push({order:ids.map(id=>deliveries.find(d=>d.db_id===id)?.id).join(', '),customer:'',reason:err.message});
+        }
+        completed++;
+      }
       selectedIds.clear();
       await refreshFromServer();
       openModal('notify-results', res);
@@ -321,6 +297,7 @@
       closeModal();
       Atelier.reportError(err, 'Could not send the notifications');
     } finally {
+      notificationRunning = false;
       Atelier.setBusy(btn, false);
     }
   }
@@ -330,6 +307,9 @@
     const fresh = await Atelier.api.get(window.location.pathname + '?json=1');
     if (fresh?.deliveries) {
       deliveries = fresh.deliveries;
+      deliveryStats = fresh.stats;
+      collectionSettings = fresh.settings;
+      selectedIds = new Set([...selectedIds].filter(id=>deliveries.some(d=>d.db_id===id && canNotify(d))));
       renderDeliveries();
       updateStats();
       Atelier.refreshCounters();
@@ -369,9 +349,15 @@
    */
   function getFilteredDeliveries() {
     switch (currentFilter) {
-      case 'All':       return deliveries;
+      case 'All':       return deliveries.filter(d=>d.collectionReady);
       case 'Overdue':   return deliveries.filter(d => d.overdue);
       case 'Due Today': return deliveries.filter(d => d.dueToday);
+      case 'Notification Needed': return deliveries.filter(d=>d.needsNotification);
+      case 'Reminder Due': return deliveries.filter(d=>d.reminderDue);
+      case 'Upcoming': return deliveries.filter(d=>d.upcoming);
+      case 'SMS Failed': return deliveries.filter(d=>d.smsFailed && d.collectionReady);
+      case 'Waiting': return deliveries.filter(d=>d.status==='Ready');
+      case 'Waiting 7+ Days': return deliveries.filter(d=>d.status==='Ready' && d.readyDays >= 7);
       default:          return deliveries.filter(d => d.status === currentFilter);
     }
   }
@@ -403,11 +389,11 @@
     };
 
     if (paginatedItems.length === 0) {
-      list.innerHTML = Atelier.emptyRow(7, {
+      list.innerHTML = Atelier.emptyRow(9, {
         icon: 'fa-box-open',
         title: deliveries.length === 0 ? 'Nothing to hand over yet' : 'No matching orders',
         message: deliveries.length === 0
-          ? 'Collection records are created automatically with each order.'
+          ? 'Orders appear here when garments reach Ready for Verification.'
           : 'Try a different filter.'
       });
       footer.innerHTML = '';
@@ -417,7 +403,7 @@
 
     list.innerHTML = paginatedItems.map(d => {
       const urgent   = d.overdue || d.dueToday;
-      const dataStr  = JSON.stringify(d).replace(/"/g, '&quot;');
+      const dataStr  = Atelier.escapeHtml(JSON.stringify(d));
       const eligible = canNotify(d);
       const checked  = selectedIds.has(d.db_id) ? 'checked' : '';
 
@@ -426,14 +412,20 @@
       let actions = `<button class="w-8 h-8 rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-900 inline-flex items-center justify-center mr-1 transition-colors" title="View Order" onclick="openModal('delivery-details', ${dataStr})"><i class="fa-regular fa-eye text-xs"></i></button>`;
 
       if (eligible) {
-        actions += `<button class="w-8 h-8 rounded-md text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 inline-flex items-center justify-center mr-1 transition-colors" title="${d.overdue ? 'Send follow-up' : 'Send SMS'}" onclick="notifyOne(${d.db_id})"><i class="fa-solid fa-comment-sms text-sm"></i></button>`;
+        actions += `<button class="w-8 h-8 rounded-md text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 inline-flex items-center justify-center mr-1 transition-colors" title="${d.smsReason === 'collection-reminder' ? 'Send Reminder' : 'Send Ready SMS'}" onclick="notifyOne(${d.db_id})"><i class="fa-solid fa-comment-sms text-sm"></i></button>`;
+      } else if (d.status !== 'Delivered') {
+        actions += `<button disabled class="w-8 h-8 rounded-md text-slate-300 inline-flex items-center justify-center" title="${Atelier.escapeHtml(d.blockedReason || 'SMS unavailable')}"><i class="fa-solid fa-comment-sms text-sm"></i></button>`;
       }
 
-      if (d.status !== 'Delivered') {
+      if (d.status === 'Ready') {
         actions += `<button class="w-8 h-8 rounded-md text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 inline-flex items-center justify-center mr-1 transition-colors" title="Mark Delivered" onclick="confirmComplete('${d.id}', ${d.db_id})"><i class="fa-solid fa-check text-xs"></i></button>`;
       }
 
-      actions += `<button class="w-8 h-8 rounded-md text-slate-400 hover:bg-red-50 hover:text-red-500 inline-flex items-center justify-center transition-colors" title="Delete" onclick="confirmDelete('${d.id}', ${d.db_id})"><i class="fa-solid fa-trash text-xs"></i></button>`;
+      if (d.status === 'Delivered') {
+        actions += `<a href="/delivery/orders/${d.db_id}/receipt" target="_blank" rel="noopener" class="w-8 h-8 rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-900 inline-flex items-center justify-center mr-1 transition-colors" title="Print Final Receipt"><i class="fa-solid fa-print text-xs"></i></a>`;
+      }
+
+      actions += `<a href="/customers?highlight=${d.customer_id}" title="View Customer" class="w-8 h-8 rounded-md text-slate-400 hover:bg-slate-100 inline-flex items-center justify-center"><i class="fa-regular fa-user text-xs"></i></a>`;
 
       return `
         <tr class="hover:bg-slate-50 transition-colors ${d.overdue ? 'border-l-4 border-l-red-500' : d.dueToday ? 'border-l-4 border-l-amber-400' : ''}" id="row-${d.id}">
@@ -443,14 +435,16 @@
               : ''}
           </td>
           <td class="px-5 py-3 font-semibold text-slate-900">${d.id}</td>
-          <td class="px-5 py-3 text-slate-600">${Atelier.escapeHtml(d.cust)}</td>
-          <td class="px-5 py-3 text-slate-500">${Atelier.escapeHtml(d.gmt)}</td>
-          <td class="px-5 py-3 ${urgent && d.status !== 'Delivered' ? 'text-red-500 font-semibold' : 'text-slate-600'}">${d.due}</td>
+          <td class="px-5 py-3 text-slate-600">${Atelier.escapeHtml(d.cust)}<div class="text-xs text-slate-400 mt-1">${Atelier.escapeHtml(d.phone)}</div></td>
+          <td class="px-5 py-3 text-slate-500">${Atelier.escapeHtml(d.gmt)}<div class="text-xs mt-1">${d.pieces} pieces</div></td>
+          <td class="px-5 py-3 ${urgent ? 'text-red-500 font-semibold' : 'text-slate-600'}">${d.due}<div class="text-xs font-normal text-slate-500 mt-1">${smsDate(d.dueDate)}</div><div class="text-xs font-normal text-slate-400 mt-1">Ready: ${smsDate(d.readyAt)}</div></td>
           <td class="px-5 py-3 whitespace-nowrap">
             <span class="badge ${statusColors[d.status] || 'badge-scheduled'}">${d.status}</span>
             ${d.overdue ? `<span class="badge badge-overdue ml-1">Overdue</span>` : ''}
             ${d.notified && d.status === 'Ready' ? `<i class="fa-solid fa-comment-sms text-emerald-500 text-xs ml-1" title="Customer already notified"></i>` : ''}
           </td>
+          <td class="px-5 py-3 text-xs text-slate-500"><div>${d.notified ? 'SMS Sent' : 'Not Sent'} · SMS Count: ${d.smsCount}</div><div>First: ${smsDate(d.firstSmsAt)}</div><div class="mt-1">Last Sent: ${smsDate(d.lastSmsAt)}</div><button class="mt-1 font-semibold text-slate-900 underline" onclick="showSmsHistory(${d.db_id})">${d.smsCount} sent · History</button>${d.smsFailed ? `<div class="text-red-500 mt-1">${Atelier.escapeHtml(d.lastSmsError || 'Previous SMS failed. Retry available.')}</div>` : ''}</td>
+          <td class="px-5 py-3 text-xs text-slate-500"><div class="font-semibold ${d.reminderDue ? 'text-amber-600' : ''}">${d.status === 'Delivered' ? 'Stopped: collected' : d.reminderDue ? 'Reminder Due' : 'Reminder Not Due'}</div><div class="mt-1">Last reminder: ${smsDate(d.lastReminderAt)}</div><div class="mt-1">${d.daysWaiting} days waiting</div>${d.nextReminderAt ? `<div class="mt-1">Next: ${smsDate(d.nextReminderAt)}</div>` : ''}</td>
           <td class="px-5 py-3 text-right whitespace-nowrap">${actions}</td>
         </tr>
       `;
@@ -506,6 +500,7 @@
 
   /** Sends to a single customer through the same endpoint as the bulk action. */
   window.notifyOne = function(dbId) {
+    if (!deliveries.some(d=>d.db_id===dbId && canNotify(d))) return;
     selectedIds = new Set([dbId]);
     confirmBulkNotify();
   }
@@ -513,49 +508,98 @@
   window.updateStats = function() {
     const set = (id, value) => { const el = document.getElementById(id); if (el) el.innerText = value; };
 
-    const ready     = deliveries.filter(d => d.status === 'Ready').length;
-    const delivered = deliveries.filter(d => d.status === 'Delivered').length;
-    const overdue   = deliveries.filter(d => d.overdue).length;
-    const dueToday  = deliveries.filter(d => d.dueToday).length;
+    const ready = deliveryStats.ready;
+    const delivered = deliveryStats.reminderDue;
+    const overdue = deliveryStats.overdue;
+    const dueToday = deliveryStats.dueToday;
 
-    set('stat-total', deliveries.length);
+    set('stat-total', deliveryStats.total);
     set('stat-ready', ready);
     set('stat-duetoday', dueToday);
     set('stat-delivered', delivered);
     set('stat-overdue', overdue);
+    document.getElementById('sms-configuration-note')?.classList.toggle('hidden',collectionSettings.smsEnabled && collectionSettings.smsConfigured);
+    const alerts = [
+      ['Customers Due Today',dueToday,'Due Today'],
+      ['Notification Needed',deliveryStats.needsNotification,'Notification Needed'],
+      ...(collectionSettings.reminderAlertsEnabled ? [['Reminder Due',delivered,'Reminder Due']] : []),
+      ['Orders Waiting 7+ Days',deliveryStats.waitingLong,'Waiting 7+ Days'],
+      ...(collectionSettings.overdueEnabled ? [['Overdue',overdue,'Overdue']] : []),
+      ['Waiting for Collection',deliveryStats.waiting,'Waiting'],
+      ['Upcoming Due Dates',deliveryStats.upcoming,'Upcoming'],
+      ['SMS Sent Today',deliveryStats.smsSentToday,'today'],
+      ['SMS Failed',deliveryStats.smsFailed,'SMS Failed'],
+    ];
+    const cards = document.getElementById('delivery-alerts');
+    if (cards) cards.classList.toggle('hidden', !collectionSettings.alertsEnabled);
+    if (cards) cards.innerHTML = alerts.map(([label,count,filter])=>`<button class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all text-left" onclick="${filter==='today' ? "showSmsHistory(null, 'today')" : `filterDelivery('${filter}')`}"><span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">${label}</span><div class="text-2xl font-bold text-slate-900 mt-2">${count}</div></button>`).join('');
 
     set('subheader', `${ready} ready for collection · ${dueToday} due today · ${overdue} overdue`);
 
     /* The red banner earns its place only when something is actually wrong. */
     const banner = document.getElementById('urgent-banner');
-    if (banner) banner.classList.toggle('hidden', dueToday === 0 && overdue === 0);
+    if (banner) banner.classList.toggle('hidden', !collectionSettings.alertsEnabled || (dueToday === 0 && (!collectionSettings.overdueEnabled || overdue === 0)));
 
-    set('urgent-alert', overdue > 0
-      ? `${overdue} order${overdue === 1 ? '' : 's'} past the promised date`
-      : `${dueToday} collection${dueToday === 1 ? '' : 's'} due today`);
+    set('urgent-alert', collectionSettings.overdueEnabled && overdue > 0
+      ? `${overdue} customer${overdue === 1 ? '' : 's'} past the promised date`
+      : `${dueToday} customer${dueToday === 1 ? '' : 's'} due today`);
 
-    set('urgent-subalert', overdue > 0
+    set('urgent-subalert', collectionSettings.overdueEnabled && overdue > 0
       ? `${dueToday} more due today. Call or message these customers.`
       : 'Have these ready at the counter.');
   }
 
+  window.showSmsHistory = async function(orderId = null, filter = '', page = 1) {
+    try {
+      const query = new URLSearchParams({page});
+      if (orderId) query.set('order_id',orderId);
+      if (filter) query.set('filter',filter);
+      const history = await Atelier.api.get('/delivery/sms-history?' + query);
+      openModal('collection-sms-history',{...history,orderId,filter});
+    } catch (err) { Atelier.reportError(err,'Could not load SMS history'); }
+  };
+  window.resolveCollectionSms = async function(id,btn) {
+    const confirmation=document.getElementById('sms-resolution-confirmation').value;
+    if (confirmation !== 'CHECKED') return toast('Type CHECKED after verifying the outcome with your SMS provider.','error');
+    Atelier.setBusy(btn,true);
+    try {
+      const res=await Atelier.api.post(`/delivery/sms/${id}/resolve`,{confirmation,outcome:document.getElementById('sms-resolution-outcome').value,provider_reference:document.getElementById('sms-resolution-reference').value});
+      await refreshFromServer(); closeModal(); toast(res.message,'success');
+    } catch(err) { Atelier.reportError(err,'Could not record provider outcome'); }
+    finally { Atelier.setBusy(btn,false); }
+  };
+
   /* ============= MODAL OVERRIDES ============= */
   window.modals = window.modals || {};
   Object.assign(window.modals, {
+    'collection-sms-history': data => `<div class="p-5 border-b border-slate-200 flex justify-between items-center"><h3 class="text-lg font-bold text-slate-900">SMS History</h3><button onclick="closeModal()" class="text-slate-400">✕</button></div>
+      <div class="p-6 space-y-3 overflow-y-auto" style="max-height:60vh">${data.data.map(log=>`<div class="bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs">
+        <div class="font-semibold text-slate-900">${Atelier.escapeHtml(log.status === 'failed' ? 'failed_attempt' : log.reason === 'collection-first' ? 'ready_notification' : log.reason === 'collection-reminder' ? 'reminder' : log.reason || log.template_id)} · ${Atelier.escapeHtml(log.status)}</div>
+        <div class="text-slate-500 mt-1">${Atelier.escapeHtml(log.customer?.name || 'Customer unavailable')} · ${Atelier.escapeHtml(log.phone)}<br>Sent At: ${smsDate(log.sent_at)} · Attempted: ${smsDate(log.created_at)} · Attempt Count: ${log.attempt_count || 1}</div>
+        <div class="mt-1">${log.collection_orders.map(o=>Atelier.escapeHtml(o.order_number || String(o.id))).join(', ')}</div>
+        <p class="text-slate-600 mt-2 whitespace-pre-wrap">${Atelier.escapeHtml(log.message)}</p>
+        ${log.error ? `<p class="text-red-500 mt-2">${Atelier.escapeHtml(log.error)}</p>` : ''}
+        ${['unknown','sending'].includes(log.status) ? `<button class="mt-2 font-semibold underline" onclick="openModal('sms-resolution', {id:${log.id}})">Check provider outcome</button>` : ''}
+      </div>`).join('') || '<p class="text-slate-500 text-sm">No SMS history yet.</p>'}</div>
+      <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-between items-center text-xs"><span>${data.total} records</span><div class="flex gap-3">${data.current_page>1 ? `<button onclick="showSmsHistory(${data.orderId || 'null'},'${data.filter}',${data.current_page-1})">Previous</button>` : ''}${data.current_page<data.last_page ? `<button onclick="showSmsHistory(${data.orderId || 'null'},'${data.filter}',${data.current_page+1})">Next</button>` : ''}<button onclick="closeModal()">Close</button></div></div>`,
+    'sms-resolution': data => `<div class="p-5 border-b border-slate-200"><h3 class="font-bold text-slate-900">Check SMS Provider</h3></div><div class="p-6 space-y-3 text-sm text-slate-600">
+      <p>An interrupted request may have been accepted. Check the provider's SMS history before allowing a retry.</p>
+      <select id="sms-resolution-outcome" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg"><option value="failed">Provider confirms: not sent</option><option value="accepted">Provider confirms: accepted</option></select>
+      <input id="sms-resolution-reference" placeholder="Provider reference (required if accepted)" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg">
+      <input id="sms-resolution-confirmation" placeholder="Type CHECKED" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg"></div><div class="p-4 bg-slate-50 border-t border-slate-200 flex flex-wrap justify-end gap-2"><button onclick="closeModal()">Cancel</button><button class="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm" onclick="resolveCollectionSms(${data.id},this)">Record outcome</button></div>`,
     'delivery-details': (data) => {
       const modalElement = document.getElementById('modal-content');
       if (modalElement) modalElement.classList.add('modal-xl');
 
       const fmt = (iso) => iso
-        ? new Date(iso).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+        ? new Date(iso).toLocaleString('en-IN', { timeZone: collectionSettings.timezone, day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
         : null;
 
-      /* Three real steps, driven by the order's own timestamps. The garments
-         are collected from the shop, so there is no leg in between. */
       const steps = [
-        { label: 'Order Created', icon: 'fa-file-pen', at: fmt(data.createdAt), note: 'Order placed and advance received.', done: true },
-        { label: 'Ready for Collection', icon: 'fa-box-archive', at: fmt(data.readyAt), note: data.notified ? 'Customer has been notified.' : 'Customer not notified yet.', done: data.status !== 'Scheduled' },
-        { label: 'Collected by Customer', icon: 'fa-handshake', at: fmt(data.deliveredAt), note: 'Handed over and payment settled.', done: data.status === 'Delivered' },
+        { label: 'Order Created', icon: 'fa-file-pen', at: fmt(data.createdAt), note: 'Order recorded.', done: true },
+        { label: 'Ready for Verification', icon: 'fa-clipboard-check', at: fmt(data.verificationAt), note: 'Verify garments and send the Ready SMS.', done: !!data.verificationAt || data.collectionReady || data.status === 'Delivered' },
+        ...(data.status === 'Ready' || data.status === 'Delivered' ? [{ label: 'Ready', icon: 'fa-box-archive', at: fmt(data.readyAt), note: data.notified ? 'Customer notified; awaiting collection.' : 'Legacy ready order; notification not recorded.', done: true }] : []),
+        ...(data.status === 'Delivered' ? [{ label: 'Collected by Customer', icon: 'fa-handshake', at: fmt(data.deliveredAt), note: 'Collection completed.', done: true }] : []),
       ];
 
       return `
@@ -576,7 +620,9 @@
                 <div class="flex justify-between"><span class="text-slate-500">Customer:</span><span class="font-semibold text-slate-900">${Atelier.escapeHtml(data.cust)}</span></div>
                 <div class="flex justify-between"><span class="text-slate-500">Phone:</span><span class="font-semibold text-slate-900">${Atelier.escapeHtml(data.phone || '—')}</span></div>
                 <div class="flex justify-between"><span class="text-slate-500">Garment:</span><span class="font-semibold text-slate-900">${Atelier.escapeHtml(data.gmt)}</span></div>
-                <div class="flex justify-between"><span class="text-slate-500">Due Date:</span><span class="font-semibold ${data.overdue ? 'text-red-500' : 'text-slate-900'}">${data.due}</span></div>
+                <div class="flex justify-between"><span class="text-slate-500">Due Date:</span><span class="font-semibold ${data.overdue ? 'text-red-500' : 'text-slate-900'}">${fmt(data.dueDate) || 'No due date'}</span></div>
+                <div class="flex justify-between"><span class="text-slate-500">Pieces:</span><span class="font-semibold text-slate-900">${data.pieces}</span></div>
+                <div class="flex justify-between"><span class="text-slate-500">Ready Date:</span><span class="font-semibold text-slate-900">${fmt(data.readyAt) || 'Not notified yet'}</span></div>
                 <div class="flex justify-between"><span class="text-slate-500">Status:</span><span class="font-semibold text-slate-900">${data.status}${data.overdue ? ' · Overdue' : ''}</span></div>
               </div>
             </div>
@@ -585,9 +631,13 @@
               <h4 class="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2"><i class="fa-solid fa-receipt text-slate-400"></i> Payment</h4>
               <div class="space-y-3 text-sm">
                 <div class="flex justify-between"><span class="text-slate-500">Total Amount:</span><span class="font-semibold text-slate-900">${Atelier.money(data.amount)}</span></div>
+                <div class="flex justify-between"><span class="text-slate-500">Advance:</span><span class="font-semibold text-slate-900">${Atelier.money(data.advance)}</span></div>
+                <div class="flex justify-between"><span class="text-slate-500">Payment Status:</span><span class="font-semibold text-slate-900">${data.paymentStatus}</span></div>
                 <div class="flex justify-between"><span class="text-slate-500">Amount Paid:</span><span class="font-semibold text-emerald-600">${Atelier.money(data.amount - data.balance)}</span></div>
-                <div class="flex justify-between border-t border-slate-200 pt-2 mt-2"><span class="font-bold text-slate-900">Balance Due:</span><span class="font-bold ${data.balance > 0 ? 'text-red-500' : 'text-emerald-600'}">${Atelier.money(data.balance)}</span></div>
-                ${data.balance > 0 ? `<div class="text-[11px] text-amber-600 font-medium">Collect the balance before handing over.</div>` : ''}
+<div class="flex justify-between border-t border-slate-200 pt-2"><span>Current Order Due:</span><strong>${Atelier.money(data.current_order_due)}</strong></div>
+<div class="flex justify-between text-red-500"><span>Previous Due:</span><strong>${Atelier.money(data.previous_due)}</strong></div>
+<div class="flex justify-between border-t border-slate-200 pt-2"><strong>Customer Total Due:</strong><strong>${Atelier.money(data.customer_total_due)}</strong></div>
+                ${data.balance > 0 && data.status === 'Ready' ? `<div class="text-[11px] text-amber-600 font-medium">Collect the balance before handing over.</div>` : ''}
               </div>
             </div>
           </div>
@@ -597,6 +647,7 @@
             <h4 class="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-5 flex items-center gap-2">
               <i class="fa-solid fa-clock-rotate-left text-slate-400"></i> Collection Timeline
             </h4>
+            <div class="text-xs text-slate-500 mb-4">${data.notified ? 'SMS Sent' : 'Ready notification needed'} · SMS Count: ${data.smsCount}<br>Last Sent: ${smsDate(data.lastSmsAt)}<br>${data.status === 'Delivered' ? 'Reminders stopped: collected' : data.reminderDue ? 'Reminder Due' : 'Reminder Not Due'}${data.lastSmsError ? `<p class="mt-2 text-red-500">${Atelier.escapeHtml(data.lastSmsError)}</p>` : ''}${data.status !== 'Delivered' && data.blockedReason ? `<p class="mt-2">${Atelier.escapeHtml(data.blockedReason)}</p>` : ''}<button class="block mt-2 font-semibold underline" onclick="showSmsHistory(${data.db_id})">SMS History</button></div>
             <div class="relative pl-8 space-y-6">
               <div class="absolute left-[14px] top-2 bottom-2 w-0.5 bg-slate-200"></div>
               ${steps.map(s => `
@@ -613,9 +664,12 @@
           </div>
 
         </div>
-        <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">
+        <div class="p-4 bg-slate-50 border-t border-slate-200 flex flex-wrap justify-end gap-2">
           <button class="bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-100 transition-colors" onclick="closeModal()">Close</button>
-          ${data.status !== 'Delivered' ? `
+          <a href="/customers?highlight=${data.customer_id}" class="bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-lg text-sm font-medium">View Customer</a>
+          ${data.status === 'Ready for Verification' && !canNotify(data) ? `<button disabled title="${Atelier.escapeHtml(data.blockedReason || 'SMS unavailable')}" class="bg-slate-100 text-slate-400 px-4 py-2 rounded-lg text-sm font-medium">Send Ready SMS</button>` : ''}
+          ${canNotify(data) ? `<button class="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-medium" onclick="closeModal(); notifyOne(${data.db_id})">${data.smsReason === 'collection-reminder' ? 'Send Reminder' : 'Send Ready SMS'}</button>` : ''}
+          ${data.status === 'Ready' ? `
             <button class="bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-600 transition-colors shadow-sm inline-flex items-center gap-2" onclick="closeModal(); confirmComplete('${data.id}', ${data.db_id})"><i class="fa-solid fa-check text-xs"></i> Mark Delivered</button>
           ` : ''}
         </div>`;
@@ -632,25 +686,25 @@
             <i class="fa-solid fa-comment-sms"></i>
           </div>
           <div class="flex-1">
-            <p class="text-sm text-slate-700">The shop's <span class="font-semibold">ORDER READY</span> message will be sent to <span class="font-bold text-emerald-600">${data.count}</span> customer${data.count === 1 ? '' : 's'}.</p>
-            <p class="text-xs text-slate-500 mt-2">Order statuses are not changed — this is a collection reminder.</p>
+            <p class="text-sm text-slate-700">The eligible <span class="font-semibold">Ready notification or reminder</span> message will be sent to <span class="font-bold text-emerald-600">${data.count}</span> customer${data.count === 1 ? '' : 's'}.</p>
+            <p class="text-xs text-slate-500 mt-2">Confirm that the selected garments are verified and complete. After a successful first SMS, Ready for Verification changes to Ready. Failed messages can be retried.</p>
           </div>
         </div>
       </div>
-      <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">
+      <div class="p-4 bg-slate-50 border-t border-slate-200 flex flex-wrap justify-end gap-2">
         <button class="bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-100 transition-colors" onclick="closeModal()">Cancel</button>
         <button class="bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-600 flex items-center gap-2 transition-colors shadow-sm" onclick="runBulkNotify(this)"><i class="fa-solid fa-paper-plane text-xs"></i> Send Now</button>
       </div>`,
 
     'notify-results': (res) => {
-      const failed = res.failed || [];
+      const failed = [...(res.failed || []), ...(res.skipped || [])];
       const sent   = res.results || [];
 
       return `
         <div class="p-5 border-b border-slate-200 flex justify-between items-center">
           <div>
             <div class="text-lg font-bold text-slate-900 tracking-tight">Notification Results</div>
-            <div class="text-xs text-slate-500 mt-0.5">${res.sent} sent · ${failed.length} failed</div>
+            <div class="text-xs text-slate-500 mt-0.5">${res.sent} sent · ${(res.failed || []).length} failed · ${(res.skipped || []).length} orders skipped</div>
           </div>
           <button class="w-8 h-8 rounded-lg text-slate-400 hover:bg-slate-100 flex items-center justify-center" onclick="closeModal()"><i class="fa-solid fa-xmark text-sm"></i></button>
         </div>
@@ -698,7 +752,7 @@
           <div>
             <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Reason *</label>
             <select id="extend-reason" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-colors">
-              <option>Power Outage</option><option>Fabric Delay</option><option>Public Holiday</option><option>Staff Shortage</option><option>Machine Repair</option>
+              ${@json(explode('|', \App\Services\Settings::get('extension_reasons'))).map(reason=>`<option>${Atelier.escapeHtml(reason)}</option>`).join('')}
             </select>
           </div>
           <div>
@@ -707,7 +761,7 @@
           </div>
         </div>
       </div>
-      <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">
+      <div class="p-4 bg-slate-50 border-t border-slate-200 flex flex-wrap justify-end gap-2">
         <button class="bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-100 transition-colors" onclick="closeModal()">Cancel</button>
         <button class="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors shadow-sm" onclick="runBulkExtend(this)"><i class="fa-solid fa-paper-plane text-xs mr-1"></i> Extend and Notify All</button>
       </div>`
@@ -736,6 +790,10 @@
     selectedIds.clear();
     updateStats();
     renderDeliveries();
+    const filter = new URLSearchParams(window.location.search).get('filter');
+    if (filter) filterDelivery(filter);
+    Atelier.poll(refreshFromServer, 30000);
   });
+  @include('delivery.payment-dialog')
 </script>
 @endpush

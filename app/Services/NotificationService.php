@@ -71,6 +71,19 @@ class NotificationService
         return $notification;
     }
 
+    /** Unique database key, shared across workers and tabs; cache eviction cannot duplicate it. */
+    public static function pushOnce(string $key, string $title, string $message, ?Order $order = null, ?string $actionUrl = null): ?Notification
+    {
+        $notification = Notification::firstOrCreate(['event_key' => $key], [
+            'title' => $title, 'message' => $message, 'type' => 'Alerts', 'category' => 'alerts',
+            'icon' => 'fa-solid fa-clock', 'color' => 'warning', 'order_id' => $order?->id,
+            'customer_id' => $order?->customer_id, 'action_url' => $actionUrl, 'is_read' => false,
+        ]);
+        if (!$notification->wasRecentlyCreated) return null;
+        self::flushCache();
+        return $notification;
+    }
+
     public static function orderCreated(Order $order): ?Notification
     {
         return self::push(
@@ -91,12 +104,6 @@ class NotificationService
 
     public static function orderStatusChanged(Order $order, string $from, string $to): ?Notification
     {
-        if ($to === 'Ready for Verification') {
-            return self::push('Garments Ready for Verification',
-                sprintf('%s (%s): garments have been stitched and are available at the shop for staff verification.', $order->display_number, $order->customer?->name ?? 'Customer'),
-                'system', 'fa-solid fa-arrows-rotate', 'info', $order, actionUrl: route('orders.index'));
-        }
-
         if (!Settings::bool('notify_status_changed')) {
             return null;
         }
@@ -134,29 +141,6 @@ class NotificationService
             'success',
             $order,
             actionUrl: route('payments-billing.index'),
-        );
-    }
-
-    public static function orderOverdue(Order $order): ?Notification
-    {
-        // Honour the repeat rule so an overdue order does not re-alert on
-        // every page load once the shop has already been told.
-        if (!self::mayRepeat('order-overdue-' . $order->id)) {
-            return null;
-        }
-
-        return self::push(
-            'Order Overdue',
-            sprintf(
-                '%s for %s passed its delivery date',
-                $order->display_number,
-                $order->customer?->name ?? 'Unknown',
-            ),
-            'alerts',
-            'fa-solid fa-triangle-exclamation',
-            'danger',
-            $order,
-            actionUrl: route('delivery.index'),
         );
     }
 
@@ -207,60 +191,6 @@ class NotificationService
     }
 
     /**
-     * Raises a reminder for every open order falling due within the window the
-     * shop configured, and for anything already past its date.
-     *
-     * Safe to call on each page load: `mayRepeat()` keeps the same order from
-     * alerting again until the repeat interval has elapsed.
-     */
-    public static function sweepDueOrders(): int
-    {
-        $days = max(0, Settings::int('alert_days_before'));
-        $raised = 0;
-
-        $orders = Order::query()
-            ->with('customer:id,name,phone')
-            ->open()
-            ->whereNotNull('delivery_date')
-            ->whereDate('delivery_date', '<=', now()->addDays($days)->toDateString())
-            ->lazyById(100);
-
-        foreach ($orders as $order) {
-            if ($order->is_overdue) {
-                $raised += self::orderOverdue($order) ? 1 : 0;
-                continue;
-            }
-
-            if (!self::mayRepeat('order-due-' . $order->id)) {
-                continue;
-            }
-
-            $due = Dates::parse($order->delivery_date);
-
-            $notification = self::push(
-                'Delivery Due Soon',
-                sprintf(
-                    '%s for %s is due %s',
-                    $order->display_number,
-                    $order->customer?->name ?? 'a customer',
-                    $due?->isToday() ? 'today' : Dates::format($order->delivery_date)
-                ),
-                'alerts',
-                'fa-solid fa-clock',
-                'warning',
-                $order,
-                actionUrl: route('delivery.index'),
-            );
-
-            $raised += $notification ? 1 : 0;
-
-            CustomerNotificationDispatcher::dispatch('due-reminder', $order);
-        }
-
-        return $raised;
-    }
-
-    /**
      * Applies the repeat-alert rule.
      *
      * With repeats off, a given subject alerts once and never again. With them
@@ -302,7 +232,6 @@ class NotificationService
             'browser'        => Settings::bool('browser_notifications'),
             'sound'          => Settings::bool('sound_alerts'),
             'paymentToasts'  => Settings::bool('payment_toasts'),
-            'alertDays'      => max(0, Settings::int('alert_days_before')),
             'repeat'         => Settings::bool('repeat_alerts'),
             'repeatHours'    => max(1, Settings::int('repeat_alert_hours')),
             'lowStock'       => self::lowStockThreshold(),

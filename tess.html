@@ -4,1053 +4,2379 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart Checkout - Ultra Premium Compact</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
-        rel="stylesheet">
+    <title>Create New Order — Step 3 Measurements</title>
+
     <style>
+        * {
+            box-sizing: border-box;
+        }
+
         body {
-            font-family: 'Inter', sans-serif;
-            background-color: #f8fafc;
-            -webkit-font-smoothing: antialiased;
-        }
-
-        /* Custom Scrollbar */
-        .overflow-y-auto::-webkit-scrollbar {
-            width: 5px;
-            height: 5px;
-        }
-
-        .overflow-y-auto::-webkit-scrollbar-track {
-            background: transparent;
-        }
-
-        .overflow-y-auto::-webkit-scrollbar-thumb {
-            background: #e2e8f0;
-            border-radius: 10px;
-        }
-
-        .overflow-y-auto:hover::-webkit-scrollbar-thumb {
-            background: #cbd5e1;
-        }
-
-        /* Number Inputs */
-        input[type=number]::-webkit-inner-spin-button,
-        input[type=number]::-webkit-outer-spin-button {
-            -webkit-appearance: none;
             margin: 0;
+            font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+            background: #eef2f7;
+            color: #12203a;
         }
 
-        input[type=number] {
-            -moz-appearance: textfield;
+        button,
+        input,
+        select {
+            font: inherit;
         }
 
-        /* SPA Transitions */
-        .pos-step {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+        button {
+            cursor: pointer;
+        }
+
+        .app {
+            max-width: 1180px;
+            margin: 28px auto 50px;
+            padding: 0 18px;
+        }
+
+        .modal {
+            background: #fff;
+            border: 1px solid #dbe3ed;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 18px 55px rgba(18, 32, 58, .12);
+        }
+
+        /* =========================================
+   HEADER
+========================================= */
+
+        .modal-head {
+            padding: 20px 24px 15px;
+            border-bottom: 1px solid #dfe6ee;
             display: flex;
-            opacity: 0;
-            pointer-events: none;
-            transform: translateX(60px);
-            transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1), transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            justify-content: space-between;
+            align-items: flex-start;
         }
 
-        .pos-step.is-active {
-            opacity: 1;
-            pointer-events: auto;
-            transform: translateX(0);
-            z-index: 10;
+        .title {
+            font-size: 21px;
+            font-weight: 900;
+            margin-bottom: 3px;
         }
 
-        .pos-step.is-previous {
-            opacity: 0;
-            transform: translateX(-60px);
-            pointer-events: none;
+        .subtitle {
+            color: #75869b;
+            font-size: 13px;
         }
 
-        .pos-step.is-next {
-            opacity: 0;
-            transform: translateX(60px);
-            pointer-events: none;
+        .close {
+            border: 0;
+            background: transparent;
+            color: #8da0b7;
+            font-size: 22px;
+            padding: 0 4px;
         }
 
-        /* Stepper CSS */
-        #pos-stepper .pos-stepper-dot {
-            width: 22px;
-            height: 22px;
-            border-radius: 50%;
-            background: #f1f5f9;
-            color: #94a3b8;
+        /* =========================================
+   STEPPER
+========================================= */
+
+        .steps {
             display: flex;
             align-items: center;
-            justify-content: center;
-            font-size: 11px;
-            font-weight: 800;
-            transition: all 0.3s ease;
-            border: 1px solid #e2e8f0;
+            padding: 14px 24px;
+            background: #f7f9fc;
+            border-bottom: 1px solid #dfe6ee;
+            overflow: auto;
         }
 
-        #pos-stepper .pos-stepper-line {
-            flex: 1;
-            height: 2px;
-            background: #e2e8f0;
-            transition: all 0.3s ease;
-            min-width: 20px;
-            border-radius: 2px;
-        }
-
-        #pos-stepper .pos-stepper-step.is-active .pos-stepper-dot {
-            background: #4f46e5;
-            color: white;
-            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
-            border-color: #4f46e5;
-        }
-
-        #pos-stepper .pos-stepper-step.is-active .pos-stepper-label {
-            color: #4f46e5;
-        }
-
-        #pos-stepper .pos-stepper-step.is-done .pos-stepper-dot {
-            background: #10b981;
-            color: white;
-            border-color: #10b981;
-        }
-
-        #pos-stepper .pos-stepper-step.is-done .pos-stepper-label {
-            color: #059669;
-        }
-
-        #pos-stepper .pos-stepper-step.is-done+.pos-stepper-line {
-            background: #10b981;
-        }
-
-        /* Ultra-Compact Payment Methods */
-        .pay-method.stacked {
+        .step {
             display: flex;
             align-items: center;
             gap: 8px;
-            padding: 10px;
-            background: white;
-            border: 2px solid #f1f5f9;
-            border-radius: 10px;
-            cursor: pointer;
-            transition: all 0.2s ease;
+            color: #72849a;
+            font-size: 13px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .step .num {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            border: 1px solid #d6e0eb;
+            background: #fff;
+            display: grid;
+            place-items: center;
+            font-weight: 900;
+            flex: none;
+        }
+
+        .step.done {
+            color: #1b8068;
+        }
+
+        .step.done .num {
+            background: #1eb38d;
+            color: #fff;
+            border-color: #1eb38d;
+        }
+
+        .step.active {
+            color: #15223a;
+        }
+
+        .step.active .num {
+            background: #4a43e8;
+            border-color: #4a43e8;
+            color: #fff;
+        }
+
+        .connector {
+            width: 48px;
+            height: 1px;
+            margin: 0 10px;
+            background: #d7e0ea;
+            flex: none;
+        }
+
+        .connector.done {
+            background: #31ab8c;
+        }
+
+        /* =========================================
+   BODY
+========================================= */
+
+        .body {
+            padding: 24px;
+        }
+
+        .intro {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 20px;
+            margin-bottom: 18px;
+        }
+
+        .intro h2 {
+            margin: 0 0 5px;
+            font-size: 17px;
+        }
+
+        .intro p {
+            margin: 0;
+            color: #74869c;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        /* =========================================
+   GARMENTS SELECTOR
+========================================= */
+
+        .order-garments {
+            border: 1px solid #d9e2ec;
+            border-radius: 12px;
+            background: #fbfcfe;
+            padding: 12px;
+            margin-bottom: 14px;
+        }
+
+        .order-garments-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 9px;
+        }
+
+        .order-garments-head strong {
+            font-size: 12px;
+            color: #2c3e56;
+        }
+
+        .order-garments-head span {
+            color: #8796a8;
+            font-size: 10px;
+        }
+
+        .garment-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 7px;
+        }
+
+        .garment-chip {
+            min-width: 145px;
+            max-width: 220px;
+            border: 1px solid #d6e0eb;
+            background: #fff;
+            color: #4d6179;
+            border-radius: 9px;
+            padding: 8px 10px;
             text-align: left;
         }
 
-        .pay-method.stacked:hover {
-            border-color: #c7d2fe;
-            background: #fcfcff;
+        .garment-chip:hover {
+            border-color: #adb8c8;
         }
 
-        .pay-method.stacked.active {
-            border-color: #4f46e5;
-            background: #eef2ff;
-            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        .garment-chip.active {
+            border-color: #6862e9;
+            background: #f3f3ff;
+            color: #303dbc;
         }
 
-        .pay-method.stacked .pay-icon {
-            width: 32px;
-            height: 32px;
-            border-radius: 8px;
-            background: #f8fafc;
+        .chip-top {
             display: flex;
             align-items: center;
-            justify-content: center;
-            color: #64748b;
-            font-size: 13px;
-            transition: all 0.2s;
-            border: 1px solid #e2e8f0;
+            gap: 7px;
         }
 
-        .pay-method.stacked.active .pay-icon {
-            background: linear-gradient(135deg, #4f46e5, #4338ca);
-            color: white;
-            border-color: transparent;
+        .chip-index {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #17233d;
+            color: #fff;
+            display: grid;
+            place-items: center;
+            font-size: 9px;
+            font-weight: 900;
+            flex: none;
         }
 
-        /* Premium Buttons */
-        .btn-primary {
-            background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
-            color: white;
-            font-weight: 600;
-            border-radius: 0.5rem;
-            transition: all 0.2s ease;
-            box-shadow: 0 2px 4px -1px rgba(79, 70, 229, 0.2);
+        .garment-chip.active .chip-index {
+            background: #4a43e8;
         }
 
-        .btn-primary:hover {
-            box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.3);
-            transform: translateY(-1px);
-        }
-
-        .btn-success {
-            background: linear-gradient(135deg, #059669 0%, #047857 100%);
-            color: white;
-            font-weight: 600;
-            border-radius: 0.5rem;
-            transition: all 0.2s ease;
-            box-shadow: 0 2px 4px -1px rgba(5, 150, 105, 0.2);
-        }
-
-        .btn-success:hover {
-            box-shadow: 0 4px 6px -1px rgba(5, 150, 105, 0.3);
-            transform: translateY(-1px);
-        }
-
-        .btn-ghost {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 6px;
-            background-color: #f8fafc;
-            color: #475569;
-            font-weight: 600;
-            font-size: 0.75rem;
-            border-radius: 0.5rem;
-            padding: 0.5rem 0.75rem;
-            transition: all 0.2s;
-            border: 1px solid #e2e8f0;
-        }
-
-        .btn-ghost:hover {
-            background-color: #f1f5f9;
-            color: #0f172a;
-        }
-
-        /* Premium Input */
-        .input-premium {
-            width: 100%;
-            padding: 0.5rem 0.75rem;
-            background-color: #fcfcfd;
-            border: 1px solid #e2e8f0;
-            border-radius: 0.5rem;
-            font-size: 0.8125rem;
-            font-weight: 500;
-            color: #0f172a;
-            transition: all 0.2s;
-        }
-
-        .input-premium:focus {
-            outline: none;
-            border-color: #4f46e5;
-            background-color: white;
-            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
-        }
-
-        /* Bottom Dock Animations */
-        .dock-bar {
-            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-
-        .dock-bar.bump {
-            animation: dockBump 0.3s ease;
-        }
-
-        @keyframes dockBump {
-
-            0%,
-            100% {
-                transform: scale(1);
-            }
-
-            50% {
-                transform: scale(1.01);
-            }
-        }
-
-        .cart-drawer {
-            max-height: 0;
+        .chip-name {
+            font-size: 10px;
+            font-weight: 900;
+            white-space: nowrap;
             overflow: hidden;
-            transition: max-height 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            text-overflow: ellipsis;
         }
 
-        .cart-drawer.open {
-            max-height: 40vh;
+        .chip-meta {
+            margin-top: 5px;
+            padding-left: 31px;
+            color: #8492a4;
+            font-size: 9px;
         }
 
-        /* Animations */
-        .cell-num {
-            font-variant-numeric: tabular-nums;
-            font-feature-settings: "tnum";
+        .chip-done {
+            color: #1b826c;
+            font-weight: 900;
         }
 
-        @keyframes pop-in {
-            0% {
-                transform: scale(0.8);
-                opacity: 0;
-            }
+        /* =========================================
+   MEASUREMENT CARD
+========================================= */
 
-            40% {
-                transform: scale(1.1);
-            }
-
-            100% {
-                transform: scale(1);
-                opacity: 1;
-            }
+        .measurement-card {
+            border: 1px solid #d9e2ec;
+            border-radius: 13px;
+            overflow: hidden;
+            background: #fff;
         }
 
-        .success-pop {
-            animation: pop-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        /* =========================================
+   CARD HEADER
+========================================= */
+
+        .card-head {
+            padding: 16px;
+            background: #f8fafc;
+            border-bottom: 1px solid #e1e7ee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 14px;
         }
 
-        .success-ring {
-            transform: scale(0);
-            animation: ring 0.8s ease-out forwards;
+        .current-info {
+            min-width: 0;
         }
 
-        @keyframes ring {
-            0% {
-                transform: scale(0);
-                opacity: 0.8;
-            }
-
-            100% {
-                transform: scale(2);
-                opacity: 0;
-            }
+        .current-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
 
-        .success-check {
-            stroke-dasharray: 48;
-            stroke-dashoffset: 48;
-            animation: draw-check 0.3s 0.2s ease-out forwards;
+        .current-number {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: grid;
+            place-items: center;
+            background: #17233d;
+            color: #fff;
+            font-size: 11px;
+            font-weight: 900;
+            flex: none;
         }
 
-        @keyframes draw-check {
-            to {
-                stroke-dashoffset: 0;
-            }
+        .current-title strong {
+            font-size: 15px;
+            color: #202f47;
         }
 
-        .fade-up {
+        .current-meta {
+            margin: 4px 0 0 42px;
+            color: #8391a3;
+            font-size: 10px;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .qty-box {
+            border: 1px solid #d8e1eb;
+            background: #fff;
+            border-radius: 8px;
+            padding: 7px 10px;
+            text-align: center;
+        }
+
+        .qty-box small {
+            display: block;
+            font-size: 8px;
+            color: #8b98a8;
+            text-transform: uppercase;
+            font-weight: 900;
+        }
+
+        .qty-box strong {
+            display: block;
+            margin-top: 2px;
+            font-size: 12px;
+            color: #293c55;
+        }
+
+        /* =========================================
+   QUICK ACTIONS
+========================================= */
+
+        .quick-area {
+            padding: 12px 16px;
+            border-bottom: 1px solid #e6ebf0;
+            background: #fbfcfe;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .quick-left,
+        .quick-right {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            flex-wrap: wrap;
+        }
+
+        .quick-btn {
+            border: 1px solid #d7e0eb;
+            border-radius: 7px;
+            background: #fff;
+            color: #53677f;
+            padding: 8px 10px;
+            font-size: 10px;
+            font-weight: 900;
+        }
+
+        .quick-btn:hover {
+            border-color: #aeb8c8;
+            color: #344bc1;
+        }
+
+        .quick-btn.primary-soft {
+            background: #f3f4ff;
+            border-color: #dfe2ff;
+            color: #3947c7;
+        }
+
+        /* =========================================
+   FORM
+========================================= */
+
+        .form-body {
+            padding: 18px 16px 16px;
+        }
+
+        .form-section {
+            margin-bottom: 0;
+        }
+
+        .section-heading {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 11px;
+        }
+
+        .section-heading strong {
+            font-size: 12px;
+            color: #2b3d56;
+        }
+
+        .unit-control {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: #8a98a8;
+            font-size: 9px;
+            font-weight: 900;
+            text-transform: uppercase;
+        }
+
+        .unit-select {
+            height: 30px;
+            border: 1px solid #d7e0eb;
+            border-radius: 7px;
+            background: #fff;
+            color: #53677f;
+            padding: 0 7px;
+            font-size: 10px;
+            font-weight: 800;
+            outline: none;
+        }
+
+        .measurement-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 10px;
+        }
+
+        .measure-field {
+            min-width: 0;
+        }
+
+        .measure-label {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 5px;
+            min-height: 16px;
+            margin-bottom: 5px;
+        }
+
+        .measure-label label {
+            color: #596c83;
+            font-size: 9px;
+            font-weight: 900;
+            text-transform: uppercase;
+            line-height: 1.2;
+        }
+
+        .required {
+            color: #9b4c4c;
+            font-size: 8px;
+        }
+
+        .input-wrap {
+            position: relative;
+        }
+
+        .measure-input {
+            width: 100%;
+            height: 42px;
+            border: 1px solid #d7e1ec;
+            border-radius: 8px;
+            background: #fbfcfe;
+            color: #22344e;
+            outline: none;
+            padding: 0 38px 0 10px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .measure-input:focus {
+            border-color: #8189ef;
+            box-shadow: 0 0 0 3px rgba(74, 67, 232, .07);
+        }
+
+        .measure-input.has-value {
+            background: #fff;
+        }
+
+        .input-unit {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #98a5b4;
+            font-size: 9px;
+            font-weight: 900;
+        }
+
+        /* =========================================
+   FORM FOOTER
+========================================= */
+
+        .card-footer {
+            padding: 13px 16px;
+            background: #f8fafc;
+            border-top: 1px solid #e0e7ee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .status {
+            color: #8190a2;
+            font-size: 10px;
+        }
+
+        .status.saved {
+            color: #1b816b;
+            font-weight: 800;
+        }
+
+        .footer-actions {
+            display: flex;
+            gap: 7px;
+        }
+
+        .btn {
+            border: 1px solid #d7e0eb;
+            background: #fff;
+            color: #30445e;
+            border-radius: 8px;
+            padding: 9px 13px;
+            font-size: 11px;
+            font-weight: 800;
+        }
+
+        /* =========================================
+   MAIN FOOTER
+========================================= */
+
+        .main-footer {
+            padding: 16px 24px;
+            background: #f8fafc;
+            border-top: 1px solid #dfe6ee;
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .actions {
+            display: flex;
+            gap: 7px;
+        }
+
+        /* =========================================
+   TOAST
+========================================= */
+
+        .toast {
+            position: fixed;
+            right: 20px;
+            bottom: 20px;
+            background: #111b33;
+            color: #fff;
+            padding: 11px 14px;
+            border-radius: 8px;
+            font-size: 11px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, .16);
             opacity: 0;
-            transform: translateY(8px);
-            animation: fade-up-anim 0.4s ease-out forwards;
+            transform: translateY(10px);
+            pointer-events: none;
+            transition: .2s;
+            z-index: 3000;
         }
 
-        @keyframes fade-up-anim {
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
+        .toast.show {
+            opacity: 1;
+            transform: none;
         }
 
-        @keyframes modalIn {
-            from {
-                opacity: 0;
-                transform: translateY(20px) scale(0.98);
+        /* =========================================
+   RESPONSIVE
+========================================= */
+
+        @media(max-width:1000px) {
+
+            .measurement-grid {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
             }
 
-            to {
-                opacity: 1;
-                transform: translateY(0) scale(1);
-            }
         }
 
-        .modal-in {
-            animation: modalIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        @media(max-width:780px) {
+
+            .measurement-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .card-head {
+                align-items: flex-start;
+            }
+
+            .header-right {
+                flex-wrap: wrap;
+                justify-content: flex-end;
+            }
+
+        }
+
+        @media(max-width:560px) {
+
+            .app {
+                margin: 12px auto 30px;
+                padding: 0 10px;
+            }
+
+            .body {
+                padding: 16px;
+            }
+
+            .modal-head {
+                padding: 17px 16px;
+            }
+
+            .steps {
+                padding: 12px 16px;
+            }
+
+            .intro {
+                flex-direction: column;
+            }
+
+            .measurement-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .card-head {
+                flex-direction: column;
+            }
+
+            .header-right {
+                width: 100%;
+                justify-content: flex-start;
+            }
+
+            .quick-area {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .quick-left,
+            .quick-right {
+                width: 100%;
+            }
+
+            .quick-btn {
+                flex: 1;
+            }
+
+            .card-footer,
+            .main-footer {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .footer-actions,
+            .actions {
+                justify-content: flex-end;
+            }
+
         }
     </style>
 </head>
 
-<body class="text-slate-800">
+<body>
 
-    <div class="p-4 md:p-6 max-w-[1600px] mx-auto">
+    <div class="app">
 
-        <!-- Header & Stepper -->
-        <div class="mb-4 flex items-center justify-between gap-4 flex-wrap">
-            <div>
-                <h1 class="text-lg font-black text-slate-900 tracking-tight">Smart Checkout</h1>
-                <p class="text-xs text-slate-500 mt-0.5 font-medium">Tap products to add them to the dock</p>
-            </div>
-            <div class="flex items-center w-full max-w-md bg-white border border-slate-200 rounded-xl shadow-sm px-4 py-2"
-                id="pos-stepper">
-                <div class="pos-stepper-step is-active flex items-center gap-2" data-step="1">
-                    <span class="pos-stepper-dot">1</span>
-                    <span class="pos-stepper-label text-xs font-semibold text-slate-500 whitespace-nowrap">Build
-                        Cart</span>
-                </div>
-                <div class="pos-stepper-line"></div>
-                <div class="pos-stepper-step flex items-center gap-2" data-step="2">
-                    <span class="pos-stepper-dot">2</span>
-                    <span
-                        class="pos-stepper-label text-xs font-semibold text-slate-500 whitespace-nowrap">Payment</span>
-                </div>
-                <div class="pos-stepper-line"></div>
-                <div class="pos-stepper-step flex items-center gap-2" data-step="3">
-                    <span class="pos-stepper-dot"><i class="fa-solid fa-check text-[9px]"></i></span>
-                    <span class="pos-stepper-label text-xs font-semibold text-slate-500 whitespace-nowrap">Done</span>
-                </div>
-            </div>
-        </div>
+        <div class="modal">
 
-        <!-- Main Container -->
-        <div id="checkout-container"
-            class="relative w-full overflow-hidden rounded-2xl bg-slate-100/50 border border-slate-200 shadow-sm"
-            style="height: calc(100vh - 9.5rem); min-height: 480px;">
+            <!-- HEADER -->
 
-            <!-- ============================================== -->
-            <!-- STEP 1: FULL WIDTH PRODUCTS + FLOATING DOCK    -->
-            <!-- ============================================== -->
-            <div id="step-1-pos" class="pos-step is-active flex flex-col h-full">
+            <header class="modal-head">
 
-                <!-- Toolbar -->
-                <div class="p-2 border-b border-slate-200 bg-white flex gap-2 items-center z-10 relative shrink-0">
-                    <div class="relative flex-1 min-w-0">
-                        <i
-                            class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none"></i>
-                        <input type="search" id="pos-search" placeholder="Search products..."
-                            class="input-premium w-full pl-9 pr-4 text-sm" autocomplete="off">
+                <div>
+
+                    <div class="title">
+                        Create New Order
                     </div>
-                    <div class="w-40 shrink-0">
-                        <select class="input-premium w-full cursor-pointer text-sm">
-                            <option>All Categories</option>
-                            <option>Fabric</option>
-                            <option>Ready-to-Wear</option>
-                        </select>
+
+                    <div class="subtitle">
+                        Step 3 of 5
                     </div>
-                    <div class="w-28 shrink-0">
-                        <select class="input-premium w-full cursor-pointer text-sm">
-                            <option>All Units</option>
-                            <option>Meters</option>
-                            <option>Pieces</option>
-                        </select>
-                    </div>
+
                 </div>
 
-                <!-- Full Width Dense Products Grid -->
-                <div class="flex-1 min-h-0 overflow-y-auto p-3 bg-slate-50/50">
-                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2.5"
-                        id="products-grid"></div>
-                </div>
-
-                <!-- Floating Bottom Dock -->
-                <div class="absolute bottom-3 left-3 right-3 z-30 pointer-events-none">
-                    <div id="dock-bar"
-                        class="dock-bar pointer-events-auto bg-white/95 backdrop-blur-md border border-slate-200 shadow-2xl rounded-2xl overflow-hidden">
-
-                        <!-- Slide-up Cart Drawer -->
-                        <div id="cart-drawer" class="cart-drawer">
-                            <div class="p-3 max-h-[35vh] overflow-y-auto border-b border-slate-100">
-                                <div class="flex justify-between items-center mb-2">
-                                    <h3 class="text-xs font-bold text-slate-800">Cart Items</h3>
-                                    <button onclick="clearCart()"
-                                        class="text-[10px] font-bold text-rose-600 hover:text-rose-700">CLEAR
-                                        ALL</button>
-                                </div>
-                                <ul id="cart-list" class="space-y-1.5"></ul>
-                            </div>
-                        </div>
-
-                        <!-- Dock Bar Content -->
-                        <div class="p-2.5 pl-4 flex items-center justify-between gap-4">
-                            <button onclick="toggleCart()" class="flex items-center gap-2.5 group">
-                                <span id="dock-count"
-                                    class="bg-indigo-600 text-white text-[10px] font-bold w-6 h-6 rounded-full flex items-center justify-center transform transition-transform group-hover:scale-110">0</span>
-                                <span class="font-bold text-slate-800 text-xs">View Cart</span>
-                                <i class="fa-solid fa-chevron-up text-slate-400 text-[9px] transition-transform"
-                                    id="drawer-icon"></i>
-                            </button>
-
-                            <div class="flex items-center gap-4">
-                                <div class="text-right">
-                                    <span
-                                        class="block text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-0.5">Total</span>
-                                    <span class="text-lg font-black text-slate-900 tracking-tight cell-num leading-none"
-                                        id="dock-total">Rs 0</span>
-                                </div>
-                                <button onclick="goToCheckout()"
-                                    class="btn-primary px-5 py-2 text-[11px] flex items-center justify-center gap-2 disabled:opacity-50"
-                                    id="btn-checkout" disabled>
-                                    Proceed <i class="fa-solid fa-arrow-right text-[9px]"></i>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-            </div>
-
-            <!-- ============================================== -->
-            <!-- STEP 2: SPLIT LAYOUT (SUMMARY LEFT, PAYMENT RIGHT) -->
-            <!-- ============================================== -->
-            <div id="step-2-checkout"
-                class="pos-step is-next flex bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden h-full">
-
-                <!-- LEFT: Order Summary -->
-                <div class="w-80 shrink-0 bg-slate-50/50 border-r border-slate-200 flex flex-col min-h-0 h-full">
-                    <div class="p-4 border-b border-slate-200 shrink-0 flex justify-between items-center">
-                        <h3 class="text-sm font-bold text-slate-800">Order Summary</h3>
-                        <button onclick="goToStep(1)" class="btn-ghost py-1.5 px-2.5 text-[10px]">
-                            <i class="fa-solid fa-arrow-left text-[9px]"></i> Edit
-                        </button>
-                    </div>
-
-                    <div class="flex-1 min-h-0 flex flex-col justify-center px-4 py-3">
-                        <div class="flex justify-between items-center mb-2">
-                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Items</span>
-                            <span class="text-[10px] text-slate-400 font-medium" id="checkout-item-count">0 items</span>
-                        </div>
-                        <div id="checkout-summary-list" class="space-y-1.5 overflow-y-auto min-h-0 pr-1"></div>
-                    </div>
-
-                    <div class="p-4 border-t border-slate-200 bg-white shrink-0 space-y-1.5">
-                        <div class="flex justify-between text-[11px] text-slate-500">
-                            <span>Subtotal</span>
-                            <span class="cell-num font-medium text-slate-700" id="checkout-subtotal">Rs 0</span>
-                        </div>
-                        <div class="flex justify-between text-[11px] text-slate-500">
-                            <span>Discount</span>
-                            <span class="cell-num font-medium text-rose-600" id="checkout-discount">-Rs 0</span>
-                        </div>
-                        <div class="flex justify-between items-end pt-1.5 border-t border-slate-100 mt-1.5">
-                            <span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Grand
-                                Total</span>
-                            <span class="text-lg font-black text-slate-900 tracking-tight cell-num"
-                                id="checkout-total">Rs 0</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- RIGHT: Payment Controls (Ultra-Compact) -->
-                <div class="flex-1 flex flex-col bg-white min-h-0 h-full p-5">
-
-                    <div class="flex items-center justify-between mb-4 shrink-0">
-                        <h2 class="text-sm font-bold text-slate-900 tracking-tight">Payment Method</h2>
-                        <span class="text-[10px] text-slate-400 font-medium bg-slate-100 px-2 py-0.5 rounded-full">Step
-                            2 of 3</span>
-                    </div>
-
-                    <div class="flex-1 min-h-0 flex flex-col justify-center space-y-4">
-                        <div class="grid grid-cols-4 gap-2">
-                            <button type="button" class="pay-method stacked active">
-                                <div class="pay-icon shrink-0"><i class="fa-solid fa-money-bill-wave text-[11px]"></i>
-                                </div>
-                                <div class="min-w-0 w-full">
-                                    <div class="font-bold text-slate-900 text-[11px] truncate">Cash</div>
-                                </div>
-                            </button>
-                            <button type="button" class="pay-method stacked">
-                                <div class="pay-icon shrink-0"><i class="fa-solid fa-credit-card text-[11px]"></i></div>
-                                <div class="min-w-0 w-full">
-                                    <div class="font-bold text-slate-900 text-[11px] truncate">Card</div>
-                                </div>
-                            </button>
-                            <button type="button" class="pay-method stacked">
-                                <div class="pay-icon shrink-0"><i class="fa-solid fa-building-columns text-[11px]"></i>
-                                </div>
-                                <div class="min-w-0 w-full">
-                                    <div class="font-bold text-slate-900 text-[11px] truncate">Transfer</div>
-                                </div>
-                            </button>
-                            <button type="button" class="pay-method stacked">
-                                <div class="pay-icon shrink-0"><i class="fa-solid fa-mobile-screen text-[11px]"></i>
-                                </div>
-                                <div class="min-w-0 w-full">
-                                    <div class="font-bold text-slate-900 text-[11px] truncate">EasyPaisa</div>
-                                </div>
-                            </button>
-                        </div>
-
-                        <div class="grid grid-cols-2 gap-3">
-                            <div class="p-3 bg-slate-50/50 border border-slate-200 rounded-xl">
-                                <label
-                                    class="block text-[9px] font-bold text-slate-500 mb-1 uppercase tracking-wider">Amount
-                                    Received</label>
-                                <div class="relative">
-                                    <span
-                                        class="absolute left-2.5 top-1/2 -translate-y-1/2 font-bold text-slate-400 text-[11px]">Rs</span>
-                                    <input type="number" id="paid-amount" value="0" min="0" step="0.01"
-                                        class="w-full pl-8 pr-12 py-2 bg-white border border-slate-200 rounded-lg text-sm font-black text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-100 transition-all cell-num"
-                                        oninput="calculateChange()" placeholder="0">
-                                    <button onclick="setFullPayment()"
-                                        class="absolute right-1.5 top-1/2 -translate-y-1/2 bg-slate-900 text-white hover:bg-indigo-600 text-[9px] font-bold px-2 py-1 rounded transition-all shadow-sm">Full</button>
-                                </div>
-                                <div class="grid grid-cols-4 gap-1 mt-2">
-                                    <button onclick="addTender(500)"
-                                        class="py-1 rounded bg-white border border-slate-200 text-[9px] font-bold text-slate-600 hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-600 transition-all cell-num">+500</button>
-                                    <button onclick="addTender(1000)"
-                                        class="py-1 rounded bg-white border border-slate-200 text-[9px] font-bold text-slate-600 hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-600 transition-all cell-num">+1k</button>
-                                    <button onclick="addTender(2000)"
-                                        class="py-1 rounded bg-white border border-slate-200 text-[9px] font-bold text-slate-600 hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-600 transition-all cell-num">+2k</button>
-                                    <button onclick="clearTender()"
-                                        class="py-1 rounded bg-white border border-slate-200 text-[9px] font-bold text-slate-400 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 transition-all">Clr</button>
-                                </div>
-                            </div>
-                            <div
-                                class="p-3 rounded-xl border border-slate-200 bg-white flex flex-col justify-center items-center text-center shadow-sm">
-                                <span class="text-[9px] font-bold text-slate-500 uppercase tracking-widest"
-                                    id="change-label">Change Return</span>
-                                <span class="text-lg font-black text-slate-900 tracking-tight cell-num mt-0.5"
-                                    id="change-amount">Rs 0</span>
-                                <span class="text-[9px] text-slate-400 mt-1 font-medium" id="change-hint">Enter
-                                    amount</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="shrink-0 mt-4 flex justify-center">
-                        <button onclick="submitCheckout()"
-                            class="btn-success w-full max-w-xs py-2.5 rounded-lg text-[11px] flex items-center justify-center gap-2"
-                            id="btn-submit-order">
-                            <i class="fa-solid fa-circle-check text-[10px]"></i> Complete Sale
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- ============================================== -->
-            <!-- STEP 3: SPLIT LAYOUT (RECEIPT LEFT, SUCCESS RIGHT) -->
-            <!-- ============================================== -->
-            <div id="step-3-success" class="pos-step is-next flex gap-3 p-1 h-full">
-
-                <!-- LEFT: Items Sold / Receipt -->
-                <div
-                    class="flex-1 bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col min-h-0 h-full overflow-hidden">
-                    <div class="px-5 pt-4 pb-3 border-b border-slate-200 shrink-0">
-                        <h3 class="text-sm font-bold text-slate-900">Sale Receipt</h3>
-                        <p class="text-[11px] text-slate-500 mt-0.5 font-medium">Invoice <span
-                                class="font-bold text-slate-700 cell-num">INV-10293</span> · Walk-in Customer</p>
-                    </div>
-
-                    <div class="flex-1 min-h-0 flex flex-col justify-center px-5 py-3">
-                        <div class="flex justify-between items-center mb-2">
-                            <h4 class="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Items Sold</h4>
-                            <span class="text-[10px] text-slate-400 font-medium" id="success-item-count">0 items</span>
-                        </div>
-                        <div class="space-y-1.5 overflow-y-auto min-h-0 pr-1" id="success-items"></div>
-                    </div>
-
-                    <div class="px-5 py-3 border-t border-slate-200 bg-slate-50/50 shrink-0">
-                        <div class="flex justify-between items-end">
-                            <span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Total</span>
-                            <span class="text-lg font-black text-slate-900 tracking-tight cell-num"
-                                id="success-total">Rs 0</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- RIGHT: Success Summary & Actions -->
-                <div
-                    class="w-80 shrink-0 bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-center px-5 py-5 min-h-0 h-full overflow-y-auto">
-
-                    <div class="flex flex-col items-center text-center mb-5">
-                        <div class="relative w-12 h-12 shrink-0 mb-2">
-                            <span class="success-ring absolute inset-0 rounded-full bg-emerald-500"></span>
-                            <div
-                                class="success-pop relative w-12 h-12 rounded-full bg-emerald-50 border-2 border-emerald-200 flex items-center justify-center">
-                                <svg class="success-check w-6 h-6" viewBox="0 0 52 52" fill="none" aria-hidden="true">
-                                    <path d="M14 27l8 8 16-16" stroke="#059669" stroke-width="5" stroke-linecap="round"
-                                        stroke-linejoin="round" />
-                                </svg>
-                            </div>
-                        </div>
-                        <h2 class="fade-up text-base font-black text-slate-900 tracking-tight"
-                            style="animation-delay:.2s">Sale Complete</h2>
-                    </div>
-
-                    <div class="fade-up grid grid-cols-2 gap-2 mb-4" style="animation-delay:.34s">
-                        <div
-                            class="p-3 rounded-lg bg-gradient-to-br from-emerald-50 to-white border border-emerald-200">
-                            <div class="text-[9px] font-bold text-emerald-700 uppercase tracking-widest">Paid</div>
-                            <div class="text-base font-black text-emerald-600 cell-num mt-0.5" id="success-paid">Rs 0
-                            </div>
-                        </div>
-                        <div class="p-3 rounded-lg border border-slate-200 bg-gradient-to-br from-slate-50 to-white">
-                            <div class="text-[9px] font-bold uppercase tracking-widest text-slate-500">Change</div>
-                            <div class="text-base font-black cell-num mt-0.5 text-slate-900" id="success-change">Rs 0
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="fade-up space-y-1.5" style="animation-delay:.46s">
-                        <button onclick="startNewSale()"
-                            class="btn-primary w-full py-2.5 text-[11px] flex items-center justify-center gap-2">
-                            <i class="fa-solid fa-plus text-[9px]"></i> New Sale
-                        </button>
-                        <div class="grid grid-cols-2 gap-1.5">
-                            <button class="btn-ghost py-2">
-                                <i class="fa-solid fa-receipt text-[9px]"></i> Receipt
-                            </button>
-                            <button class="btn-ghost py-2">
-                                <i class="fa-solid fa-list text-[9px]"></i> Orders
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-        </div>
-    </div>
-
-    <!-- ============================================== -->
-    <!-- PREMIUM NEW CUSTOMER MODAL                     -->
-    <!-- ============================================== -->
-    <div id="customer-modal"
-        class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-        <div class="modal-in bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden">
-            <div class="px-5 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-                <div class="flex items-center gap-3">
-                    <div class="w-9 h-9 rounded-lg bg-indigo-100 flex items-center justify-center text-indigo-600">
-                        <i class="fa-solid fa-user-plus text-xs"></i>
-                    </div>
-                    <h3 class="text-sm font-black text-slate-900 tracking-tight">Quick Add Customer</h3>
-                </div>
-                <button onclick="closeModal()"
-                    class="text-slate-400 hover:text-slate-600 hover:bg-slate-200 w-7 h-7 rounded-lg flex items-center justify-center transition">
-                    <i class="fa-solid fa-xmark text-xs"></i>
+                <button class="close" id="closeBtn" type="button">
+                    ×
                 </button>
+
+            </header>
+
+
+            <!-- STEPPER -->
+
+            <div class="steps">
+
+                <div class="step done">
+                    <span class="num">✓</span>
+                    Customer
+                </div>
+
+                <div class="connector done"></div>
+
+                <div class="step done">
+                    <span class="num">✓</span>
+                    Garment
+                </div>
+
+                <div class="connector done"></div>
+
+                <div class="step active">
+                    <span class="num">3</span>
+                    Measurements
+                </div>
+
+                <div class="connector"></div>
+
+                <div class="step">
+                    <span class="num">4</span>
+                    Pricing
+                </div>
+
+                <div class="connector"></div>
+
+                <div class="step">
+                    <span class="num">5</span>
+                    Confirm
+                </div>
+
             </div>
-            <div class="p-5">
-                <form id="quick-customer-form" onsubmit="saveCustomer(event)">
-                    <div class="mb-3">
-                        <label class="block text-[10px] font-bold text-slate-600 mb-1 uppercase tracking-wider">Full
-                            Name *</label>
-                        <div class="relative">
-                            <i
-                                class="fa-solid fa-user absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[11px]"></i>
-                            <input type="text" class="input-premium w-full pl-9 pr-3" placeholder="e.g. Ahmed Khan"
-                                required>
-                        </div>
+
+
+            <!-- BODY -->
+
+            <main class="body">
+
+                <!-- INTRO -->
+
+                <div class="intro">
+
+                    <div>
+
+                        <h2>
+                            Body Measurements
+                        </h2>
+
+                        <p>
+                            Each garment type has one measurement set. Quantity only represents how many pieces use the
+                            same measurements.
+                        </p>
+
                     </div>
-                    <div class="mb-3">
-                        <label class="block text-[10px] font-bold text-slate-600 mb-1 uppercase tracking-wider">Phone
-                            Number</label>
-                        <div class="relative">
-                            <i
-                                class="fa-solid fa-phone absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[11px]"></i>
-                            <input type="text" class="input-premium w-full pl-9 pr-3" placeholder="e.g. 03001234567">
-                        </div>
+
+                </div>
+
+
+                <!-- GARMENTS -->
+
+                <section class="order-garments">
+
+                    <div class="order-garments-head">
+
+                        <strong>
+                            Garments in this order
+                        </strong>
+
+                        <span>
+                            Select a garment
+                        </span>
+
                     </div>
-                    <div class="mb-4">
-                        <label
-                            class="block text-[10px] font-bold text-slate-600 mb-1 uppercase tracking-wider">City</label>
-                        <div class="relative">
-                            <i
-                                class="fa-solid fa-city absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[11px]"></i>
-                            <input type="text" class="input-premium w-full pl-9 pr-3" placeholder="e.g. Karachi">
+
+                    <div class="garment-chips" id="garmentChips"></div>
+
+                </section>
+
+
+                <!-- MEASUREMENT CARD -->
+
+                <section class="measurement-card">
+
+                    <!-- HEADER -->
+
+                    <div class="card-head">
+
+                        <div class="current-info">
+
+                            <div class="current-title">
+
+                                <span class="current-number" id="currentNumber">
+                                    1
+                                </span>
+
+                                <strong id="currentGarment">
+                                    --
+                                </strong>
+
+                            </div>
+
+                            <div class="current-meta" id="currentMeta">
+                                --
+                            </div>
+
                         </div>
+
+
+                        <div class="header-right">
+
+                            <div class="qty-box">
+
+                                <small>
+                                    Pieces
+                                </small>
+
+                                <strong id="currentQty">
+                                    0
+                                </strong>
+
+                            </div>
+
+
+                            <div class="qty-box">
+
+                                <small>
+                                    Status
+                                </small>
+
+                                <strong id="currentStatus">
+                                    Pending
+                                </strong>
+
+                            </div>
+
+                        </div>
+
                     </div>
-                    <button type="submit"
-                        class="btn-primary w-full py-2.5 text-xs flex items-center justify-center gap-2">
-                        <i class="fa-solid fa-check text-[10px]"></i> Save Customer
+
+
+                    <!-- QUICK ACTIONS -->
+
+                    <div class="quick-area">
+
+                        <div class="quick-left">
+
+                            <button class="quick-btn primary-soft" id="newMeasurementsBtn" type="button">
+                                New Measurements
+                            </button>
+
+                            <button class="quick-btn" id="useSavedBtn" type="button">
+                                Use Customer Saved
+                            </button>
+
+                            <button class="quick-btn" id="copyLastBtn" type="button">
+                                Copy Last Garment
+                            </button>
+
+                        </div>
+
+
+                        <div class="quick-right">
+
+                            <button class="quick-btn" id="clearBtn" type="button">
+                                Clear
+                            </button>
+
+                        </div>
+
+                    </div>
+
+                    <!-- FORM -->
+
+                    <div class="form-body">
+
+                        <div class="form-section">
+
+                            <div class="section-heading">
+
+                                <strong>
+                                    Measurements
+                                </strong>
+
+                                <div class="unit-control">
+
+                                    Unit
+
+                                    <select id="unitSelect" class="unit-select">
+
+                                        <option value="in">
+                                            in
+                                        </option>
+
+                                        <option value="cm">
+                                            cm
+                                        </option>
+
+                                    </select>
+
+                                </div>
+
+                            </div>
+
+
+                            <div class="measurement-grid" id="measurementGrid"></div>
+
+                        </div>
+
+                    </div>
+
+
+                    <!-- CARD FOOTER -->
+
+                    <div class="card-footer">
+
+                        <div class="status" id="formStatus">
+                            New measurement
+                        </div>
+
+                    </div>
+
+                </section>
+
+            </main>
+
+
+            <!-- MAIN FOOTER -->
+
+            <footer class="main-footer">
+
+                <button class="btn" id="cancelBtn" type="button">
+                    Cancel
+                </button>
+
+
+                <div class="actions">
+
+                    <button class="btn" id="backBtn" type="button">
+                        ← Back
                     </button>
-                </form>
-            </div>
+
+                    <button class="btn primary" id="nextBtn" type="button">
+                        Next →
+                    </button>
+
+                </div>
+
+            </footer>
+
         </div>
+
     </div>
+
+
+    <div class="toast" id="toast"></div>
+
 
     <script>
-        // --- Mock Data ---
-        const mockProducts = [
-            { id: 1, name: "Alkaram Khaddar", cat: "Winter", price: 1200, stock: 45.5, unit: "meter" },
-            { id: 2, name: "Gul Ahmed Premium Lawn", cat: "Summer", price: 1800, stock: 12, unit: "meter" },
-            { id: 3, name: "Bareeze Ready-to-Wear", cat: "Unstitched", price: 3500, stock: 5, unit: "pcs" },
-            { id: 4, name: "Sana Safinaz Silk", cat: "Luxury", price: 8500, stock: 0, unit: "meter" },
-            { id: 5, name: "Junaid Jamshed Kurti", cat: "Ready-to-Wear", price: 4500, stock: 20, unit: "pcs" },
-            { id: 6, name: "Maria B. Embroidered", cat: "Luxury", price: 9200, stock: 8.5, unit: "meter" },
-            { id: 7, name: "Sapphire Wash & Wear", cat: "Summer", price: 1400, stock: 50, unit: "meter" },
-            { id: 8, name: "Edenrobe T-Shirt", cat: "Menswear", price: 1500, stock: 100, unit: "pcs" },
-            { id: 9, name: "Nishat Linen Trouser", cat: "Bottoms", price: 2500, stock: 15, unit: "pcs" },
-            { id: 10, name: "Charcoal Denim Jacket", cat: "Menswear", price: 6500, stock: 4, unit: "pcs" },
-            { id: 11, name: "Firdous Cotton Suit", cat: "Unstitched", price: 4200, stock: 30, unit: "meter" },
-            { id: 12, name: "Amir Adnan Sherwani", cat: "Formal", price: 25000, stock: 2, unit: "pcs" },
+
+        /* ============================================================
+           STEP 2 DATA
+        ============================================================ */
+
+        const garments = [
+
+            {
+                id: 1,
+                type: "Shalwar Kameez Stitching",
+                qty: 2,
+                price: 4500,
+                fabric: "Italian Wool",
+                notes: "Peak lapel"
+            },
+
+            {
+                id: 2,
+                type: "Sherwani Stitching",
+                qty: 1,
+                price: 8500,
+                fabric: "Navy",
+                notes: "Full length"
+            },
+
+            {
+                id: 3,
+                type: "Waistcoat Stitching",
+                qty: 3,
+                price: 2500,
+                fabric: "Navy",
+                notes: "Buttons"
+            }
+
         ];
 
-        let cart = [];
-        let currentStep = 1;
-        let isDockOpen = false;
 
-        // --- DOM Elements ---
-        const productsGrid = document.getElementById('products-grid');
-        const cartList = document.getElementById('cart-list');
-        const dockCount = document.getElementById('dock-count');
-        const dockTotal = document.getElementById('dock-total');
-        const dockBar = document.getElementById('dock-bar');
-        const cartDrawer = document.getElementById('cart-drawer');
-        const drawerIcon = document.getElementById('drawer-icon');
-        const modal = document.getElementById('customer-modal');
+        /* ============================================================
+           EXACT FIELD LIST
+        ============================================================ */
 
-        // --- Render Products (Ultra Compact Horizontal Cards) ---
-        function renderProducts() {
-            productsGrid.innerHTML = mockProducts.map(p => {
-                const isLow = p.stock > 0 && p.stock <= 10;
-                const stockLabel = p.stock % 1 === 0 ? p.stock : p.stock.toFixed(2);
-                return `
-            <div class="relative flex items-center gap-2.5 p-2.5 bg-white rounded-lg border border-slate-200 cursor-pointer transition-all duration-200 group hover:border-indigo-400 hover:shadow-sm ${p.stock <= 0 ? 'opacity-50 pointer-events-none' : ''}"
-                 onclick="addToCart(${p.id})">
-                ${p.stock <= 0 ? `<div class="absolute top-1 right-1 z-10 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-white bg-rose-500 rounded">Out</div>` : ''}
-                <div class="w-11 h-11 shrink-0 rounded-md overflow-hidden bg-slate-50 border border-slate-100 flex items-center justify-center">
-                    <i class="fa-solid fa-tag text-slate-300 text-sm"></i>
-                </div>
-                <div class="flex-1 min-w-0">
-                    <h3 class="text-[13px] font-semibold text-slate-800 truncate group-hover:text-indigo-600 transition-colors">${p.name}</h3>
-                    <div class="flex items-center gap-1.5 mt-0.5">
-                        <span class="text-[9px] font-medium text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">${p.cat}</span>
-                        <span class="text-[9px] font-medium flex items-center gap-1 ${isLow ? 'text-rose-500' : 'text-emerald-500'}">
-                            <span class="w-1.5 h-1.5 rounded-full ${isLow ? 'bg-rose-500' : 'bg-emerald-500'}"></span>
-                            ${stockLabel} ${p.unit === 'meter' ? 'm' : 'pcs'}
-                        </span>
-                    </div>
-                    <p class="text-[13px] font-bold text-slate-900 mt-1">Rs ${p.price.toLocaleString()}</p>
-                </div>
-                <div class="shrink-0 w-7 h-7 rounded-full bg-slate-50 text-slate-400 flex items-center justify-center transition-all group-hover:bg-indigo-600 group-hover:text-white shadow-sm">
-                    <i class="fa-solid fa-plus text-[10px]"></i>
-                </div>
-            </div>`;
-            }).join('');
-        }
+        const ALL_FIELDS = [
 
-        // --- Cart Logic ---
-        window.addToCart = function (id) {
-            const p = mockProducts.find(x => x.id === id);
-            if (!p) return;
-            const existing = cart.find(item => item.id === id);
-            if (existing) {
-                existing.qty += 1;
-            } else {
-                cart.push({ id: p.id, name: p.name, price: p.price, qty: 1, unit: p.unit, maxStock: p.stock });
+            {
+                key: "length",
+                label: "Length",
+                required: true
+            },
+
+            {
+                key: "shoulder_width",
+                label: "Shoulder Width",
+                required: false
+            },
+
+            {
+                key: "sleeve_length",
+                label: "Sleeve Length",
+                required: false
+            },
+
+            {
+                key: "chest",
+                label: "Chest",
+                required: true
+            },
+
+            {
+                key: "chest_losing",
+                label: "Chest Losing",
+                required: true
+            },
+
+            {
+                key: "waist",
+                label: "Waist",
+                required: true
+            },
+
+            {
+                key: "waist_losing",
+                label: "Waist Losing",
+                required: true
+            },
+
+            {
+                key: "hip",
+                label: "Hip",
+                required: false
+            },
+
+            {
+                key: "hip_losing",
+                label: "Hip Losing",
+                required: true
+            },
+
+            {
+                key: "collar",
+                label: "Collar",
+                required: false
+            },
+
+            {
+                key: "ghera",
+                label: "Ghera",
+                required: false
+            },
+
+            {
+                key: "patti",
+                label: "Patti",
+                required: false
+            },
+
+            {
+                key: "button",
+                label: "Button",
+                required: false
+            },
+
+            {
+                key: "cuff",
+                label: "Cuff",
+                required: false
+            },
+
+            {
+                key: "koni",
+                label: "Koni",
+                required: false
+            },
+
+            {
+                key: "elbow",
+                label: "Elbow",
+                required: false
+            },
+
+            {
+                key: "armhole",
+                label: "Armhole",
+                required: false
+            },
+
+            {
+                key: "takai",
+                label: "Takai",
+                required: false
+            },
+
+            {
+                key: "salwar_length",
+                label: "Salwar Length",
+                required: false
+            },
+
+            {
+                key: "pancho",
+                label: "Pancho",
+                required: false
             }
 
-            // Bump animation
-            dockBar.classList.remove('bump');
-            void dockBar.offsetWidth;
-            dockBar.classList.add('bump');
+        ];
 
-            renderCart();
-        }
 
-        window.addDecQty = function (id, amount) {
-            const item = cart.find(i => i.id === id);
-            if (item) {
-                item.qty += amount;
-                if (item.qty <= 0) {
-                    cart = cart.filter(i => i.id !== id);
-                }
-                renderCart();
+        /* ============================================================
+           GARMENT FIELD RULES
+        ============================================================ */
+
+        const FIELD_RULES = {
+
+            "Shalwar Kameez Stitching": [
+
+                "length",
+                "shoulder_width",
+                "sleeve_length",
+                "chest",
+                "chest_losing",
+                "waist",
+                "waist_losing",
+                "hip",
+                "hip_losing",
+                "collar",
+                "ghera",
+                "patti",
+                "button",
+                "cuff",
+                "koni",
+                "elbow",
+                "armhole",
+                "takai",
+                "salwar_length",
+                "pancho"
+
+            ],
+
+
+            "Sherwani Stitching": [
+
+                "length",
+                "shoulder_width",
+                "sleeve_length",
+                "chest",
+                "chest_losing",
+                "waist",
+                "waist_losing",
+                "hip",
+                "hip_losing",
+                "collar",
+                "ghera",
+                "patti",
+                "button",
+                "cuff",
+                "koni",
+                "elbow",
+                "armhole",
+                "takai"
+
+            ],
+
+
+            "Waistcoat Stitching": [
+
+                "length",
+                "shoulder_width",
+                "chest",
+                "chest_losing",
+                "waist",
+                "waist_losing",
+                "hip",
+                "hip_losing",
+                "collar",
+                "ghera",
+                "patti",
+                "button",
+                "armhole",
+                "takai"
+
+            ],
+
+
+            "Trouser Stitching": [
+
+                "length",
+                "waist",
+                "waist_losing",
+                "hip",
+                "hip_losing",
+                "ghera",
+                "patti",
+                "button",
+                "takai",
+                "salwar_length",
+                "pancho"
+
+            ],
+
+
+            "Kurta Pajama Stitching": [
+
+                "length",
+                "shoulder_width",
+                "sleeve_length",
+                "chest",
+                "chest_losing",
+                "waist",
+                "waist_losing",
+                "hip",
+                "hip_losing",
+                "collar",
+                "ghera",
+                "patti",
+                "button",
+                "cuff",
+                "koni",
+                "elbow",
+                "armhole",
+                "takai",
+                "salwar_length",
+                "pancho"
+
+            ],
+
+
+            "Three Piece Suit Stitching": [
+
+                "length",
+                "shoulder_width",
+                "sleeve_length",
+                "chest",
+                "chest_losing",
+                "waist",
+                "waist_losing",
+                "hip",
+                "hip_losing",
+                "collar",
+                "ghera",
+                "patti",
+                "button",
+                "cuff",
+                "koni",
+                "elbow",
+                "armhole",
+                "takai"
+
+            ],
+
+
+            "Premium Suit Stitching": [
+
+                "length",
+                "shoulder_width",
+                "sleeve_length",
+                "chest",
+                "chest_losing",
+                "waist",
+                "waist_losing",
+                "hip",
+                "hip_losing",
+                "collar",
+                "ghera",
+                "patti",
+                "button",
+                "cuff",
+                "koni",
+                "elbow",
+                "armhole",
+                "takai"
+
+            ],
+
+
+            "Bridal Dress Stitching": [
+
+                "length",
+                "shoulder_width",
+                "sleeve_length",
+                "chest",
+                "chest_losing",
+                "waist",
+                "waist_losing",
+                "hip",
+                "hip_losing",
+                "collar",
+                "ghera",
+                "patti",
+                "button",
+                "cuff",
+                "koni",
+                "elbow",
+                "armhole",
+                "takai",
+                "pancho"
+
+            ],
+
+
+            "Ladies Suit Stitching": [
+
+                "length",
+                "shoulder_width",
+                "sleeve_length",
+                "chest",
+                "chest_losing",
+                "waist",
+                "waist_losing",
+                "hip",
+                "hip_losing",
+                "collar",
+                "ghera",
+                "patti",
+                "button",
+                "cuff",
+                "koni",
+                "elbow",
+                "armhole",
+                "takai",
+                "pancho"
+
+            ]
+
+        };
+
+
+        /* ============================================================
+           GET FIELDS
+        ============================================================ */
+
+        function getFieldsForGarment(type) {
+
+            const rule =
+                FIELD_RULES[type];
+
+            if (!rule) {
+
+                return ALL_FIELDS;
+
             }
+
+            return rule
+                .map(
+                    key =>
+                        ALL_FIELDS.find(
+                            field =>
+                                field.key === key
+                        )
+                )
+                .filter(Boolean);
+
         }
 
-        window.clearCart = function () {
-            cart = [];
-            renderCart();
+
+        /* ============================================================
+           STATE
+        ============================================================ */
+
+        const state =
+            garments.map(
+                garment => ({
+
+                    ...garment,
+
+                    measurement: {
+                        values: {},
+                        complete: false
+                    }
+
+                })
+            );
+
+
+        let currentIndex = 0;
+
+
+        /* ============================================================
+           DOM
+        ============================================================ */
+
+        const garmentChips =
+            document.getElementById(
+                "garmentChips"
+            );
+
+        const measurementGrid =
+            document.getElementById(
+                "measurementGrid"
+            );
+
+        const unitSelect =
+            document.getElementById(
+                "unitSelect"
+            );
+
+        const toast =
+            document.getElementById(
+                "toast"
+            );
+
+
+        /* ============================================================
+           HELPERS
+        ============================================================ */
+
+        function currentGarment() {
+
+            return state[
+                currentIndex
+            ];
+
         }
 
-        window.toggleCart = function () {
-            isDockOpen = !isDockOpen;
-            if (isDockOpen) {
-                cartDrawer.classList.add('open');
-                drawerIcon.classList.add('rotate-180');
-            } else {
-                cartDrawer.classList.remove('open');
-                drawerIcon.classList.remove('rotate-180');
-            }
+
+        function esc(value) {
+
+            return String(
+                value ?? ""
+            ).replace(
+                /[&<>"']/g,
+                char => ({
+
+                    "&": "&amp;",
+                    "<": "&lt;",
+                    ">": "&gt;",
+                    '"': "&quot;",
+                    "'": "&#039;"
+
+                }[char])
+            );
+
         }
 
-        function renderCart() {
-            if (cart.length === 0) {
-                dockCount.innerText = '0';
-                dockTotal.innerText = 'Rs 0';
-                document.getElementById('btn-checkout').disabled = true;
-                cartList.innerHTML = `<li class="text-center text-slate-400 text-xs py-4">Cart is empty</li>`;
-            } else {
-                dockCount.innerText = cart.length;
-                document.getElementById('btn-checkout').disabled = false;
 
-                cartList.innerHTML = cart.map(item => {
-                    const total = item.price * item.qty;
-                    const isMeter = item.unit === 'meter';
-                    const stepUp = isMeter ? 0.5 : 1;
-                    return `
-                <li class="group flex items-center gap-2 p-2 bg-slate-50 border border-slate-200 rounded-md hover:border-indigo-300 transition-all">
-                    <div class="flex-1 min-w-0">
-                        <div class="font-semibold text-slate-800 text-[11px] truncate leading-tight">${item.name}</div>
-                        <div class="text-[9px] text-slate-400 mt-0.5 cell-num">Rs ${item.price.toLocaleString()} / ${isMeter ? 'm' : 'pc'}</div>
-                    </div>
-                    <div class="flex items-center gap-0.5 shrink-0 bg-white border border-slate-200 rounded-md p-0.5">
-                        <button onclick="addDecQty(${item.id}, -${stepUp})" class="w-5 h-5 flex items-center justify-center text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors text-[9px]"><i class="fa-solid fa-minus"></i></button>
-                        <input type="number" value="${item.qty}" class="w-8 text-center bg-transparent border-0 text-[11px] font-bold text-slate-800 focus:outline-none cell-num">
-                        <button onclick="addDecQty(${item.id}, ${stepUp})" class="w-5 h-5 flex items-center justify-center text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors text-[9px]"><i class="fa-solid fa-plus"></i></button>
-                    </div>
-                    <div class="w-14 text-right shrink-0">
-                        <div class="font-bold text-slate-900 text-[11px] cell-num">Rs ${total.toLocaleString()}</div>
-                    </div>
-                </li>`;
-                }).join('');
-            }
-            updateTotals();
+        function showToast(message) {
+
+            toast.textContent =
+                message;
+
+            toast.classList.add(
+                "show"
+            );
+
+            clearTimeout(
+                showToast.timer
+            );
+
+            showToast.timer =
+                setTimeout(
+                    () => {
+
+                        toast.classList.remove(
+                            "show"
+                        );
+
+                    },
+                    2200
+                );
+
         }
 
-        function updateTotals() {
-            let subtotal = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
-            dockCount.innerText = cart.length;
-            dockTotal.innerText = 'Rs ' + subtotal.toLocaleString();
-        }
 
-        // --- Step 2 Logic ---
-        window.goToCheckout = function () {
-            if (cart.length === 0) return;
-            toggleCart(); // Close drawer if open
+        /* ============================================================
+           CUSTOMER SAVED MEASUREMENT
+        ============================================================ */
 
-            let subtotal = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
-            let total = subtotal;
+        function getCustomerSavedValue(
+            garment,
+            field
+        ) {
 
-            const summaryList = document.getElementById('checkout-summary-list');
-            summaryList.innerHTML = cart.map((item, i) => `
-            <div class="fade-up flex justify-between items-center gap-2 text-[11px] p-1.5 rounded-md bg-white border border-slate-200" style="animation-delay:${Math.min(i * 40, 300)}ms">
-                <div class="min-w-0">
-                    <div class="font-semibold text-slate-800 truncate">${item.name}</div>
-                    <div class="text-[9px] text-slate-500 cell-num flex items-center gap-1">
-                        <span>${item.qty} ${item.unit === 'meter' ? 'm' : 'pc'}</span>
-                        <span class="text-slate-300">×</span>
-                        <span>Rs ${item.price.toLocaleString()}</span>
-                    </div>
-                </div>
-                <div class="font-bold text-slate-900 shrink-0 cell-num">Rs ${(item.price * item.qty).toLocaleString()}</div>
-            </div>
-        `).join('');
+            const demo = {
 
-            document.getElementById('checkout-item-count').innerText = `${cart.length} items`;
-            document.getElementById('checkout-subtotal').innerText = 'Rs ' + subtotal.toLocaleString();
-            document.getElementById('checkout-total').innerText = 'Rs ' + total.toLocaleString();
+                length: "38",
+                shoulder_width: "17.5",
+                sleeve_length: "24",
+                chest: "41.5",
+                chest_losing: "2",
+                waist: "39",
+                waist_losing: "2",
+                hip: "42",
+                hip_losing: "2",
+                collar: "15.5",
+                ghera: "24",
+                patti: "2.5",
+                button: "6",
+                cuff: "9",
+                koni: "14",
+                elbow: "12",
+                armhole: "20",
+                takai: "14",
+                salwar_length: "40",
+                pancho: "8"
 
-            document.getElementById('paid-amount').value = total;
-            calculateChange();
-            goToStep(2);
-        }
-
-        window.setFullPayment = function () {
-            let subtotal = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
-            document.getElementById('paid-amount').value = subtotal;
-            calculateChange();
-        }
-
-        window.addTender = function (amount) {
-            let current = parseFloat(document.getElementById('paid-amount').value) || 0;
-            document.getElementById('paid-amount').value = current + amount;
-            calculateChange();
-        }
-
-        window.clearTender = function () {
-            document.getElementById('paid-amount').value = '';
-            calculateChange();
-        }
-
-        window.calculateChange = function () {
-            let subtotal = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
-            let total = subtotal;
-            let paid = parseFloat(document.getElementById('paid-amount').value) || 0;
-
-            const changeLabel = document.getElementById('change-label');
-            const changeAmt = document.getElementById('change-amount');
-            const hint = document.getElementById('change-hint');
-
-            if (paid >= total) {
-                changeLabel.innerText = 'Change Return';
-                changeAmt.innerText = 'Rs ' + (paid - total).toLocaleString();
-                changeAmt.className = 'text-lg font-black tracking-tight text-emerald-600 cell-num mt-0.5';
-                hint.textContent = paid > total ? 'Hand this back to customer' : 'Exact amount';
-                hint.className = 'text-[9px] text-slate-400 mt-1 font-medium';
-            } else {
-                changeLabel.innerText = 'Balance Due';
-                changeAmt.innerText = 'Rs ' + (total - paid).toLocaleString();
-                changeAmt.className = 'text-lg font-black tracking-tight text-rose-600 cell-num mt-0.5';
-                hint.textContent = 'Will be added to ledger';
-                hint.className = 'text-[9px] text-rose-500 mt-1 font-medium';
-            }
-        }
-
-        // --- Step 3 Logic ---
-        window.submitCheckout = function () {
-            let subtotal = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
-            let total = subtotal;
-            let paid = parseFloat(document.getElementById('paid-amount').value) || 0;
-            let change = paid > total ? paid - total : 0;
-
-            document.getElementById('success-total').innerText = 'Rs ' + total.toLocaleString();
-            document.getElementById('success-paid').innerText = 'Rs ' + paid.toLocaleString();
-            document.getElementById('success-change').innerText = 'Rs ' + change.toLocaleString();
-            document.getElementById('success-item-count').innerText = `${cart.length} items`;
-
-            const successItems = document.getElementById('success-items');
-            successItems.innerHTML = cart.map(item => `
-            <div class="flex justify-between items-center gap-2 p-1.5 rounded-md border border-slate-200 bg-white hover:bg-slate-50 transition-colors">
-                <div class="min-w-0">
-                    <div class="text-[11px] font-semibold text-slate-800 truncate">${item.name}</div>
-                    <div class="text-[9px] text-slate-500 cell-num mt-0.5 flex items-center gap-1">
-                        <span>${item.qty} ${item.unit === 'meter' ? 'm' : 'pc'}</span>
-                        <span class="text-slate-300">×</span>
-                        <span>Rs ${item.price.toLocaleString()}</span>
-                    </div>
-                </div>
-                <div class="text-[11px] font-bold text-slate-900 shrink-0 cell-num">Rs ${(item.price * item.qty).toLocaleString()}</div>
-            </div>
-        `).join('');
-
-            goToStep(3);
-        }
-
-        window.startNewSale = function () {
-            cart = [];
-            renderCart();
-            goToStep(1);
-        }
-
-        // --- Modal Logic ---
-        window.openModal = function () {
-            modal.classList.remove('hidden');
-        }
-
-        window.closeModal = function () {
-            modal.classList.add('hidden');
-        }
-
-        window.saveCustomer = function (e) {
-            e.preventDefault();
-            closeModal();
-            alert('Customer saved successfully!');
-        }
-
-        // --- SPA Step Machine ---
-        function goToStep(step) {
-            currentStep = step;
-            const panels = {
-                1: document.getElementById('step-1-pos'),
-                2: document.getElementById('step-2-checkout'),
-                3: document.getElementById('step-3-success'),
             };
 
-            Object.entries(panels).forEach(([n, el]) => {
-                const num = Number(n);
-                el.classList.remove('is-active', 'is-next', 'is-previous');
-                el.classList.add(num === step ? 'is-active' : (num < step ? 'is-previous' : 'is-next'));
-            });
+            return (
+                demo[field.key] || ""
+            );
 
-            document.querySelectorAll('.pos-stepper-step').forEach(el => {
-                const num = Number(el.dataset.step);
-                el.classList.toggle('is-active', num === step);
-                el.classList.toggle('is-done', num < step);
-            });
         }
 
-        // --- Payment Method Selection ---
-        document.querySelectorAll('.pay-method.stacked').forEach(btn => {
-            btn.addEventListener('click', function () {
-                document.querySelectorAll('.pay-method.stacked').forEach(b => b.classList.remove('active'));
-                this.classList.add('active');
-            });
-        });
 
-        // --- Init ---
-        renderProducts();
-        renderCart(); // Initialize empty cart state
+        /* ============================================================
+           GARMENT CHIPS
+        ============================================================ */
+
+        function renderGarmentChips() {
+
+            garmentChips.innerHTML =
+                state.map(
+                    (garment, index) => {
+
+                        const active =
+                            index === currentIndex;
+
+                        const done =
+                            garment.measurement.complete;
+
+                        return `
+
+          <button
+            type="button"
+            class="garment-chip ${active ? "active" : ""
+                            }"
+            data-garment="${index}"
+          >
+
+            <div class="chip-top">
+
+              <span class="chip-index">
+
+                ${done
+                                ? "✓"
+                                : index + 1
+                            }
+
+              </span>
+
+              <span class="chip-name">
+
+                ${esc(
+                                garment.type
+                            )}
+
+              </span>
+
+            </div>
+
+            <div class="chip-meta">
+
+              Qty ${garment.qty}
+
+              ·
+
+              ${done
+                                ? `<span class="chip-done">Measurement Saved</span>`
+                                : "Measurement Pending"
+                            }
+
+            </div>
+
+          </button>
+
+        `;
+
+                    }
+                ).join("");
+
+
+            garmentChips
+                .querySelectorAll(
+                    "[data-garment]"
+                )
+                .forEach(
+                    button => {
+
+                        button.addEventListener(
+                            "click",
+                            () => {
+
+                                currentIndex =
+                                    Number(
+                                        button.dataset.garment
+                                    );
+
+                                renderAll();
+
+                            }
+                        );
+
+                    }
+                );
+
+        }
+
+
+        /* ============================================================
+           CREATE FIELD
+        ============================================================ */
+
+        function createField(
+            field,
+            garment
+        ) {
+
+            const value =
+                garment.measurement
+                    .values[
+                field.key
+                ] ?? "";
+
+            return `
+
+    <div class="measure-field">
+
+      <div class="measure-label">
+
+        <label>
+
+          ${esc(
+                field.label
+            )}
+
+          ${field.required
+                    ? `<span class="required">*</span>`
+                    : ""
+                }
+
+        </label>
+
+      </div>
+
+
+      <div class="input-wrap">
+
+        <input
+          type="number"
+          min="0"
+          step="0.01"
+          inputmode="decimal"
+          class="measure-input ${value !== ""
+                    ? "has-value"
+                    : ""
+                }"
+          value="${esc(value)}"
+          data-field="${esc(
+                    field.key
+                )}"
+        >
+
+        <span class="input-unit">
+
+          ${esc(
+                    unitSelect.value
+                )}
+
+        </span>
+
+      </div>
+
+    </div>
+
+  `;
+
+        }
+
+
+        /* ============================================================
+           RENDER FORM
+        ============================================================ */
+
+        function renderForm() {
+
+            const garment =
+                currentGarment();
+
+            if (!garment) {
+
+                measurementGrid.innerHTML =
+                    "";
+
+                return;
+
+            }
+
+
+            const completed =
+                garment.measurement.complete;
+
+
+            document.getElementById(
+                "currentGarment"
+            ).textContent =
+                garment.type;
+
+
+            document.getElementById(
+                "currentNumber"
+            ).textContent =
+                currentIndex + 1;
+
+
+            document.getElementById(
+                "currentQty"
+            ).textContent =
+                garment.qty;
+
+
+            document.getElementById(
+                "currentStatus"
+            ).textContent =
+                completed
+                    ? "Saved"
+                    : "Pending";
+
+
+            document.getElementById(
+                "currentMeta"
+            ).textContent =
+                `One measurement set shared by ${garment.qty
+                } piece${garment.qty === 1
+                    ? ""
+                    : "s"
+                }`;
+
+
+            const status =
+                document.getElementById(
+                    "formStatus"
+                );
+
+
+            status.className =
+                completed
+                    ? "status saved"
+                    : "status";
+
+
+            status.textContent =
+                completed
+                    ? "✓ Measurement set saved"
+                    : "New measurement";
+
+
+            const fields =
+                getFieldsForGarment(
+                    garment.type
+                );
+
+
+            measurementGrid.innerHTML =
+                fields
+                    .map(
+                        field =>
+                            createField(
+                                field,
+                                garment
+                            )
+                    )
+                    .join("");
+
+
+            bindInputs();
+
+        }
+
+
+        /* ============================================================
+           INPUTS
+        ============================================================ */
+
+        function bindInputs() {
+
+            document
+                .querySelectorAll(
+                    ".measure-input"
+                )
+                .forEach(
+                    input => {
+
+                        input.addEventListener(
+                            "input",
+                            () => {
+
+                                const garment =
+                                    currentGarment();
+
+
+                                garment.measurement
+                                    .values[
+                                    input.dataset.field
+                                ] =
+                                    input.value;
+
+
+                                garment.measurement.complete =
+                                    false;
+
+
+                                input.classList.toggle(
+                                    "has-value",
+                                    input.value !== ""
+                                );
+
+
+                                document.getElementById(
+                                    "currentStatus"
+                                ).textContent =
+                                    "Editing";
+
+
+                                document.getElementById(
+                                    "formStatus"
+                                ).className =
+                                    "status";
+
+
+                                document.getElementById(
+                                    "formStatus"
+                                ).textContent =
+                                    "Unsaved changes";
+
+
+                                renderGarmentChips();
+
+                            }
+
+                        );
+
+                    }
+                );
+
+        }
+
+        /* ============================================================
+           NEW MEASUREMENTS
+        ============================================================ */
+
+        document
+            .getElementById(
+                "newMeasurementsBtn"
+            )
+            .addEventListener(
+                "click",
+                () => {
+
+                    const garment =
+                        currentGarment();
+
+
+                    /*
+                       Start a completely fresh
+                       measurement set for the
+                       currently selected garment.
+                    */
+
+                    garment.measurement.values =
+                        {};
+
+
+                    garment.measurement.complete =
+                        false;
+
+
+                    renderAll();
+
+
+                    showToast(
+                        "New measurement set started"
+                    );
+
+                }
+            );
+
+
+        /* ============================================================
+           USE CUSTOMER SAVED
+        ============================================================ */
+
+        document
+            .getElementById(
+                "useSavedBtn"
+            )
+            .addEventListener(
+                "click",
+                () => {
+
+                    const garment =
+                        currentGarment();
+
+
+                    const fields =
+                        getFieldsForGarment(
+                            garment.type
+                        );
+
+
+                    fields.forEach(
+                        field => {
+
+                            const value =
+                                getCustomerSavedValue(
+                                    garment,
+                                    field
+                                );
+
+
+                            if (value) {
+
+                                garment.measurement
+                                    .values[
+                                    field.key
+                                ] =
+                                    value;
+
+                            }
+
+                        }
+                    );
+
+
+                    garment.measurement.complete =
+                        false;
+
+
+                    renderAll();
+
+
+                    showToast(
+                        "Customer saved measurements loaded"
+                    );
+
+                }
+            );
+
+
+        /* ============================================================
+           COPY LAST GARMENT
+        ============================================================ */
+
+        document
+            .getElementById(
+                "copyLastBtn"
+            )
+            .addEventListener(
+                "click",
+                () => {
+
+                    if (currentIndex === 0) {
+
+                        showToast(
+                            "No previous garment to copy"
+                        );
+
+                        return;
+
+                    }
+
+
+                    const current =
+                        currentGarment();
+
+
+                    const previous =
+                        state[
+                        currentIndex - 1
+                        ];
+
+
+                    const currentFields =
+                        getFieldsForGarment(
+                            current.type
+                        );
+
+
+                    currentFields.forEach(
+                        field => {
+
+                            const value =
+                                previous.measurement
+                                    .values[
+                                field.key
+                                ];
+
+
+                            if (
+                                value !== undefined
+                            ) {
+
+                                current.measurement
+                                    .values[
+                                    field.key
+                                ] =
+                                    value;
+
+                            }
+
+                        }
+                    );
+
+
+                    current.measurement.complete =
+                        false;
+
+
+                    renderAll();
+
+
+                    showToast(
+                        "Compatible measurements copied"
+                    );
+
+                }
+            );
+
+
+        /* ============================================================
+           CLEAR
+        ============================================================ */
+
+        document
+            .getElementById(
+                "clearBtn"
+            )
+            .addEventListener(
+                "click",
+                () => {
+
+                    const garment =
+                        currentGarment();
+
+
+                    garment.measurement.values =
+                        {};
+
+
+                    garment.measurement.complete =
+                        false;
+
+
+                    renderAll();
+
+
+                    showToast(
+                        "Current measurement cleared"
+                    );
+
+                }
+            );
+
+
+        /* ============================================================
+           SAVE
+        ============================================================ */
+
+        function saveCurrentMeasurement() {
+
+            const garment =
+                currentGarment();
+
+
+            const fields =
+                getFieldsForGarment(
+                    garment.type
+                );
+
+
+            const required =
+                fields.filter(
+                    field =>
+                        field.required
+                );
+
+
+            const missing =
+                required.find(
+                    field => {
+
+                        const value =
+                            garment.measurement
+                                .values[
+                            field.key
+                            ];
+
+
+                        return (
+                            value === undefined ||
+                            value === null ||
+                            String(
+                                value
+                            ).trim() === ""
+                        );
+
+                    }
+                );
+
+
+            if (missing) {
+
+                showToast(
+                    `Please enter ${missing.label}`
+                );
+
+
+                document
+                    .querySelector(
+                        `[data-field="${missing.key}"]`
+                    )
+                    ?.focus();
+
+
+                return false;
+
+            }
+
+
+            garment.measurement.complete =
+                true;
+
+
+            renderAll();
+
+            return true;
+
+        }
+
+
+        /* ============================================================
+           UNIT CHANGE
+        ============================================================ */
+
+        unitSelect.addEventListener(
+            "change",
+            () => {
+
+                renderForm();
+
+            }
+        );
+
+
+        /* ============================================================
+           NEXT
+        ============================================================ */
+
+        document
+            .getElementById(
+                "nextBtn"
+            )
+            .addEventListener(
+                "click",
+                () => {
+
+                    /*
+                       Automatically validate/save
+                       the currently visible garment.
+                    */
+
+                    if (
+                        !currentGarment().measurement.complete
+                    ) {
+
+                        const saved =
+                            saveCurrentMeasurement();
+
+
+                        if (!saved) {
+
+                            return;
+
+                        }
+
+                    }
+
+
+                    const incomplete =
+                        state.findIndex(
+                            garment =>
+                                !garment.measurement.complete
+                        );
+
+
+                    if (
+                        incomplete !== -1
+                    ) {
+
+                        currentIndex =
+                            incomplete;
+
+
+                        renderAll();
+
+
+                        showToast(
+                            `Complete ${currentGarment().type} measurements`
+                        );
+
+
+                        return;
+
+                    }
+
+
+                    /*
+                       ONE measurement set per garment.
+                       Quantity does NOT duplicate measurements.
+                    */
+
+                    const pricingPayload =
+                        state.map(
+                            garment => ({
+
+                                garment_id:
+                                    garment.id,
+
+                                garment_type:
+                                    garment.type,
+
+                                quantity:
+                                    garment.qty,
+
+                                unit_price:
+                                    garment.price,
+
+                                fabric:
+                                    garment.fabric,
+
+                                notes:
+                                    garment.notes,
+
+                                measurement_unit:
+                                    unitSelect.value,
+
+                                measurements:
+                                    garment.measurement.values
+
+                            })
+                        );
+
+
+                    console.log(
+                        "STEP 4 PAYLOAD:",
+                        pricingPayload
+                    );
+
+
+                    showToast(
+                        "All measurements completed — ready for Pricing"
+                    );
+
+                }
+            );
+
+
+        /* ============================================================
+           BACK
+        ============================================================ */
+
+        document
+            .getElementById(
+                "backBtn"
+            )
+            .addEventListener(
+                "click",
+                () => {
+
+                    showToast(
+                        "Back to Garment step"
+                    );
+
+                }
+            );
+
+
+        /* ============================================================
+           CANCEL
+        ============================================================ */
+
+        document
+            .getElementById(
+                "cancelBtn"
+            )
+            .addEventListener(
+                "click",
+                () => {
+
+                    showToast(
+                        "Order creation cancelled"
+                    );
+
+                }
+            );
+
+
+        /* ============================================================
+           CLOSE
+        ============================================================ */
+
+        document
+            .getElementById(
+                "closeBtn"
+            )
+            .addEventListener(
+                "click",
+                () => {
+
+                    showToast(
+                        "Close order creation"
+                    );
+
+                }
+            );
+
+
+        /* ============================================================
+           MASTER RENDER
+        ============================================================ */
+
+        function renderAll() {
+
+            renderGarmentChips();
+
+            renderForm();
+
+        }
+
+
+        /* ============================================================
+           INIT
+        ============================================================ */
+
+        renderAll();
+
     </script>
 
 </body>

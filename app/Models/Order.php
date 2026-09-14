@@ -39,37 +39,21 @@ class Order extends Model
         'progress'      => 'integer',
     ];
 
-    /** Persisted stages; verification and collection always require staff. */
     public const WORKFLOW = ['Received', 'Pending', 'Stitching', 'Ready for Verification', 'Ready', 'Delivered'];
     public const ALL_STATUSES = self::WORKFLOW;
-    public const OPEN_STATUSES = ['Received', 'Pending', 'Stitching', 'Ready for Verification', 'Ready'];
-    // Retain closed legacy records without offering retired statuses for new work.
-    public const CLOSED_STATUSES = ['Delivered', 'Completed', 'Cancelled'];
+    public const OPEN_STATUSES = ['Received', 'Pending', 'Stitching', 'In Progress', 'Ready for Verification', 'Ready'];
+    public const UNVERIFIED_STATUSES = ['Received', 'Pending', 'Stitching', 'In Progress', 'Ready for Verification'];
+    public const CLOSED_STATUSES = ['Delivered', 'Completed', 'Cancelled', 'On Hold'];
     public const TRANSITIONS = [
-        'Received' => ['Pending'],
-        'Pending' => ['Stitching'],
-        'Stitching' => ['Ready for Verification'],
+        'Received' => ['Pending', 'Ready for Verification', 'Ready'],
+        'Pending' => ['Stitching', 'Ready for Verification', 'Ready'],
+        'Stitching' => ['Ready for Verification', 'Ready'],
+        'In Progress' => ['Stitching', 'Ready for Verification', 'Ready'],
         'Ready for Verification' => ['Ready'],
         'Ready' => ['Delivered'],
-        'Delivered' => [],
-        'Completed' => [],
-        'Cancelled' => [],
+        'Delivered' => [], 'Completed' => [], 'Cancelled' => [], 'On Hold' => [],
     ];
-
-    public const PROGRESS_MAP = [
-        'Received'               => 0,
-        'Pending'                => 10,
-        'Stitching'            => 40,
-        'Ready for Verification' => 70,
-        'Ready'                  => 100,
-        'Delivered'              => 100,
-        'Completed'              => 100,
-        'Cancelled'              => 0,
-
-        // Legacy rows written before Overdue stopped being a status. Kept so an
-        // un-migrated database still renders instead of showing 0%.
-        'Overdue'                => 40,
-    ];
+    public const PROGRESS_MAP = ['Received' => 0, 'Pending' => 20, 'Stitching' => 50, 'In Progress' => 50, 'Ready for Verification' => 90, 'Ready' => 100, 'Delivered' => 100];
 
     /* ------------------------------------------------------------------ */
     /* Relationships                                                       */
@@ -77,7 +61,12 @@ class Order extends Model
 
     public function customer(): BelongsTo
     {
-        return $this->belongsTo(Customer::class);
+        return $this->belongsTo(Customer::class)->withTrashed();
+    }
+
+    public function collectionMessages()
+    {
+        return $this->belongsToMany(SmsLog::class,'collection_sms_orders')->withPivot('reason')->orderBy('sms_logs.id');
     }
 
     public function lineItems(): HasMany
@@ -174,7 +163,7 @@ class Order extends Model
 
     public function scopeOpen(Builder $q): Builder
     {
-        return $q->whereNotIn('status', self::CLOSED_STATUSES);
+        return $q->whereIn('status', self::OPEN_STATUSES);
     }
 
     public function scopeDueToday(Builder $q): Builder
@@ -186,8 +175,8 @@ class Order extends Model
     public function scopeOverdue(Builder $q): Builder
     {
         return $q->whereNotNull('delivery_date')
-                 ->where('delivery_date', '<', today())
-                 ->whereNotIn('status', self::CLOSED_STATUSES);
+                 ->where('delivery_date', '<', now())
+                 ->whereIn('status', Order::UNVERIFIED_STATUSES);
     }
 
     public function scopeSearch(Builder $q, ?string $term): Builder
@@ -353,42 +342,6 @@ class Order extends Model
     }
 
     /**
-     * The statuses this order may legally move to right now.
-     *
-     * @return array<int, string>
-     */
-    /**
-     * Each status that a timer may move on, and where it moves to.
-     *
-     * The settings key holds the delay; a delay of zero switches that hop off.
-     */
-    public const AUTO_ADVANCE = [
-        'Received' => ['to' => 'Pending', 'setting' => 'auto_status_received_delay'],
-        'Pending' => ['to' => 'Stitching', 'setting' => 'auto_status_pending_hours'],
-        'Stitching' => ['to' => 'Ready for Verification', 'setting' => 'auto_status_progress_delay'],
-    ];
-
-    /** Elapsed stages, using effective timestamps rather than the time of a page visit. */
-    public function elapsedTransitions(\Illuminate\Support\Carbon $asOf): array
-    {
-        if (!\App\Services\Settings::bool('auto_status_enabled')) return [];
-        $status = $this->status;
-        $since = $this->stage_since_at->copy();
-        $minutes = \App\Services\Settings::str('auto_status_unit') === 'minutes';
-        $transitions = [];
-        while ($stage = self::AUTO_ADVANCE[$status] ?? null) {
-            $delay = \App\Services\Settings::int($stage['setting']);
-            if ($delay < 1) break;
-            $due = $minutes ? $since->copy()->addMinutes($delay) : $since->copy()->addHours($delay);
-            if ($due->gt($asOf)) break;
-            $transitions[] = ['from' => $status, 'to' => $stage['to'], 'at' => $due];
-            $status = $stage['to'];
-            $since = $due;
-        }
-        return $transitions;
-    }
-
-    /**
      * Select the moment this order entered its current status, as `stage_since`.
      *
      * `updated_at` cannot answer this — any edit moves it. The status history
@@ -469,30 +422,13 @@ class Order extends Model
      */
     public function getIsAtRiskAttribute(): bool
     {
-        if (!$this->delivery_date || $this->is_overdue) {
-            return false;
-        }
-
-        if (!in_array($this->status, self::OPEN_STATUSES, true)) {
-            return false;
-        }
-
-        // Already verified or on the shelf: the work is done, so a near date is
-        // not a risk any more.
-        if (in_array($this->status, ['Ready'], true)) {
-            return false;
-        }
-
-        $hours = max(\App\Services\Settings::int('at_risk_hours'), 1);
-
-        return $this->delivery_date->lte(now()->addHours($hours));
+        return \App\Services\DeliveryTiming::describe($this)['dueSoon'];
     }
 
     public function getIsOverdueAttribute(): bool
     {
-        return $this->delivery_date
-            && $this->delivery_date->lt(today())
-            && !in_array($this->status, self::CLOSED_STATUSES, true);
+        return $this->delivery_date && $this->delivery_date->lt(now())
+            && in_array($this->status, Order::UNVERIFIED_STATUSES, true);
     }
 
     public function getIsDueTodayAttribute(): bool

@@ -7,7 +7,7 @@
 <div class="page flex justify-between items-center mb-6">
   <div>
     <h1 class="text-xl font-bold text-slate-900 tracking-tight">Measurement Management</h1>
-    <p class="text-sm text-slate-500 mt-0.5">Standard templates and custom measurements</p>
+    <p class="text-sm text-slate-500 mt-0.5">Customer measurements: save, update and print. No order required.</p>
   </div>
   <div class="flex gap-2">
       <a href="{{ route('customers.import') }}" class="bg-white border border-slate-200 text-slate-600 px-3.5 py-2 rounded-lg text-xs font-medium hover:bg-slate-50 hover:border-slate-300 flex items-center gap-2 transition-colors shadow-sm" title="Bulk import customers and their measurements from a spreadsheet"><i class="fa-solid fa-file-import text-[10px]"></i> Import</a>
@@ -29,12 +29,12 @@
   </div>
   <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5">
     <div class="flex items-center justify-between mb-3">
-      <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Active Templates</span>
+      <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Customers Measured</span>
       <div class="w-7 h-7 rounded-md bg-sky-50 text-sky-600 flex items-center justify-center"><i class="fa-solid fa-file-lines text-[11px]"></i></div>
     </div>
     @php $catalogued = $garmentTypes->count(); @endphp
-    <h3 class="text-2xl font-bold text-slate-900 tracking-tight">{{ number_format($stats['active_templates']) }}</h3>
-    <p class="text-[11px] text-slate-400 font-medium mt-1">{{ $catalogued }} catalogued · {{ max($stats['active_templates'] - $catalogued, 0) }} custom</p>
+    <h3 class="text-2xl font-bold text-slate-900 tracking-tight">{{ number_format($measurementsData->pluck('customer_id')->unique()->count()) }}</h3>
+    <p class="text-[11px] text-slate-400 font-medium mt-1">Customers with saved measurements</p>
   </div>
   <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5">
     <div class="flex items-center justify-between mb-3">
@@ -46,7 +46,7 @@
   </div>
   <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5">
     <div class="flex items-center justify-between mb-3">
-      <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Avg. Accuracy</span>
+      <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Fields Filled</span>
       <div class="w-7 h-7 rounded-md bg-emerald-50 text-emerald-600 flex items-center justify-center"><i class="fa-solid fa-bullseye text-[11px]"></i></div>
     </div>
     <h3 class="text-2xl font-bold text-slate-900 tracking-tight">{{ $stats['accuracy'] }}</h3>
@@ -58,15 +58,14 @@
 <div class="page bg-white p-4 rounded-xl border border-slate-200 shadow-sm mb-6 flex flex-col xl:flex-row gap-3 items-center">
   <div class="relative flex-1 w-full">
     <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-    <input type="text" id="measurementSearch" oninput="filterMeasurements()" placeholder="Search by customer name or order ID" class="w-full h-10 pl-10 pr-4 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition">
+    <input type="text" id="measurementSearch" oninput="filterMeasurements()" placeholder="Search by customer name" class="w-full h-10 pl-10 pr-4 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition">
   </div>
   <div class="flex flex-wrap gap-2 w-full xl:w-auto justify-end">
     <select id="statusFilter" onchange="filterMeasurements()" class="w-full sm:w-48 h-10 px-4 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-600 focus:outline-none focus:ring-2 focus:ring-slate-900 font-medium transition-all">
       <option value="all">All Measurements</option>
-      <option value="completed">Completed</option>
-      <option value="pending">Pending</option>
-      <option value="revision">Revision Needed</option>
-      <option value="awaiting">Awaiting Measurement</option>
+      <option value="completed">Mostly filled</option>
+      <option value="pending">Partly filled</option>
+      <option value="revision">Few fields filled</option>
     </select>
     <select id="garmentFilter" onchange="filterMeasurements()" class="w-full sm:w-36 h-10 px-4 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-600 focus:outline-none focus:ring-2 focus:ring-slate-900 font-medium transition-all">
       <option value="">Garment Type</option>
@@ -75,10 +74,7 @@
       @endforeach
     </select>
     <select id="tailorFilter" onchange="filterMeasurements()" class="w-full sm:w-36 h-10 px-4 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-600 focus:outline-none focus:ring-2 focus:ring-slate-900 font-medium transition-all">
-      <option value="">Tailor</option>
-      @foreach($measurementsData->pluck('tailor')->filter()->unique()->sort() as $t)
-      <option value="{{ $t }}">{{ $t }}</option>
-      @endforeach
+      <option value="">All Units</option><option value="in">Inches (in)</option><option value="cm">Centimetres (cm)</option>
     </select>
     <button class="w-full sm:w-auto bg-slate-900 text-white px-4 h-10 rounded-lg text-xs font-semibold hover:bg-slate-800 flex items-center justify-center gap-2 transition-colors shadow-sm" onclick="exportData()"><i class="fa-solid fa-file-export text-[10px]"></i> Export</button>
   </div>
@@ -92,9 +88,9 @@
         <tr>
           <th class="px-5 py-3 text-left font-bold">Customer Name</th>
           <th class="px-5 py-3 text-left font-bold">Garment Type</th>
-          <th class="px-5 py-3 text-left font-bold">Tailor</th>
-          <th class="px-5 py-3 text-left font-bold">Date</th>
-          <th class="px-5 py-3 text-left font-bold">Status</th>
+          <th class="px-5 py-3 text-left font-bold">Unit</th>
+          <th class="px-5 py-3 text-left font-bold">Last Updated</th>
+          <th class="px-5 py-3 text-left font-bold">Fields Filled</th>
           <th class="px-5 py-3 text-right font-bold">Actions</th>
         </tr>
       </thead>
@@ -104,13 +100,13 @@
           $completeness = $m->completeness;
           $rowStatus = $completeness >= 80 ? 'completed' : ($completeness >= 40 ? 'pending' : 'revision');
           $rowBadge = ['completed' => 'badge-delivered', 'pending' => 'badge-pending', 'revision' => 'badge-overdue'][$rowStatus];
-          $rowLabel = ['completed' => 'Completed', 'pending' => 'Pending', 'revision' => 'Revision Needed'][$rowStatus];
+          $rowLabel = ['completed' => 'Mostly filled', 'pending' => 'Partly filled', 'revision' => 'Few fields filled'][$rowStatus];
         @endphp
-        <tr class="hover:bg-slate-50 transition-colors" data-status="{{ $rowStatus }}" data-garment="{{ $m->garment_type }}" data-tailor="{{ $m->tailor }}" data-name="{{ strtolower($m->customer->name ?? '') }}" id="row-{{ $m->id }}">
+        <tr class="hover:bg-slate-50 transition-colors" data-status="{{ $rowStatus }}" data-garment="{{ $m->garment_type }}" data-tailor="{{ $m->unit }}" data-name="{{ strtolower($m->customer->name ?? '') }}" id="row-{{ $m->id }}">
           <td class="px-5 py-3 font-semibold text-slate-900">{{ $m->customer->name ?? 'Unknown' }}</td>
           <td class="px-5 py-3 text-slate-600">{{ $m->garment_type }}</td>
-          <td class="px-5 py-3 {{ $m->tailor == 'Unassigned' ? 'text-slate-400 italic' : 'text-slate-600' }}">{{ $m->tailor }}</td>
-          <td class="px-5 py-3 text-slate-500">{{ $m->created_at->format('d M Y') }}</td>
+          <td class="px-5 py-3 text-slate-600">{{ $m->unit === 'in' ? 'Inches (in)' : 'Centimetres (cm)' }}</td>
+          <td class="px-5 py-3 text-slate-500">{{ $m->updated_at->format('d M Y') }}</td>
           <td class="px-5 py-3">
              <span class="badge {{ $rowBadge }}">{{ $rowLabel }}</span>
           </td>
@@ -132,63 +128,28 @@
   <!-- Pagination -->
   <div class="px-6 py-3 border-t border-slate-200 flex flex-col sm:flex-row justify-between items-center text-sm gap-3">
     <span id="paginationInfo" class="text-xs text-slate-500">Showing {{ $measurementsData->count() }} of {{ $measurementsData->count() }} results</span>
-    <div class="flex items-center gap-1">
-      <button class="w-8 h-8 flex items-center justify-center rounded-md border border-slate-200 text-slate-500 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled>
-        <i class="fa-solid fa-chevron-left text-xs"></i>
-      </button>
-      <button class="w-8 h-8 flex items-center justify-center text-xs font-medium rounded-md transition-colors bg-slate-900 text-white">1</button>
-      <button class="w-8 h-8 flex items-center justify-center text-xs font-medium rounded-md transition-colors text-slate-600 hover:bg-slate-100" onclick="toast('Page 2', 'info')">2</button>
-      <button class="w-8 h-8 flex items-center justify-center text-xs font-medium rounded-md transition-colors text-slate-600 hover:bg-slate-100" onclick="toast('Page 3', 'info')">3</button>
-      <span class="px-1 text-slate-400 flex items-center text-xs">...</span>
-      <button class="w-8 h-8 flex items-center justify-center text-xs font-medium rounded-md transition-colors text-slate-600 hover:bg-slate-100" onclick="toast('Page 129', 'info')">129</button>
-      <button class="w-8 h-8 flex items-center justify-center rounded-md border border-slate-200 text-slate-500 hover:bg-slate-100 transition-colors" onclick="toast('Page 2', 'info')">
-        <i class="fa-solid fa-chevron-right text-xs"></i>
-      </button>
-    </div>
+    <div class="flex items-center gap-1"><span class="text-xs text-slate-500">All saved measurements</span></div>
   </div>
 </div>
 
 <div class="page grid grid-cols-1 gap-6">
-  <!-- RIGHT CARD: Pending Measurements -->
   <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
     <div class="flex justify-between items-center mb-5">
-      <div>
-        <h3 class="text-base font-semibold text-slate-900 tracking-tight">Awaiting Measurements</h3>
-        <p class="text-xs text-slate-500 mt-0.5">Orders pending measurement intake</p>
-      </div>
-      <span class="badge badge-pending text-[10px]">3 Pending</span>
+      <div><h3 class="text-base font-semibold text-slate-900 tracking-tight">Recently Updated Measurements</h3>
+      <p class="text-xs text-slate-500 mt-0.5">Open a saved set to update customer measurements</p></div>
+      <span class="badge badge-pending text-[10px]">{{ $measurementsData->count() }} saved</span>
     </div>
     <div class="space-y-2">
+      @forelse($measurementsData->sortByDesc('updated_at')->take(3) as $recent)
       <div class="flex items-center justify-between p-3 border border-slate-100 rounded-lg hover:bg-slate-50 transition-colors">
-        <div class="flex items-center gap-3">
-           <div class="avatar sm green">SR</div>
-           <div>
-             <div class="text-sm font-semibold text-slate-900">Sneha Reddy</div>
-             <div class="text-xs text-slate-500 mt-0.5">ORD-2454 · Due: Nov 22</div>
-           </div>
-        </div>
-        <button class="bg-slate-100 text-slate-700 px-2.5 py-1 rounded-md text-xs font-semibold hover:bg-slate-900 hover:text-white transition-colors" onclick="openModal('add-measurement', {name: 'Sneha Reddy', garment: 'Kurta Set'})">Take Measurement</button>
+        <div class="flex items-center gap-3"><div class="avatar sm green">{{ mb_substr($recent->customer?->name ?? '?', 0, 1) }}</div>
+        <div><div class="text-sm font-semibold text-slate-900">{{ $recent->customer?->name }}</div>
+        <div class="text-xs text-slate-500 mt-0.5">{{ $recent->garment_type }} / {{ $recent->updated_at->format('d M Y') }}</div></div></div>
+        <button class="bg-slate-100 text-slate-700 px-2.5 py-1 rounded-md text-xs font-semibold hover:bg-slate-900 hover:text-white transition-colors" onclick='openModal("add-measurement", @json($recent))'>Update Measurements</button>
       </div>
-      <div class="flex items-center justify-between p-3 border border-slate-100 rounded-lg hover:bg-slate-50 transition-colors">
-        <div class="flex items-center gap-3">
-           <div class="avatar sm blue">KN</div>
-           <div>
-             <div class="text-sm font-semibold text-slate-900">Karthik Nair</div>
-             <div class="text-xs text-slate-500 mt-0.5">ORD-2457 · Due: Nov 20</div>
-           </div>
-        </div>
-        <button class="bg-slate-100 text-slate-700 px-2.5 py-1 rounded-md text-xs font-semibold hover:bg-slate-900 hover:text-white transition-colors" onclick="openModal('add-measurement', {name: 'Karthik Nair', garment: 'Formal Shirt'})">Take Measurement</button>
-      </div>
-      <div class="flex items-center justify-between p-3 border border-slate-100 rounded-lg hover:bg-slate-50 transition-colors">
-        <div class="flex items-center gap-3">
-           <div class="avatar sm orange">DS</div>
-           <div>
-             <div class="text-sm font-semibold text-slate-900">Diya Sharma</div>
-             <div class="text-xs text-slate-500 mt-0.5">ORD-2461 · Due: Nov 21</div>
-           </div>
-        </div>
-        <button class="bg-slate-100 text-slate-700 px-2.5 py-1 rounded-md text-xs font-semibold hover:bg-slate-900 hover:text-white transition-colors" onclick="openModal('add-measurement', {name: 'Diya Sharma', garment: 'Silk Saree'})">Take Measurement</button>
-      </div>
+      @empty
+      <p class="text-xs text-slate-500">No saved measurements yet. Use Add Measurements to record your first set.</p>
+      @endforelse
     </div>
   </div>
 </div>
@@ -282,6 +243,7 @@
 <script>
   /* ============= LIVE SEARCH LOGIC ============= */
   window.allCustomers = @json($customers);
+  window.savedMeasurementSets = @json($measurementsData);
   window.garmentTypes = @json($garmentTypes);
   window.tailorNames = @json($tailors);
 
@@ -299,9 +261,9 @@
     
     if (matches.length > 0) {
       dropdown.innerHTML = matches.map(c => `
-        <div class="px-3 py-2 hover:bg-slate-50 cursor-pointer border-b border-slate-100 last:border-0" onmousedown="selectCustomer('${c.name.replace(/'/g, "\\'")}')">
-          <div class="text-sm font-semibold text-slate-900">${c.name}</div>
-          <div class="text-[10px] text-slate-500">${c.phone || 'No phone'}</div>
+        <div class="px-3 py-2 hover:bg-slate-50 cursor-pointer border-b border-slate-100 last:border-0" onmousedown="selectCustomer(${c.id})">
+          <div class="text-sm font-semibold text-slate-900">${Atelier.escapeHtml(c.name)}</div>
+          <div class="text-[10px] text-slate-500">${Atelier.escapeHtml(c.phone || 'No phone')}</div>
         </div>
       `).join('');
       dropdown.classList.remove('hidden');
@@ -311,13 +273,51 @@
     }
   }
 
-  function selectCustomer(name) {
-    const input = document.getElementById('meas-customer');
-    if (input) {
-      input.value = name;
+  function selectCustomer(id) {
+    const customer = window.allCustomers.find(c => Number(c.id) === Number(id));
+    if (!customer) return;
+    const latest = window.savedMeasurementSets.filter(m => Number(m.customer_id) === Number(customer.id)).sort((a,b) => new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at))[0];
+    openModal('add-measurement', latest || { customer, customer_id: customer.id, name: customer.name });
+  }
+
+  function savedMeasurementsForGarment(customerId, garment) {
+    const garmentKey = String(garment || '').trim().toLowerCase();
+    return window.savedMeasurementSets.filter(m => Number(m.customer_id) === Number(customerId)
+      && String(m.garment_type || '').trim().toLowerCase() === garmentKey);
+  }
+
+  function selectMeasurementSet(value) {
+    const customerId = Number(document.getElementById('meas-customer').dataset.customerId);
+    const customer = window.allCustomers.find(c => Number(c.id) === customerId);
+    if (value.startsWith('saved:')) {
+      const saved = savedMeasurementsForGarment(customerId, document.getElementById('meas-garment').value)
+        .find(m => Number(m.id) === Number(value.slice(6)));
+      if (saved) openModal('add-measurement', saved);
+    } else if (value === 'new') {
+      const garment = document.getElementById('meas-garment').value;
+      const name = document.getElementById('meas-customer').value;
+      openModal('add-measurement', {customer, customer_id: customer?.id, name, garment});
     }
-    const dropdown = document.getElementById('customer-dropdown');
-    if (dropdown) dropdown.classList.add('hidden');
+  }
+
+  function selectGarmentMeasurements(garment) {
+    const customerId = Number(document.getElementById('meas-customer').dataset.customerId);
+    const customer = window.allCustomers.find(c => Number(c.id) === customerId);
+    const existing = savedMeasurementsForGarment(customerId, garment)[0];
+    const name = document.getElementById('meas-customer').value;
+    openModal('add-measurement', existing || {customer, customer_id: customer?.id, name, garment});
+  }
+
+  function measurementCustomerChanged() {
+    const input = document.getElementById('meas-customer');
+    if (input.dataset.customerId && input.value !== input.dataset.customerName) {
+      // An edited saved set must never be reassigned just by typing a different name.
+      const name = input.value;
+      openModal('add-measurement', {name});
+      const fresh = document.getElementById('meas-customer');
+      fresh.focus(); fresh.setSelectionRange(name.length, name.length);
+    }
+    filterCustomerSearch(document.getElementById('meas-customer').value);
   }
 
   /* ============= EXPORT LOGIC ============= */
@@ -361,6 +361,7 @@
   async function executeDelete() {
     if (deleteContext.dbId) {
       await Atelier.api.delete(`/measurements/${deleteContext.dbId}`);
+      window.savedMeasurementSets = window.savedMeasurementSets.filter(m => Number(m.id) !== Number(deleteContext.dbId));
     }
 
     if (deleteContext.elementId) {
@@ -391,7 +392,7 @@
     const pct = completenessOf(m);
     const status = pct >= 80 ? 'completed' : pct >= 40 ? 'pending' : 'revision';
     const badge = { completed: 'badge-delivered', pending: 'badge-pending', revision: 'badge-overdue' }[status];
-    const label = { completed: 'Completed', pending: 'Pending', revision: 'Revision Needed' }[status];
+    const label = { completed: 'Mostly filled', pending: 'Partly filled', revision: 'Few fields filled' }[status];
     const name = m.customer?.name || 'Unknown';
     const json = JSON.stringify(m).replace(/"/g, '&quot;');
 
@@ -400,14 +401,14 @@
     tr.id = `row-${m.id}`;
     tr.dataset.status = status;
     tr.dataset.garment = m.garment_type || '';
-    tr.dataset.tailor = m.tailor || '';
+    tr.dataset.tailor = m.unit || '';
     tr.dataset.name = name.toLowerCase();
 
     tr.innerHTML = `
       <td class="px-5 py-3 font-semibold text-slate-900">${Atelier.escapeHtml(name)}</td>
       <td class="px-5 py-3 text-slate-600">${Atelier.escapeHtml(m.garment_type || '')}</td>
-      <td class="px-5 py-3 ${m.tailor === 'Unassigned' ? 'text-slate-400 italic' : 'text-slate-600'}">${Atelier.escapeHtml(m.tailor || '')}</td>
-      <td class="px-5 py-3 text-slate-500">${new Date(m.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
+      <td class="px-5 py-3 text-slate-600">${m.unit === 'in' ? 'Inches (in)' : 'Centimetres (cm)'}</td>
+      <td class="px-5 py-3 text-slate-500">${new Date(m.updated_at || m.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
       <td class="px-5 py-3"><span class="badge ${badge}">${label}</span></td>
       <td class="px-5 py-3 text-right whitespace-nowrap">
         <button class="w-8 h-8 rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-900 inline-flex items-center justify-center mr-1 transition-colors" title="View Details" onclick='openModal("view-measurement", ${json})'><i class="fa-regular fa-eye text-xs"></i></button>
@@ -428,7 +429,7 @@
     const row = buildMeasurementRow(m);
     const existing = document.getElementById(`row-${m.id}`);
 
-    if (isEdit && existing) {
+    if (existing) {
       existing.replaceWith(row);
     } else {
       tbody.prepend(row);
@@ -466,6 +467,8 @@
       payload[field] = document.getElementById(`meas-${field}`)?.value || null;
     });
 
+    if (!payload.garment_type) { toast('Choose saved measurements to update, or a new garment set', 'error'); return; }
+
     // Catch missing mandatory fields before the round-trip.
     const missing = cfg.required.filter(f => !payload[f]);
     if (missing.length) {
@@ -475,9 +478,10 @@
     }
 
     // Bind to a real customer record when the typed name matches one.
-    const match = (window.allCustomers || []).find(
-      c => c.name.toLowerCase() === payload.customer_name.trim().toLowerCase()
-    );
+    const selectedId = Number(document.getElementById('meas-customer').dataset.customerId);
+    const candidates = (window.allCustomers || []).filter(c => c.name.toLowerCase() === payload.customer_name.trim().toLowerCase());
+    const match = (window.allCustomers || []).find(c => Number(c.id) === selectedId) || (candidates.length === 1 ? candidates[0] : null);
+    if (!match && candidates.length > 1) { toast('Select the customer from the search results to confirm their phone number', 'error'); return; }
     if (match) payload.customer_id = match.id;
 
     if (!payload.customer_name.trim()) {
@@ -491,6 +495,12 @@
     try {
       const res = await (isEdit ? Atelier.api.put(url, payload) : Atelier.api.post(url, payload));
       closeModal();
+      const duplicates = window.savedMeasurementSets.filter(m => Number(m.customer_id) === Number(res.measurement.customer_id) && m.garment_type.trim().toLowerCase() === res.measurement.garment_type.trim().toLowerCase() && Number(m.id) !== Number(res.measurement.id));
+      duplicates.forEach(m => document.getElementById(`row-${m.id}`)?.remove());
+      window.savedMeasurementSets = window.savedMeasurementSets.filter(m => !duplicates.includes(m));
+      const savedIndex = window.savedMeasurementSets.findIndex(m => Number(m.id) === Number(res.measurement.id));
+      if (savedIndex >= 0) window.savedMeasurementSets[savedIndex] = res.measurement;
+      else window.savedMeasurementSets.unshift(res.measurement);
       upsertMeasurementRow(res.measurement, isEdit);
       toast(res.message || 'Measurement saved successfully', 'success');
     } catch (err) {
@@ -512,20 +522,20 @@
 
       const metrics = [
         { label: 'Length', id: 'length' },
-        { label: 'Shoulder Width', id: 'shoulder_width' },
-        { label: 'Sleeve Length', id: 'sleeve_length' },
+        { label: 'Shoulder', id: 'shoulder_width' },
+        { label: 'Sleeves', id: 'sleeve_length' },
         { label: 'Chest', id: 'chest', hasLosing: true },
-        { label: 'Waist', id: 'waist', hasLosing: true },
+        { label: 'West', id: 'waist', hasLosing: true },
         { label: 'Hip', id: 'hip', hasLosing: true },
         { label: 'Collar', id: 'collar' },
-        { label: 'Ghera', id: 'ghera' },
-        { label: 'Patti', id: 'patti' },
+        { label: 'Galla', id: 'ghera' },
+        { label: 'F/Patti', id: 'patti' },
         { label: 'Button', id: 'button' },
         { label: 'Cuff', id: 'cuff' },
         { label: 'Koni', id: 'koni' },
         { label: 'Elbow', id: 'elbow' },
-        { label: 'Armhole', id: 'armhole' },
-        { label: 'Takai', id: 'takai' },
+        { label: 'Armor', id: 'armhole' },
+        { label: 'Takki', id: 'takai' },
         { label: 'Salwar Length', id: 'salwar_length' },
         { label: 'Pancho', id: 'pancho' }
       ];
@@ -548,16 +558,16 @@
               <div class="text-sm font-semibold text-slate-900 mt-1">${garment}</div>
             </div>
             <div>
-              <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Tailor</div>
-              <div class="text-sm font-semibold text-slate-900 mt-1">${tailor}</div>
+              <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Unit</div>
+              <div class="text-sm font-semibold text-slate-900 mt-1">${unit}</div>
             </div>
             <div>
               <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Date</div>
               <div class="text-sm font-semibold text-slate-900 mt-1">${date}</div>
             </div>
             <div>
-              <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Status</div>
-              <div class="text-sm font-semibold text-emerald-600 mt-1">Completed</div>
+              <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Fields Filled</div>
+              <div class="text-sm font-semibold text-emerald-600 mt-1">${completenessOf(data)}%</div>
             </div>
           </div>
 
@@ -570,7 +580,7 @@
             ${metrics.map(m => {
               if (m.hasLosing) {
                 const mainVal = renderValue(data[m.id]);
-                const losingVal = data[m.id + '_losing'] !== null && data[m.id + '_losing'] !== undefined && data[m.id + '_losing'] !== '' ? `(${data[m.id + '_losing']} losing)` : '';
+                const losingVal = data[m.id + '_losing'] !== null && data[m.id + '_losing'] !== undefined && data[m.id + '_losing'] !== '' ? `(${data[m.id + '_losing']} ${window.MEASUREMENT_CONFIG.labels[m.id + '_losing']})` : '';
                 return `
                   <div class="bg-white border border-slate-200 rounded-lg p-3">
                     <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">${m.label}</div>
@@ -587,15 +597,15 @@
             }).join('')}
           </div>
 
-          <!-- Tailor Notes -->
+          <!-- Measurement Notes -->
           ${data.notes ? `
           <div class="mt-6">
             <div class="flex items-center gap-2 mb-3">
-              <h4 class="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Tailor Notes</h4>
+              <h4 class="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Notes</h4>
               <div class="flex-1 h-px bg-slate-200"></div>
             </div>
             <div class="bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-lg text-sm">
-              ${data.notes}
+              ${Atelier.escapeHtml(data.notes)}
             </div>
           </div>` : ''}
         </div>
@@ -605,16 +615,23 @@
         </div>`;
     },
     'add-measurement': (data) => {
+      if (data?.id) data = window.savedMeasurementSets.find(m => Number(m.id) === Number(data.id)) || data;
       const isEdit = data && data.id;
-      const title = isEdit ? 'Edit Measurement' : 'Add New Measurement';
-      const desc = isEdit ? `Update metrics for ${data.customer?.name || 'Unknown'}` : 'Record body metrics for a new order';
+      const title = isEdit ? 'Update Measurements' : 'Add Measurements';
+      const desc = isEdit ? `Update saved measurements for ${data.customer?.name || 'Unknown'}` : 'Save or update customer measurements. No order required.';
       const customerVal = isEdit ? (data.customer?.name || '') : (data?.name || '');
-      const garmentVal = isEdit ? data.garment_type : (data?.garment || (window.garmentTypes[0] || 'Shirt'));
+      const garmentVal = isEdit ? data.garment_type : (data?.garment || window.garmentTypes[0] || '');
       const tailorVal = isEdit ? data.tailor : (window.tailorNames[0] || 'Unassigned');
       // Unit, precision and which fields are mandatory all come from Settings.
       const cfg = window.MEASUREMENT_CONFIG;
       const unitVal = isEdit ? data.unit : cfg.unit;
       const notesVal = isEdit ? data.notes : '';
+
+      const customerId = data?.customer_id || data?.customer?.id;
+      const savedSets = savedMeasurementsForGarment(customerId, garmentVal);
+      const chooseSaved = data?.chooseSaved && savedSets.length > 0;
+      const garmentOptions = [...new Set([...(garmentVal ? [garmentVal] : []), ...window.garmentTypes])].map(g => `<option value="${Atelier.escapeHtml(g)}" ${g === garmentVal ? 'selected' : ''}>${Atelier.escapeHtml(g)}</option>`).join('');
+      const savedOptions = `<option value="new">Choose garment / record measurements</option>${savedSets.map((m, i) => `<option value="saved:${m.id}" ${isEdit && Number(data.id) === Number(m.id) ? 'selected' : ''}>${Atelier.escapeHtml(m.garment_type)} / ${new Date(m.updated_at || m.created_at).toLocaleDateString('en-GB')} / ${m.unit || cfg.unit}</option>`).join('')}`;
 
       const isRequired = id => cfg.required.includes(id);
       const star = id => isRequired(id) ? ' <span class="text-red-500">*</span>' : '';
@@ -622,20 +639,20 @@
 
       const metrics = [
         { label: 'Length', id: 'length' },
-        { label: 'Shoulder Width', id: 'shoulder_width' },
-        { label: 'Sleeve Length', id: 'sleeve_length' },
+        { label: 'Shoulder', id: 'shoulder_width' },
+        { label: 'Sleeves', id: 'sleeve_length' },
         { label: 'Chest', id: 'chest', hasLosing: true },
-        { label: 'Waist', id: 'waist', hasLosing: true },
+        { label: 'West', id: 'waist', hasLosing: true },
         { label: 'Hip', id: 'hip', hasLosing: true },
         { label: 'Collar', id: 'collar' },
-        { label: 'Ghera', id: 'ghera' },
-        { label: 'Patti', id: 'patti' },
+        { label: 'Galla', id: 'ghera' },
+        { label: 'F/Patti', id: 'patti' },
         { label: 'Button', id: 'button' },
         { label: 'Cuff', id: 'cuff' },
         { label: 'Koni', id: 'koni' },
         { label: 'Elbow', id: 'elbow' },
-        { label: 'Armhole', id: 'armhole' },
-        { label: 'Takai', id: 'takai' },
+        { label: 'Armor', id: 'armhole' },
+        { label: 'Takki', id: 'takai' },
         { label: 'Salwar Length', id: 'salwar_length' },
         { label: 'Pancho', id: 'pancho' }
       ];
@@ -644,7 +661,7 @@
         <div class="p-5 border-b border-slate-200 flex justify-between items-center">
           <div>
             <div class="text-lg font-bold text-slate-900 tracking-tight">${title}</div>
-            <div class="text-xs text-slate-500 mt-1">${desc}</div>
+            <div class="text-xs text-slate-500 mt-1">${Atelier.escapeHtml(desc)}</div>
           </div>
           <button class="w-8 h-8 rounded-lg text-slate-400 hover:bg-slate-100 flex items-center justify-center" onclick="closeModal()"><i class="fa-solid fa-xmark text-sm"></i></button>
         </div>
@@ -652,20 +669,20 @@
           <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
             <div class="col-span-2 md:col-span-2 relative">
               <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Customer Name *</label>
-              <input type="text" id="meas-customer" oninput="filterCustomerSearch(this.value)" onfocus="filterCustomerSearch(this.value)" onblur="setTimeout(() => { const d = document.getElementById('customer-dropdown'); if(d) d.classList.add('hidden') }, 200)" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-colors" placeholder="Search or enter customer name" value="${customerVal}" autocomplete="off">
+              <input type="text" id="meas-customer" data-customer-id="${customerId || ''}" data-customer-name="${Atelier.escapeHtml(customerVal)}" oninput="measurementCustomerChanged()" onfocus="filterCustomerSearch(this.value)" onblur="setTimeout(() => { const d = document.getElementById('customer-dropdown'); if(d) d.classList.add('hidden') }, 200)" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-colors" placeholder="Search or enter customer name" value="${Atelier.escapeHtml(customerVal)}" autocomplete="off">
               <div id="customer-dropdown" class="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg hidden max-h-48 overflow-y-auto"></div>
             </div>
             <div>
               <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Garment Type *</label>
-              <select id="meas-garment" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-colors">
-                ${[...new Set([...(garmentVal ? [garmentVal] : []), ...window.garmentTypes])].map(g => `<option ${g === garmentVal ? 'selected' : ''}>${Atelier.escapeHtml(g)}</option>`).join('')}
+              <select id="meas-garment" onchange="selectGarmentMeasurements(this.value)" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-colors">
+                ${garmentOptions}
               </select>
             </div>
             <div>
-              <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Assigned Tailor *</label>
-              <select id="meas-tailor" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-colors">
-                ${[...window.tailorNames, 'Unassigned'].map(t => `<option ${t === tailorVal ? 'selected' : ''}>${Atelier.escapeHtml(t)}</option>`).join('')}
-              </select>
+              <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Saved Measurements</label>
+              <select id="meas-saved" onchange="selectMeasurementSet(this.value)" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-colors">${savedOptions}</select>
+              <input type="hidden" id="meas-tailor" value="${Atelier.escapeHtml(tailorVal || 'Unassigned')}">
+
             </div>
           </div>
           
@@ -691,8 +708,8 @@
                   <div>
                     <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">${m.label}${star(m.id)}${star(m.id + '_losing')}</label>
                     <div class="flex gap-2">
-                      <input type="number" id="meas-${m.id}" ${attrs(m.id)} class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-colors" placeholder="Main" value="${cell(m.id)}">
-                      <input type="number" id="meas-${m.id}_losing" ${attrs(m.id + '_losing')} class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-colors" placeholder="Losing" value="${cell(m.id + '_losing')}">
+                      <input type="number" id="meas-${m.id}" ${attrs(m.id)} class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-colors" placeholder="Body" value="${cell(m.id)}">
+                      <input type="number" id="meas-${m.id}_losing" ${attrs(m.id + '_losing')} class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-colors" placeholder="${window.MEASUREMENT_CONFIG.labels[m.id + '_losing']}" value="${cell(m.id + '_losing')}">
                     </div>
                   </div>
                 `;
@@ -707,52 +724,21 @@
           </div>
 
           <div>
-            <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Tailor Notes</label>
-            <textarea id="meas-notes" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-colors min-h-[80px]" placeholder="Specific posture notes or style preferences...">${notesVal || ''}</textarea>
+            <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Notes</label>
+            <textarea id="meas-notes" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-colors min-h-[80px]" placeholder="Fit, posture, or notes...">${Atelier.escapeHtml(notesVal || '')}</textarea>
           </div>
         </div>
         <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">
           <button class="bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-100 transition-colors" onclick="closeModal()">Cancel</button>
-          <button id="save-measurement-btn" class="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors shadow-sm flex items-center gap-2" onclick="saveMeasurement(${isEdit ? data.id : 'null'})"><i class="fa-solid fa-check text-xs"></i> Save Measurement</button>
-        </div>`;
-    },
-    'template-form': (data) => {
-      const isEdit = data && data.name;
-      const title = isEdit ? 'Edit Template' : 'Add New Template';
-      
-      return `
-        <div class="p-5 border-b border-slate-200 flex justify-between items-center">
-          <div>
-            <div class="text-lg font-bold text-slate-900 tracking-tight">${title}</div>
-            <div class="text-xs text-slate-500 mt-1">Configure measurement fields</div>
-          </div>
-          <button class="w-8 h-8 rounded-lg text-slate-400 hover:bg-slate-100 flex items-center justify-center" onclick="closeModal()"><i class="fa-solid fa-xmark text-sm"></i></button>
-        </div>
-        <div class="p-6 overflow-y-auto">
-          <div class="grid grid-cols-2 gap-4 mb-6">
-            <div class="col-span-2">
-              <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Template Name *</label>
-              <input type="text" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-colors" placeholder="e.g. Kurta Template" value="${isEdit ? data.name : ''}">
-            </div>
-            <div>
-              <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Category</label>
-              <select class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-colors">
-                <option>Standard</option><option>Custom</option>
-              </select>
-            </div>
-            <div>
-              <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Fields Count</label>
-              <input type="number" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-colors" placeholder="0" value="${isEdit ? 8 : ''}">
-            </div>
-          </div>
-        </div>
-        <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">
-          <button class="bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-100 transition-colors" onclick="closeModal()">Cancel</button>
-          <button class="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors shadow-sm flex items-center gap-2" onclick="closeModal(); toast('Template saved successfully', 'success')"><i class="fa-solid fa-check text-xs"></i> Save Template</button>
+          <button id="save-measurement-btn" class="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors shadow-sm flex items-center gap-2" onclick="saveMeasurement(${isEdit ? data.id : 'null'})"><i class="fa-solid fa-check text-xs"></i> ${isEdit ? 'Update Measurements' : 'Save Measurements'}</button>
         </div>`;
     },
     'print-preview': (data) => {
-      if (!data) return '<div class="p-5 text-center">Error: No data provided</div>';
+      if (!data) return `
+        <div class="p-5 border-b border-slate-200 flex justify-between items-center"><div class="text-lg font-bold text-slate-900 tracking-tight">Print Measurements</div><button class="w-8 h-8 rounded-lg text-slate-400 hover:bg-slate-100" onclick="closeModal()"><i class="fa-solid fa-xmark text-sm"></i></button></div>
+        <div class="p-6"><label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Select saved measurements</label><select id="measurement-print-choice" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm">${window.savedMeasurementSets.map(m => `<option value="${m.id}">${Atelier.escapeHtml(m.customer?.name || 'Customer')} / ${Atelier.escapeHtml(m.garment_type)} / #${m.id}</option>`).join('')}</select>${window.savedMeasurementSets.length ? '' : '<p class="text-xs text-slate-500 mt-1">Save measurements before printing.</p>'}</div>
+        <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-2"><button class="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-800" onclick="openModal('print-preview', window.savedMeasurementSets.find(m => Number(m.id) === Number(document.getElementById('measurement-print-choice').value)))" ${window.savedMeasurementSets.length ? '' : 'disabled'}>Preview Sheet</button></div>`;
+      if (data?.id) data = window.savedMeasurementSets.find(m => Number(m.id) === Number(data.id)) || data;
       
       const customer = data.customer?.name || data.name || 'Unknown';
       const garment = data.garment_type || data.garment || 'Unknown';
@@ -761,20 +747,20 @@
 
       const metrics = [
         { label: 'Length', id: 'length' },
-        { label: 'Shoulder Width', id: 'shoulder_width' },
-        { label: 'Sleeve Length', id: 'sleeve_length' },
+        { label: 'Shoulder', id: 'shoulder_width' },
+        { label: 'Sleeves', id: 'sleeve_length' },
         { label: 'Chest', id: 'chest', hasLosing: true },
-        { label: 'Waist', id: 'waist', hasLosing: true },
+        { label: 'West', id: 'waist', hasLosing: true },
         { label: 'Hip', id: 'hip', hasLosing: true },
         { label: 'Collar', id: 'collar' },
-        { label: 'Ghera', id: 'ghera' },
-        { label: 'Patti', id: 'patti' },
+        { label: 'Galla', id: 'ghera' },
+        { label: 'F/Patti', id: 'patti' },
         { label: 'Button', id: 'button' },
         { label: 'Cuff', id: 'cuff' },
         { label: 'Koni', id: 'koni' },
         { label: 'Elbow', id: 'elbow' },
-        { label: 'Armhole', id: 'armhole' },
-        { label: 'Takai', id: 'takai' },
+        { label: 'Armor', id: 'armhole' },
+        { label: 'Takki', id: 'takai' },
         { label: 'Salwar Length', id: 'salwar_length' },
         { label: 'Pancho', id: 'pancho' }
       ];
@@ -788,7 +774,7 @@
         if (m.hasLosing) {
           const losing = data[m.id + '_losing'];
           if (losing !== null && losing !== undefined && losing !== '') {
-            losingStr = ` (${Number(losing).toFixed(2)} losing)`;
+            losingStr = ` (${Number(losing).toFixed(2)} ${window.MEASUREMENT_CONFIG.labels[m.id + '_losing']})`;
           }
         }
         
@@ -807,8 +793,8 @@
         </div>
         <div class="p-6 bg-slate-100 overflow-y-auto flex justify-center print-container" style="max-height:60vh;">
           <div id="measurement-print-sheet" style="background:#fff; width:280px; padding:20px; box-shadow:0 0 10px rgba(0,0,0,0.1); font-family: 'Courier New', monospace; color: #000;">
-             <div style="text-align:center; font-weight:bold; font-size:16px; margin-bottom:4px;">ATELIER TAILORS</div>
-             <div style="text-align:center; font-size:10px; margin-bottom:8px;">123 Fashion Street, Mumbai | 0300-1234567</div>
+             <div style="text-align:center; font-weight:bold; font-size:16px; margin-bottom:4px;">{{ \App\Services\Settings::str('store_name') }}</div>
+             <div style="text-align:center; font-size:10px; margin-bottom:8px;">Customer Measurement Record</div>
              <div style="border-top:1px dashed #000; margin:8px 0;"></div>
              <div style="font-size:12px; margin-bottom:2px; display:flex; justify-content:space-between;"><span>Customer:</span><span style="font-weight:bold;">${customer}</span></div>
              <div style="font-size:12px; margin-bottom:2px; display:flex; justify-content:space-between;"><span>Garment:</span><span style="font-weight:bold;">${garment}</span></div>
@@ -818,11 +804,11 @@
                 ${renderMetrics || '<div style="text-align:center; color:#999; font-style:italic;">No measurement values found</div>'}
              </div>
              <div style="border-top:1px dashed #000; margin:8px 0;"></div>
-             <div style="text-align:center; font-size:10px; margin-top:20px;">Tailor Sign: ___________</div>
+             <div style="text-align:center; font-size:10px; margin-top:20px;">Customer Measurement Sheet</div>
           </div>
         </div>
         <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-2 no-print">
-          <button class="bg-white border border-slate-200 text-slate-500 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-100 flex items-center gap-2 transition-colors" onclick="toast('Feature coming soon','info')"><i class="fa-solid fa-file-pdf text-xs"></i> Download PDF</button>
+          <button class="bg-white border border-slate-200 text-slate-500 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-100 flex items-center gap-2 transition-colors" onclick="window.print()"><i class="fa-solid fa-file-pdf text-xs"></i> Save as PDF</button>
           <button class="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-800 flex items-center gap-2 transition-colors shadow-sm" onclick="window.print()"><i class="fa-solid fa-print text-xs"></i> Print</button>
         </div>`;
     },

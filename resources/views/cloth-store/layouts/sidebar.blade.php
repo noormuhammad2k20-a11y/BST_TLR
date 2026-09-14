@@ -115,6 +115,25 @@
   #sidebar .sb-dropdown-toggle[aria-expanded="true"] .sb-child-active-dot {
     opacity: 0;
   }
+
+  /* ==========================================================================
+     Collapse Button Fix
+     --------------------------------------------------------------------------
+     Explicit rigid sizes to prevent the icon from expanding into the dashboard.
+     ========================================================================== */
+  .sidebar-collapse-button svg {
+    width: 20px !important;
+    height: 20px !important;
+    min-width: 20px !important;
+    max-width: 20px !important;
+    min-height: 20px !important;
+    max-height: 20px !important;
+    flex: 0 0 20px !important;
+  }
+  
+  .sidebar-collapse-wrapper {
+    overflow: hidden;
+  }
 </style>
 
 <aside id="sidebar" class="w-64 bg-white border-r border-slate-200 fixed top-0 bottom-0 left-0 z-40 flex flex-col">
@@ -128,31 +147,31 @@
     </div>
   </div>
 
-  <div class="flex-1 overflow-y-auto py-4">
+  <div class="flex-1 overflow-y-auto overflow-x-hidden py-4">
 
     {{-- ── Main Daily-Use ─────────────────────────────────────── --}}
     <div class="sb-label px-6 mb-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Main</div>
 
     <a href="{{ route('cloth-store.dashboard') }}" class="{{ $nav }} {{ request()->routeIs('cloth-store.dashboard') ? 'active text-slate-900' : 'text-slate-600' }}">
-      <x-icon name="dashboard" /> Dashboard
+      <x-icon name="dashboard" /> <span class="sb-text">Dashboard</span>
     </a>
     <a href="{{ route('cloth-store.checkout.index') }}" class="{{ $nav }} {{ request()->routeIs('cloth-store.checkout.*') ? 'active text-slate-900' : 'text-slate-600' }}">
-      <x-icon name="checkout" /> Smart Checkout
+      <x-icon name="checkout" /> <span class="sb-text">Smart Checkout</span>
     </a>
     <a href="{{ route('cloth-store.orders.index') }}" class="{{ $nav }} {{ request()->routeIs('cloth-store.orders.*') ? 'active text-slate-900' : 'text-slate-600' }}">
-      <x-icon name="orders" /> Orders
+      <x-icon name="orders" /> <span class="sb-text">Orders</span>
     </a>
     <a href="{{ route('cloth-store.products.index') }}" class="{{ $nav }} {{ request()->routeIs('cloth-store.products.*') ? 'active text-slate-900' : 'text-slate-600' }}">
-      <x-icon name="products" /> Products
+      <x-icon name="products" /> <span class="sb-text">Products</span>
     </a>
     <a href="{{ route('cloth-store.stock.index') }}" class="{{ $nav }} {{ request()->routeIs('cloth-store.stock.index') || request()->routeIs('cloth-store.stock.history') ? 'active text-slate-900' : 'text-slate-600' }}">
-      <x-icon name="stock" /> Stock Management
+      <x-icon name="stock" /> <span class="sb-text">Stock Management</span>
     </a>
     <a href="{{ route('cloth-store.customers.index') }}" class="{{ $nav }} {{ request()->routeIs('cloth-store.customers.*') ? 'active text-slate-900' : 'text-slate-600' }}">
-      <x-icon name="customers" /> Customers
+      <x-icon name="customers" /> <span class="sb-text">Customers</span>
     </a>
     <a href="{{ route('cloth-store.payments.index') }}" class="{{ $nav }} {{ request()->routeIs('cloth-store.payments.*') ? 'active text-slate-900' : 'text-slate-600' }}">
-      <x-icon name="payments" /> Payments
+      <x-icon name="payments" /> <span class="sb-text">Payments</span>
     </a>
 
     {{-- ── More dropdown ──────────────────────────────────────── --}}
@@ -166,7 +185,7 @@
         <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>
         </svg>
-        <span>More</span>
+        <span class="sb-text">More</span>
         @if($moreActive)
           <span class="sb-child-active-dot"></span>
         @endif
@@ -177,17 +196,17 @@
 
       <div class="sb-dropdown-body {{ $moreActive ? 'open' : '' }}">
         <a href="{{ route('cloth-store.returns.index') }}" class="{{ $nav }} {{ request()->routeIs('cloth-store.returns.*') ? 'active text-slate-900' : 'text-slate-600' }}">
-          <x-icon name="returns" /> Returns &amp; Exchanges
+          <x-icon name="returns" /> <span class="sb-text">Returns &amp; Exchanges</span>
         </a>
         <a href="{{ route('cloth-store.expenses.index') }}" class="{{ $nav }} {{ request()->routeIs('cloth-store.expenses.*') ? 'active text-slate-900' : 'text-slate-600' }}">
-          <x-icon name="expenses" /> Expenses
+          <x-icon name="expenses" /> <span class="sb-text">Expenses</span>
         </a>
         <a href="{{ route('cloth-store.stock.alerts') }}" class="{{ $nav }} {{ request()->routeIs('cloth-store.stock.alerts*') ? 'active text-slate-900' : 'text-slate-600' }}">
-          <x-icon name="alert" /> Low Stock Alerts
+          <x-icon name="alert" /> <span class="sb-text">Low Stock Alerts</span>
           <span class="sb-badge ml-auto bg-red-50 text-red-600 text-[10px] font-bold px-1.5 py-0.5 rounded">4</span>
         </a>
         <a href="{{ route('cloth-store.categories.index') }}" class="{{ $nav }} {{ request()->routeIs('cloth-store.categories.*') ? 'active text-slate-900' : 'text-slate-600' }}">
-          <x-icon name="categories" /> Categories
+          <x-icon name="categories" /> <span class="sb-text">Categories</span>
         </a>
       </div>
     </div>
@@ -203,7 +222,7 @@
         <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
           <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
         </svg>
-        <span>Tools &amp; Settings</span>
+        <span class="sb-text">Tools &amp; Settings</span>
         @if($toolsActive)
           <span class="sb-child-active-dot"></span>
         @endif
@@ -214,68 +233,31 @@
 
       <div class="sb-dropdown-body {{ $toolsActive ? 'open' : '' }}">
         <a href="{{ route('cloth-store.discounts.index') }}" class="{{ $nav }} {{ request()->routeIs('cloth-store.discounts.*') ? 'active text-slate-900' : 'text-slate-600' }}">
-          <x-icon name="discounts" /> Discounts &amp; Offers
+          <x-icon name="discounts" /> <span class="sb-text">Discounts &amp; Offers</span>
         </a>
         <a href="{{ route('cloth-store.reports.index') }}" class="{{ $nav }} {{ request()->routeIs('cloth-store.reports.*') ? 'active text-slate-900' : 'text-slate-600' }}">
-          <x-icon name="reports" /> Reports &amp; Analytics
+          <x-icon name="reports" /> <span class="sb-text">Reports &amp; Analytics</span>
         </a>
         @if($user?->isAdmin())
         <a href="{{ route('cloth-store.settings.index') }}" class="{{ $nav }} {{ request()->routeIs('cloth-store.settings.*') ? 'active text-slate-900' : 'text-slate-600' }}">
-          <x-icon name="settings" /> Settings
+          <x-icon name="settings" /> <span class="sb-text">Settings</span>
         </a>
         @endif
       </div>
     </div>
 
-  </div>
+    </div>
 
-  <!-- Quick Sidebar Palette -->
-  <div class="px-3 pb-1 relative" id="sb-palette-wrap">
-    <button onclick="toggleSidebarPalette(event)" class="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium transition-all" style="color: var(--sb-muted, #64748b);" title="Change sidebar color">
-      <x-icon name="palette" :size="16" class="menu-ico" style="color: var(--sb-accent, #4F46E5); opacity:1;" />
-      <span>Sidebar Color</span>
-      <span class="ml-auto w-4 h-4 rounded-full shadow-sm" style="background: var(--sb-bg, #ffffff); border: 2px solid var(--sb-accent, #4F46E5);"></span>
+  <!-- Collapse Toggle -->
+  <div class="mt-auto border-t border-slate-200 p-3 sidebar-collapse-wrapper">
+    <button type="button" onclick="toggleSidebarCollapse()" class="{{ $nav }} sidebar-collapse-button w-full text-slate-500 justify-start hover:text-slate-900 hover:bg-slate-50 transition-colors">
+      <svg class="nav-ico collapse-arrow transition-transform duration-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+        <line x1="9" y1="3" x2="9" y2="21"/>
+        <path d="M15 9l-3 3 3 3"/>
+      </svg>
+      <span class="sb-collapse-text font-medium">Collapse Sidebar</span>
     </button>
-    <div id="sb-palette-popover">
-      <div class="bg-white rounded-xl shadow-2xl p-3 w-56 border border-slate-200">
-        <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2.5 px-0.5">Sidebar Theme</div>
-        <div class="grid grid-cols-4 gap-2" id="sb-swatches"></div>
-      </div>
-    </div>
-  </div>
-
-  <div class="sb-foot p-3 border-t border-slate-200 relative">
-    <div id="sidebar-user-menu" class="hidden absolute bottom-full left-3 right-3 mb-2 bg-white border border-slate-200 rounded-lg shadow-lg overflow-hidden z-50">
-      @if($user?->isAdmin())
-      {{-- Cloth Store settings, matching the System link in the nav above.
-           This pointed at the Tailor system's settings page. --}}
-      <a href="{{ route('cloth-store.settings.index') }}" class="flex items-center gap-2.5 px-3 py-2.5 text-sm text-slate-600 hover:bg-slate-50 transition-colors">
-        <x-icon name="settings" :size="16" class="menu-ico" /> Settings
-      </a>
-      @endif
-      {{-- Shown only when the browser reports the app can be installed. --}}
-      <button type="button" data-install-app class="hidden w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-indigo-600 hover:bg-indigo-50 transition-colors border-t border-slate-100" onclick="installApp()">
-        <x-icon name="install" :size="16" class="menu-ico" /> Install App
-      </button>
-
-      <form method="POST" action="{{ route('logout') }}" class="border-t border-slate-100" id="logout-form">
-        @csrf
-        <button type="button" onclick="confirmLogout()" class="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors">
-          <x-icon name="logout" :size="16" class="menu-ico" /> Sign Out
-        </button>
-      </form>
-    </div>
-
-    <a href="{{ route('profile.index') }}" class="sb-user-link flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 cursor-pointer">
-      <div class="avatar sm bg-slate-900">{{ $user?->initials ?? 'AT' }}</div>
-      <div class="flex-1 min-w-0">
-        <div class="sb-uname text-sm font-semibold text-slate-900 truncate">{{ $user?->name ?? 'Guest' }}</div>
-        <div class="sb-urole text-xs text-slate-500 truncate">{{ $user?->title ?: ($user?->role_label ?? 'Administrator') }}</div>
-      </div>
-      <span class="sb-more text-slate-400" onclick="event.preventDefault(); event.stopPropagation(); document.getElementById('sidebar-user-menu').classList.toggle('hidden');">
-        <x-icon name="more" :size="16" class="menu-ico" />
-      </span>
-    </a>
   </div>
 </aside>
 
@@ -297,62 +279,28 @@
     }
   };
 
-  document.addEventListener('click', function (e) {
-    const menu = document.getElementById('sidebar-user-menu');
-    if (menu && !menu.classList.contains('hidden') && !menu.contains(e.target)) {
-      menu.classList.add('hidden');
-    }
-  });
-
-  /* Uses the shared confirmation dialog, matching the design's logout variant. */
-  window.confirmLogout = function () {
-    document.getElementById('sidebar-user-menu')?.classList.add('hidden');
-
-    showConfirmation({
-      variant: 'logout',
-      title: 'End Current Session?',
-      message: 'You will be immediately logged out. Please ensure all your work is saved.',
-      confirmLabel: 'Logout Now',
-      onConfirm: () => document.getElementById('logout-form').submit(),
+  /* Auto-populate titles for premium collapse tooltips */
+  document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('#sidebar .nav-item, #sidebar .sb-dropdown-toggle').forEach(el => {
+      if (!el.hasAttribute('title')) {
+        let textNode = Array.from(el.childNodes).find(node => node.nodeType === 3 && node.textContent.trim().length > 0);
+        let text = textNode ? textNode.textContent.trim() : el.innerText.trim();
+        if (text) el.setAttribute('title', text);
+      }
     });
-  };
 
-  /* === Quick Sidebar Palette === */
-  window.toggleSidebarPalette = function(e) {
-    e && e.stopPropagation();
-    var pop = document.getElementById('sb-palette-popover');
-    if (!pop) return;
-    pop.classList.toggle('show');
-    if (pop.classList.contains('show')) renderSbSwatches();
-  };
-
-  /* The tick inside a swatch is the same line icon used in the nav, drawn
-     inline here because this markup is built by JS rather than Blade. */
-  var SB_CHECK_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
-
-  function renderSbSwatches() {
-    var c = document.getElementById('sb-swatches');
-    if (!c || !window.SIDEBAR_THEMES) return;
-    var cur = window.getActiveSidebarTheme();
-    c.innerHTML = Object.entries(SIDEBAR_THEMES).map(function(e) {
-      var k = e[0], t = e[1], on = k === cur;
-      var chk = k === 'white' ? '#0f172a' : '#fff';
-      var bdr = k === 'white' ? '#e2e8f0' : t.border;
-      return '<button class="sb-swatch' + (on ? ' active' : '') + '" style="background:' + t.swatch + ';border-color:' + bdr + '" onclick="pickSbTheme(\'' + k + '\')" title="' + t.n + '"><span class="sb-check" style="color:' + chk + '">' + SB_CHECK_SVG + '</span></button>';
-    }).join('');
-  }
-
-  window.pickSbTheme = function(k) {
-    window.applySidebarTheme(k);
-    renderSbSwatches();
-    toast(((window.SIDEBAR_THEMES || {})[k]?.n || 'Theme') + ' applied!', 'success');
-  };
-
-  document.addEventListener('click', function(e) {
-    var pop = document.getElementById('sb-palette-popover');
-    var wrap = document.getElementById('sb-palette-wrap');
-    if (pop && pop.classList.contains('show') && wrap && !wrap.contains(e.target)) {
-      pop.classList.remove('show');
+    /* Restore collapse state */
+    if (localStorage.getItem('sidebar-collapsed') === 'true') {
+      document.body.classList.add('sidebar-collapsed');
     }
   });
+
+  /* === Sidebar Collapse Toggle === */
+  window.toggleSidebarCollapse = function() {
+    const body = document.body;
+    body.classList.toggle('sidebar-collapsed');
+    const isCollapsed = body.classList.contains('sidebar-collapsed');
+    localStorage.setItem('sidebar-collapsed', isCollapsed ? 'true' : 'false');
+  };
+
 </script>

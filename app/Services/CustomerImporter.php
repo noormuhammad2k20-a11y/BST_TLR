@@ -45,11 +45,11 @@ class CustomerImporter
             'shoulder_width' => ['Shoulder', 'Shoulder Width', 'Kandha', 'Kandhay'],
             'sleeve_length'  => ['Sleeve', 'Sleeve Length', 'Bazu', 'Astin'],
             'chest'          => ['Chest', 'Seena', 'Bust'],
-            'chest_losing'   => ['Chest Losing', 'Chest Loose', 'Seena Losing'],
+            'chest_losing'   => ['Chest Losing', 'Chest Ease', 'Chest Loose', 'Seena Losing'],
             'waist'          => ['Waist', 'Kamar'],
-            'waist_losing'   => ['Waist Losing', 'Waist Loose', 'Kamar Losing'],
+            'waist_losing'   => ['Waist Losing', 'Waist Ease', 'West Loasing', 'Waist Loose', 'Kamar Losing'],
             'hip'            => ['Hip', 'Hips', 'Gheera Hip'],
-            'hip_losing'     => ['Hip Losing', 'Hip Loose'],
+            'hip_losing'     => ['Hip Losing', 'Hip Ease', 'Hip Loose'],
             'collar'         => ['Collar', 'Neck', 'Gala'],
             'ghera'          => ['Ghera', 'Gherra', 'Gera'],
             'patti'          => ['Patti', 'Patty'],
@@ -127,7 +127,7 @@ class CustomerImporter
                 'aliases' => ['unit', 'units', 'measure unit', 'measurement unit'],
             ],
             'measurement_notes' => [
-                'label'   => 'Measurement notes',
+                'label'   => 'Notes',
                 'group'   => 'measurement',
                 'type'    => 'text',
                 'aliases' => ['measurement notes', 'fitting notes', 'style notes', 'special instructions'],
@@ -292,8 +292,15 @@ class CustomerImporter
 
         $mapping = [];
         $taken   = [];
+        $fields = self::fields();
+        $exactHeaders = [];
+        foreach ($fields as $field) {
+            foreach (array_merge([$field['label']], $field['aliases']) as $alias) {
+                $exactHeaders[self::normalise($alias)] = true;
+            }
+        }
 
-        foreach (self::fields() as $key => $field) {
+        foreach ($fields as $key => $field) {
             $candidates = array_merge([$field['label'], $key], $field['aliases']);
             $candidates = array_map([self::class, 'normalise'], $candidates);
 
@@ -301,6 +308,14 @@ class CustomerImporter
 
             // Exact match first, so "chest" never steals "chest losing".
             foreach ($normalised as $index => $header) {
+                // Two final labels are "Losing". Use their adjacent body field
+                // rather than silently assigning Hip's value to Chest.
+                if ($header === 'losing') {
+                    $body = ['chest_losing' => 'chest', 'hip_losing' => 'hip'][$key] ?? null;
+                    $bodyHeaders = $body ? array_map([self::class, 'normalise'], array_merge([$fields[$body]['label']], $fields[$body]['aliases'])) : [];
+                    if (!$body || !in_array($normalised[$index - 1] ?? '', $bodyHeaders, true)) continue;
+                }
+                if ($header === 'notes' && $key !== 'measurement_notes') continue;
                 if ($header !== '' && !isset($taken[$index]) && in_array($header, $candidates, true)) {
                     $match = $index;
                     break;
@@ -309,7 +324,7 @@ class CustomerImporter
 
             if ($match === null) {
                 foreach ($normalised as $index => $header) {
-                    if ($header === '' || isset($taken[$index])) {
+                    if ($header === '' || isset($taken[$index]) || isset($exactHeaders[$header])) {
                         continue;
                     }
 
@@ -456,6 +471,11 @@ class CustomerImporter
         $existingId   = $directory[$key] ?? null;
 
         if ($existingId !== null) {
+            if (Customer::onlyTrashed()->whereKey($existingId)->exists()) {
+                $summary['skipped']++;
+                $summary['issues'][] = self::issue($line, 'warning', $name, $phone, 'Archived customer found — use Restore Customer in Archived Customers before importing.');
+                return;
+            }
             $mode = $options['existing'] ?? self::EXISTING_FILL;
 
             if ($mode === self::EXISTING_SKIP) {
@@ -658,8 +678,9 @@ class CustomerImporter
     {
         $out = [];
 
-        Customer::query()
+        Customer::withTrashed()->whereNull('anonymized_at')
             ->select('id', 'phone')
+            ->orderByRaw('deleted_at IS NOT NULL')
             ->orderBy('id')
             ->chunk(2000, function ($customers) use (&$out) {
                 foreach ($customers as $customer) {

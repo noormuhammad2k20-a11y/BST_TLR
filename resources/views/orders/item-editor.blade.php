@@ -24,20 +24,25 @@
     const total = samePrices ? newOrderState.originalTotal : (itemPricing.tax_inclusive ? subtotal : Math.round(subtotal*(100+rate))/100);
     return {subtotal,total,balance:total-Number(newOrderState.editId ? newOrderState.paid : newOrderState.advance)};
   }
-  function itemRefresh() { openModal('add-order-wizard'); }
+  function itemRefresh() { renderPage(); }
   window.itemField = (i,key,value) => { newOrderState.garments[i][key]=value; };
   window.itemChoose = (i,id) => {
     const row = newOrderState.garments[i];
     if (row.pieces.some(p => Object.values(p.values).some(v => v !== '' && v !== null)) && !confirm('Changing garment clears incompatible measurements. Continue?')) { itemRefresh(); return; }
     const product = activeServices.find(s => s.id == id);
     row.product_service_id = Number(id); row.name = product?.name; row.unit_price = product?.price || '0.00';
-    row.pieces.forEach(p => { p.values={}; delete p.measurement_id; p.profile=product?.profile; });
+    row.pieces.forEach(p => { p.values={}; delete p.measurement_id; delete p.saved_measurement_id; delete p.saved_changes; delete p.measurement_mode; p.profile=product?.profile; });
     itemRefresh();
   };
   window.itemQuantity = (i,value) => {
     const row = newOrderState.garments[i], qty = Math.max(1,Math.min(Math.max(20,row.originalQuantity||0),parseInt(value)||1));
     if (qty < row.pieces.length && row.pieces.slice(qty).some(p => p.id || Object.values(p.values).some(v => v !== '' && v !== null)) && !confirm('Remove the trailing pieces? Their saved history will be retained.')) { itemRefresh(); return; }
-    while(row.pieces.length<qty) row.pieces.push(blankPiece());
+    while(row.pieces.length<qty) {
+      const first=row.pieces[0];
+      row.pieces.push({...blankPiece(), unit:first.unit, values:{...first.values}, measurement_id:first.measurement_id,
+        saved_measurement_id:first.saved_measurement_id, measurement_mode:first.measurement_mode,
+        saved_changes:first.saved_changes ? JSON.parse(JSON.stringify(first.saved_changes)) : undefined});
+    }
     row.pieces.length=qty; row.quantity=qty; newOrderState.activePiece=0; itemRefresh();
   };
   window.itemRemove = i => {
@@ -45,47 +50,83 @@
     if (!confirm('Remove this garment and its pieces? Saved history will be retained.')) return;
     newOrderState.garments.splice(i,1); newOrderState.activeItem=0; newOrderState.activePiece=0; itemRefresh();
   };
-  window.itemAdd = () => { if(newOrderState.garments.length<50) newOrderState.garments.push(blankGarment()); itemRefresh(); };
-  window.itemTab = (i,j) => { newOrderState.activeItem=i; newOrderState.activePiece=j; itemRefresh(); };
-  window.itemMeasure = (field,value) => { const p=newOrderState.garments[newOrderState.activeItem].pieces[newOrderState.activePiece]; p.values[field]=value; delete p.measurement_id; };
-  window.itemUnit = value => { const piece=newOrderState.garments[newOrderState.activeItem].pieces[newOrderState.activePiece]; piece.unit=value; delete piece.measurement_id; };
+  window.itemAdd = () => { if(newOrderState.garments.length<50) { newOrderState.garments.push(blankGarment()); newOrderState.activeItem = newOrderState.garments.length - 1; } itemRefresh(); };
+  window.itemTab = (i) => { newOrderState.activeItem=i; itemRefresh(); };
+  window.itemMeasure = (field,value) => { 
+    newOrderState.garments[newOrderState.activeItem].pieces.forEach(p => {
+      p.values[field]=value;
+      if (p.measurement_id) { p.saved_changes ||= {}; p.saved_changes.values ||= {}; p.saved_changes.values[field]=value; }
+    });
+  };
+  window.itemUnit = value => { 
+    newOrderState.garments[newOrderState.activeItem].pieces.forEach(p => {
+      p.unit=value;
+      if (p.measurement_id) { p.saved_changes ||= {}; p.saved_changes.unit=value; }
+    });
+  };
   function inferSavedProfile(sheet) {
     if(sheet.profile_key) return sheet.profile_key;
     const name=(sheet.garment_type||'').toLowerCase();
     for(const [word,key] of Object.entries({shalwar:'shalwar_kameez',sherwani:'sherwani',waistcoat:'waistcoat',kurta:'kurta_pajama',trouser:'trouser',alteration:'alteration'})) if(name.includes(word)) return key;
     return 'generic';
   }
+  function compatibleSavedMeasurements(row) {
+    const name = value => String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    return (customers.find(c => c.db_id == newOrderState.customerId)?.measurements || [])
+      .filter(m => m.customer_id == newOrderState.customerId && inferSavedProfile(m) === rowProfile(row).key
+        && (m.product_service_id ? m.product_service_id == row.product_service_id : name(m.garment_type) === name(rowName(row))))
+      .sort((a,b) => (Date.parse(b.updated_at) || 0) - (Date.parse(a.updated_at) || 0) || Number(b.id) - Number(a.id));
+  }
   window.itemSaved = id => {
-    const row=newOrderState.garments[newOrderState.activeItem], piece=row.pieces[newOrderState.activePiece];
-    if(!id) {piece.values={}; delete piece.measurement_id; itemRefresh(); return;}
-    const sheet=customers.find(c=>c.db_id==newOrderState.customerId)?.measurements.find(m=>m.id==id);
-    if(!sheet || inferSavedProfile(sheet)!==rowProfile(row).key) return;
-    piece.values={}; rowProfile(row).fields.forEach(f=>piece.values[f]=sheet[f]??sheet.details?.[f]??'');
-    piece.unit=sheet.unit; piece.measurement_id=sheet.id; itemRefresh();
-  };
-  window.itemCopy = value => {
-    if(!value) return;
-    const [i,j]=value.split(':').map(Number), source=newOrderState.garments[i].pieces[j];
-    const target=newOrderState.garments[newOrderState.activeItem].pieces[newOrderState.activePiece];
-    target.values=structuredClone(source.values); target.unit=source.unit; delete target.measurement_id; itemRefresh();
+    const row=newOrderState.garments[newOrderState.activeItem];
+    const saved = compatibleSavedMeasurements(row);
+    const sheet = id ? saved.find(m=>m.id==id) : saved.find(m=>m.id==row.pieces[0].measurement_id) || saved[0];
+    if(!sheet && !id) {
+       row.pieces.forEach(p => { p.values={}; delete p.measurement_id; delete p.saved_measurement_id; delete p.saved_changes; p.measurement_mode='new'; });
+       itemRefresh(); return;
+    }
+    if(sheet) {
+      row.pieces.forEach(p => {
+         // New updates the selected set and retains any edits already made.
+         if (!id && p.measurement_id == sheet.id) { p.measurement_mode='new'; return; }
+         p.measurement_id = sheet.id;
+         p.saved_measurement_id = sheet.id;
+         p.measurement_mode = id ? 'saved' : 'new';
+         delete p.saved_changes;
+         p.unit = sheet.unit || 'in';
+         const values = {...sheet, ...(sheet.details || {})};
+         p.values = Object.fromEntries(rowProfile(row).fields.map(k => [k, values[k] ?? '']));
+      });
+      itemRefresh();
+    }
   };
   window.itemGo = direction => {
     if(direction>0) {
       if(wizardStep===1 && !newOrderState.customerId) return toast('Select a customer.','error');
       if(wizardStep===2 && newOrderState.garments.some(r=>!r.product_service_id&&!r.id)) return toast('Choose a garment for every row.','error');
       if(wizardStep===3 && !newOrderState.editId && newOrderState.garments.some(r=>r.pieces.some(p=>!rowComplete(r,p)))) return toast('Complete the required measurements for every piece.','error');
-      if(wizardStep===4 && (!newOrderState.date || itemTotals().balance<0)) return toast('Check the delivery date and payment amount.','error');
+      if(wizardStep===4 && (!newOrderState.date || !newOrderState.slot || itemTotals().balance<0)) return toast('Check the delivery date and payment amount.','error');
     }
     wizardStep=Math.max(newOrderState.editId?2:1,Math.min(5,wizardStep+direction)); itemRefresh();
   };
   window.itemSubmit = async btn => {
-    const s=newOrderState, payload={priority:s.priority, delivery_date:s.date, time_slot:s.slot, staff_id:s.tailorId||null, notes:s.notes};
-    if(!s.locked) payload.garments=s.garments.map(r=>({id:r.id,client_key:r.client_key,product_service_id:r.product_service_id,quantity:Number(r.quantity),unit_price:String(r.unit_price),fabric:r.fabric,style_notes:r.style_notes,pieces:r.pieces.map(p=>({id:p.id,client_key:p.client_key,unit:p.unit,measurement_id:p.measurement_id,values:p.values}))}));
+    const s=newOrderState, payload={priority:s.priority, delivery_date:s.date, delivery_time:s.slot, staff_id:s.tailorId||null, notes:s.notes};
+    if(!s.locked) payload.garments=s.garments.map(r=>({id:r.id,client_key:r.client_key,product_service_id:r.product_service_id,quantity:Number(r.quantity),unit_price:String(r.unit_price),fabric:r.fabric,style_notes:r.style_notes,pieces:r.pieces.map(p=>({id:p.id,client_key:p.client_key,unit:p.unit,measurement_id:p.measurement_id,saved_changes:p.saved_changes,values:p.values}))}));
     if(s.editId) {payload.edit_version=s.edit_version; payload.status=s.status;}
     else {payload.customer_id=s.customerId; payload.advance=s.advance;}
     Atelier.setBusy(btn,true);
     try {
       const result=s.editId ? await Atelier.api.put(ROUTES.update(s.editId),payload) : await Atelier.api.post(ROUTES.store,payload);
+      s.garments.forEach(row => row.pieces.forEach(piece => {
+        const sheet = customers.find(c=>c.db_id==s.customerId)?.measurements.find(m=>m.id==piece.measurement_id);
+        if (!sheet || !piece.saved_changes) return;
+        Object.entries(piece.saved_changes.values || {}).forEach(([field,value]) => {
+          if (Object.prototype.hasOwnProperty.call(sheet,field)) sheet[field]=value;
+          else { sheet.details ||= {}; sheet.details[field]=value; }
+        });
+        if (piece.saved_changes.unit) sheet.unit=piece.saved_changes.unit;
+        sheet.updated_at=new Date().toISOString();
+      }));
       upsertOrder(result.order); closeModal(); renderPage(); Atelier.refreshCounters(); toast(result.message,'success');
       newOrderState=blankOrderState(); wizardStep=1;
       if (!s.editId && result.order) setTimeout(() => window.openReceipt(result.order.db_id), 400);
@@ -103,19 +144,20 @@
 
     /* ── Header ──────────────────────────────────────────────────────── */
     let html = `
-      <div class="p-5 border-b border-slate-200 flex justify-between items-center">
-        <div>
-          <div class="text-lg font-bold text-slate-900 tracking-tight">${isEdit ? 'Edit Order' : 'Create New Order'}</div>
-          <div class="text-xs text-slate-500">${s.locked ? 'Limited editing' : `Step ${wizardStep} of 5`}</div>
-        </div>
-        <button class="w-8 h-8 rounded-lg text-slate-400 hover:bg-slate-100 flex items-center justify-center" onclick="closeModal()"><i class="fa-solid fa-xmark text-sm"></i></button>
-      </div>`;
+      <div class="page flex flex-col bg-white rounded-xl shadow-sm border border-slate-200 mb-6 mx-auto w-full" style="max-width:min(1600px, 100%)">
+        <div class="p-5 border-b border-slate-200 flex justify-between items-center bg-slate-50 rounded-t-xl">
+          <div>
+            <h1 class="text-xl font-bold text-slate-900 tracking-tight">${isEdit ? 'Edit Order' : 'Create New Order'}</h1>
+            <div class="text-xs text-slate-500 font-medium mt-0.5">${s.locked ? 'Limited editing mode' : `Step ${wizardStep} of 5`}</div>
+          </div>
+          <button class="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 text-xs font-medium hover:bg-slate-100 transition-colors shadow-sm" onclick="currentView='list'; renderPage();"><i class="fa-solid fa-arrow-left mr-1"></i> Back to Orders</button>
+        </div>`;
 
     /* ── Stepper ──────────────────────────────────────────────────────── */
     if (!s.locked) {
       html += `
       <div class="p-2 bg-slate-50 border-b border-slate-200">
-        <div class="flex items-center justify-between max-w-2xl mx-auto px-4">
+        <div class="flex items-center justify-between max-w-4xl mx-auto px-4">
           ${stepLabels.map((label, i) => {
             const stepNum = i + 1;
             const completed = wizardStep > stepNum || (isEdit && stepNum === 1);
@@ -138,7 +180,7 @@
     }
 
     /* ── Body ─────────────────────────────────────────────────────────── */
-    html += `<div class="p-6 overflow-y-auto" style="max-height:60vh">`;
+    html += `<div class="p-6 flex-1 overflow-visible">`;
 
     /* ---------- Locked mode ----------------------------------------- */
     if (s.locked) {
@@ -171,135 +213,191 @@
 
     /* ---------- Step 2 — Garment & Fabric --------------------------- */
     } else if (wizardStep === 2) {
-      html += `<h3 class="text-sm font-semibold text-slate-900 mb-3">Garment &amp; Fabric Details</h3>`;
+      html += `<div class="flex justify-between items-center mb-6">
+                 <div>
+                   <h3 class="text-xl font-bold text-slate-900 tracking-tight">Garment Details</h3>
+                   <p class="text-sm text-slate-500 mt-1">Select the garment type, quantity, pricing, and fabric notes.</p>
+                 </div>
+                 ${s.garments.length > 0 ? `<button class="text-sm bg-slate-900 text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-slate-800 transition-colors shadow-sm shadow-slate-900/20 flex items-center gap-2" onclick="itemAdd()"><i class="fa-solid fa-plus"></i> Add Garment</button>` : ''}
+               </div>`;
 
       s.garments.forEach((r, i) => {
+        let isExpanded = (s.activeItem === i);
+        if (!isExpanded) {
+           let serviceName = activeServices.find(x => x.id == r.product_service_id)?.name || 'Garment Type Not Selected';
+           html += `
+           <div class="border border-slate-200 bg-slate-50 hover:bg-slate-100 cursor-pointer rounded-2xl shadow-sm p-4 sm:p-5 mb-6 flex items-center justify-between transition-colors group" onclick="setItemActive(${i})">
+             <div class="flex items-center gap-4">
+               <div class="w-10 h-10 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-base">${i + 1}</div>
+               <div>
+                 <div class="font-bold text-slate-900 text-base sm:text-lg">${itemEsc(serviceName)}</div>
+                 <div class="text-xs sm:text-sm text-slate-500 mt-0.5">Qty: <span class="font-bold text-slate-700">${r.quantity}</span> &bull; Subtotal: <span class="font-bold text-indigo-600">${Atelier.money(Number(r.unit_price || 0) * r.quantity)}</span></div>
+               </div>
+             </div>
+             <div class="flex items-center gap-2 sm:gap-3">
+               <button class="w-10 h-10 flex items-center justify-center rounded-xl bg-white border border-slate-200 text-slate-500 group-hover:text-indigo-600 group-hover:border-indigo-300 transition-colors shadow-sm" title="Edit Garment"><i class="fa-solid fa-pen"></i></button>
+               ${s.garments.length > 1 ? `<button class="w-10 h-10 flex items-center justify-center rounded-xl bg-white border border-slate-200 text-slate-500 group-hover:text-red-500 group-hover:border-red-300 transition-colors shadow-sm" onclick="event.stopPropagation(); itemRemove(${i})" title="Remove Garment"><i class="fa-solid fa-trash-can"></i></button>` : ''}
+             </div>
+           </div>`;
+           return;
+        }
+
         html += `
-        <div class="border border-slate-200 rounded-xl p-4 mb-4">
-          <div class="flex justify-between items-center mb-3">
-            <div class="text-sm font-bold text-slate-900">Garment ${i + 1}</div>
-            ${s.garments.length > 1 ? `<button class="text-xs text-red-500 hover:text-red-700 font-medium" onclick="itemRemove(${i})"><i class="fa-solid fa-trash text-[10px] mr-1"></i>Remove</button>` : ''}
+        <div class="border border-indigo-200 bg-white rounded-2xl shadow-md ring-4 ring-indigo-50 p-6 mb-6 relative transition-all group">
+          ${s.garments.length > 1 ? `<button class="absolute top-6 right-6 w-8 h-8 flex items-center justify-center rounded-lg bg-red-50 text-red-500 hover:bg-red-500 hover:text-white transition-colors opacity-0 group-hover:opacity-100" onclick="itemRemove(${i})" title="Remove Garment"><i class="fa-solid fa-trash-can"></i></button>` : ''}
+          
+          <div class="flex items-center gap-3 mb-6 pb-4 border-b border-slate-100">
+            <div class="w-8 h-8 rounded-full bg-slate-100 text-slate-700 flex items-center justify-center font-bold text-sm">
+              ${i + 1}
+            </div>
+            <h4 class="text-lg font-bold text-slate-900">Garment Details</h4>
           </div>
-          <div class="grid grid-cols-2 gap-4">
-            <div class="col-span-2">
-              <label class="block text-xs font-semibold text-slate-500 mb-1.5">Garment Type *</label>
-              <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          
+          <div class="space-y-8">
+            <!-- Garment Type Grid -->
+            <div>
+              <label class="block text-sm font-bold text-slate-700 mb-3">Garment Type <span class="text-red-500">*</span></label>
+              <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
                 ${activeServices.map(p => {
-                  let icon = p.name.toLowerCase().includes('suit') ? 'fa-vest' : p.name.toLowerCase().includes('shirt') ? 'fa-shirt' : 'fa-vest-patches';
                   let isSelected = p.id == r.product_service_id;
-                  return `<button class="p-3 border-2 ${isSelected ? 'border-indigo-600 bg-indigo-50 text-indigo-600' : 'border-slate-200 text-slate-500 hover:border-indigo-600'} rounded-lg text-xs font-medium flex flex-col items-center gap-1 transition-colors" onclick="itemChoose(${i}, '${p.id}')"><i class="fa-solid ${icon} text-lg"></i> <span class="text-center">${itemEsc(p.name)}</span></button>`;
+                  return `<button class="w-full px-4 py-3 border text-left flex items-center gap-3 rounded-xl text-sm transition-all ${isSelected ? 'border-indigo-600 bg-indigo-50 text-indigo-700 font-bold shadow-sm ring-2 ring-indigo-600/20' : 'border-slate-200 text-slate-600 hover:border-indigo-300 hover:bg-slate-50 font-medium'}" onclick="itemChoose(${i}, '${p.id}')">
+                    <i class="fa-solid ${p.name.toLowerCase().includes('suit') ? 'fa-vest text-lg' : p.name.toLowerCase().includes('shirt') ? 'fa-shirt text-lg' : 'fa-vest-patches text-lg'} ${isSelected ? 'text-indigo-600' : 'text-slate-400'}"></i> 
+                    <span class="leading-tight">${itemEsc(p.name)}</span>
+                  </button>`;
                 }).join('')}
-                ${!rowProduct(r) && r.product_service_id ? `<button class="p-3 border-2 border-indigo-600 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-medium flex flex-col items-center gap-1" disabled><i class="fa-solid fa-vest-patches text-lg"></i> <span class="text-center">${itemEsc(r.name)} (historical)</span></button>` : ''}
+                ${!rowProduct(r) && r.product_service_id ? `<button class="w-full px-4 py-3 border text-left flex items-center gap-3 rounded-xl text-sm border-indigo-600 bg-indigo-50 text-indigo-700 font-bold shadow-sm" disabled><i class="fa-solid fa-vest-patches text-lg text-indigo-600"></i> <span class="leading-tight">${itemEsc(r.name)} (historical)</span></button>` : ''}
               </div>
             </div>
-            <div>
-              <label class="block text-xs font-semibold text-slate-500 mb-1.5">Quantity (kitne kapre) *</label>
-              <input type="number" min="1" max="${Math.max(20, r.originalQuantity || 0)}" step="1"
-                     class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900"
-                     value="${r.quantity}" onchange="itemQuantity(${i}, this.value)">
-              <p class="mt-1 text-[11px] text-slate-400">Har piece ka apna naap agle step mein.</p>
-            </div>
-            <div>
-              <label class="block text-xs font-semibold text-slate-500 mb-1.5">Unit Price (${Atelier.currency})</label>
-              <input type="number" min="0" step="0.01"
-                     class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900"
-                     value="${itemEsc(r.unit_price)}" onchange="itemField(${i}, 'unit_price', this.value)">
-              <p class="mt-1 text-[11px] text-slate-400">${Atelier.money(Number(r.unit_price || 0))} × ${r.quantity} = ${Atelier.money(Number(r.unit_price || 0) * r.quantity)}</p>
-            </div>
-            <div class="col-span-2">
-              <label class="block text-xs font-semibold text-slate-500 mb-1.5">Fabric Selection</label>
-              <input class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900"
-                     value="${itemEsc(r.fabric)}" oninput="itemField(${i}, 'fabric', this.value)" placeholder="e.g. Italian Wool">
-            </div>
-            <div class="col-span-2">
-              <label class="block text-xs font-semibold text-slate-500 mb-1.5">Style Notes</label>
-              <textarea class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900"
-                        placeholder="e.g. Peak lapel, side vents..." oninput="itemField(${i}, 'style_notes', this.value)">${itemEsc(r.style_notes)}</textarea>
+            
+            <!-- Bottom Section: Grid for details -->
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-5 mt-8 border-t border-slate-100 pt-6">
+              
+              <!-- Quantity -->
+              <div class="md:col-span-3">
+                <label class="block text-sm font-semibold text-slate-700 mb-2">Quantity</label>
+                <div class="flex items-center w-full">
+                  <button class="w-10 h-10 flex justify-center items-center bg-slate-100 border border-slate-200 rounded-l-lg text-slate-600 hover:bg-slate-200 transition-colors" onclick="itemQuantity(${i}, ${r.quantity - 1})"><i class="fa-solid fa-minus text-[10px]"></i></button>
+                  <input type="number" min="1" max="20" step="1"
+                         class="w-full h-10 px-2 text-center bg-white border-y border-slate-200 text-sm focus:outline-none focus:ring-0 text-slate-900 font-bold"
+                         value="${r.quantity}" onchange="itemQuantity(${i}, this.value)" readonly>
+                  <button class="w-10 h-10 flex justify-center items-center bg-slate-100 border border-slate-200 rounded-r-lg text-slate-600 hover:bg-slate-200 transition-colors" onclick="itemQuantity(${i}, ${r.quantity + 1})"><i class="fa-solid fa-plus text-[10px]"></i></button>
+                </div>
+              </div>
+              
+              <!-- Unit Price -->
+              <div class="md:col-span-4">
+                <label class="block text-sm font-semibold text-slate-700 mb-2">Unit Price (${Atelier.currency})</label>
+                <input type="number" min="0" step="0.01"
+                       class="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 font-medium"
+                       value="${itemEsc(r.unit_price)}" onchange="itemField(${i}, 'unit_price', this.value)">
+              </div>
+              
+              <!-- Subtotal -->
+              <div class="md:col-span-5 flex flex-col justify-end">
+                <label class="block text-sm font-semibold text-slate-700 mb-2 md:hidden">Subtotal</label>
+                <div class="w-full h-10 bg-indigo-50 border border-indigo-100 rounded-lg flex items-center justify-between px-4">
+                  <span class="text-sm font-semibold text-indigo-900/60">Subtotal</span>
+                  <span class="text-base font-bold text-indigo-700">${Atelier.money(Number(r.unit_price || 0) * r.quantity)}</span>
+                </div>
+              </div>
+              
+              <!-- Fabric Details -->
+              <div class="md:col-span-5">
+                <label class="block text-sm font-semibold text-slate-700 mb-2">Fabric Details</label>
+                <input class="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 placeholder:text-slate-400"
+                       value="${itemEsc(r.fabric)}" oninput="itemField(${i}, 'fabric', this.value)" placeholder="e.g. Italian Wool, Navy Blue">
+              </div>
+              
+              <!-- Style Notes -->
+              <div class="md:col-span-7">
+                <label class="block text-sm font-semibold text-slate-700 mb-2">Style Notes / Instructions</label>
+                <input class="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 placeholder:text-slate-400"
+                       value="${itemEsc(r.style_notes)}" oninput="itemField(${i}, 'style_notes', this.value)" placeholder="e.g. Peak lapel, side vents...">
+              </div>
+              
             </div>
           </div>
-          ${rowProfile(r).key === 'generic' ? '<p class="text-xs text-amber-700 mt-2"><i class="fa-solid fa-info-circle mr-1"></i>Generic measurements apply. Choose a specific garment type above for tailored measurement fields.</p>' : ''}
+          ${rowProfile(r).key === 'generic' ? '<p class="text-xs text-amber-700 mt-6 font-bold flex items-center gap-2 bg-amber-50 px-4 py-3 rounded-xl border border-amber-200"><i class="fa-solid fa-triangle-exclamation text-amber-500 text-base"></i> Generic measurements apply. Choose a specific garment type above for tailored options.</p>' : ''}
         </div>`;
       });
 
       html += `
-        <button class="w-full p-3 border-2 border-dashed border-slate-300 rounded-lg text-sm font-medium text-slate-500 hover:border-indigo-500 hover:text-indigo-600 transition-colors flex items-center justify-center gap-2" onclick="itemAdd()">
-          <i class="fa-solid fa-plus"></i> Add Another Garment
+        <button class="w-full p-4 border-2 border-dashed border-slate-300 rounded-2xl text-sm font-bold text-slate-500 hover:border-indigo-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors flex items-center justify-center gap-2" onclick="itemAdd()">
+          <i class="fa-solid fa-plus text-lg"></i> Add Another Garment
         </button>`;
 
     /* ---------- Step 3 — Measurements ------------------------------- */
     } else if (wizardStep === 3) {
       const row = s.garments[s.activeItem] || s.garments[0];
-      const piece = row.pieces[s.activePiece] || row.pieces[0];
+      const piece = row.pieces[0]; // Measurements apply to all pieces in the garment
       const profile = rowProfile(row);
-      const saved = (customers.find(c => c.db_id == s.customerId)?.measurements || []).filter(m => inferSavedProfile(m) === profile.key);
+      const saved = compatibleSavedMeasurements(row);
+      const sourceSaved = saved.find(m => m.id == (piece.saved_measurement_id || piece.measurement_id));
+      const selectedSaved = piece.measurement_mode === 'new' ? null : sourceSaved;
+      const availableSaved = sourceSaved || saved[0];
 
-      html += `<h3 class="text-sm font-semibold text-slate-900 mb-3">Body Measurements</h3>`;
+      html += `<h3 class="text-xl font-bold text-slate-900 tracking-tight mb-6">Body Measurements</h3>`;
 
-      /* Piece / garment tabs */
-      const allTabs = [];
-      s.garments.forEach((r, i) => r.pieces.forEach((p, j) => allTabs.push({gi:i, pi:j, row:r, piece:p})));
-
-      if (allTabs.length > 1) {
+      /* Garment tabs */
+      if (s.garments.length > 1) {
         html += `
-        <div class="flex items-center gap-1.5 mb-3 overflow-x-auto pb-1">
-          ${allTabs.map(t => {
-            const on = t.gi === s.activeItem && t.pi === s.activePiece;
-            const done = rowComplete(t.row, t.piece);
-            return `<button onclick="itemTab(${t.gi}, ${t.pi})" class="shrink-0 px-3 py-1.5 rounded-md text-xs font-semibold border transition-colors ${on ? 'bg-indigo-600 border-indigo-600 text-white' : done ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:border-emerald-400' : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-400'}">
-              ${done && !on ? '<i class="fa-solid fa-check mr-1"></i>' : ''}${itemEsc(rowName(t.row))} · Piece ${t.pi + 1}
+        <div class="flex items-center gap-2 mb-6 overflow-x-auto pb-2">
+          ${s.garments.map((r, i) => {
+            const on = i === s.activeItem;
+            const done = rowComplete(r, r.pieces[0]);
+            return `<button onclick="itemTab(${i})" class="shrink-0 px-4 py-2.5 rounded-xl text-sm font-bold border transition-all ${on ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm shadow-indigo-600/20' : done ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:border-emerald-400' : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-400'}">
+              ${done && !on ? '<i class="fa-solid fa-check mr-2"></i>' : ''}${itemEsc(rowName(r))}
             </button>`;
           }).join('')}
         </div>`;
       }
 
       if (!profile.fields.length) {
-        html += `<div class="text-center py-8 text-sm text-slate-500"><i class="fa-solid fa-check-circle text-emerald-500 text-2xl mb-2 block"></i>No measurements required for this item.</div>`;
+        html += `<div class="text-center py-10 bg-slate-50 rounded-2xl border border-slate-200 text-sm text-slate-500"><i class="fa-solid fa-check-circle text-emerald-500 text-3xl mb-3 block"></i><span class="font-bold text-base text-slate-700 block mb-1">No measurements required</span>Generic item selected.</div>`;
       } else {
-        /* Saved / copy / unit toolbar */
+        /* Saved / Unit toolbar */
         html += `
-        <div class="flex items-center justify-between gap-2 mb-4 p-2 bg-slate-50 rounded-lg flex-wrap">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 p-4 bg-slate-50 rounded-2xl border border-slate-200">
           <div class="flex gap-2 flex-wrap">
-            <div>
-              <label class="text-xs font-semibold text-slate-500 block mb-1">Saved Measurements</label>
-              <select class="text-xs border border-slate-200 rounded p-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 font-medium" onchange="itemSaved(this.value)">
-                <option value="">Enter new</option>
-                ${saved.map(m => `<option value="${m.id}" ${m.id == piece.measurement_id ? 'selected' : ''}>${itemEsc(m.garment_type)} #${m.id}</option>`).join('')}
-              </select>
-            </div>
-            ${allTabs.length > 1 ? `
-            <div>
-              <label class="text-xs font-semibold text-slate-500 block mb-1">Copy from</label>
-              <select class="text-xs border border-slate-200 rounded p-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 font-medium" onchange="itemCopy(this.value)">
-                <option value="">Choose compatible piece</option>
-                ${s.garments.map((r2, i2) => rowProfile(r2).key === profile.key ? r2.pieces.map((p2, j2) => i2 === s.activeItem && j2 === s.activePiece ? '' : `<option value="${i2}:${j2}">${itemEsc(rowName(r2))} · Piece ${j2 + 1}</option>`).join('') : '').join('')}
-              </select>
-            </div>` : ''}
+            <button class="px-4 py-2.5 text-sm font-bold transition-colors ${!selectedSaved ? 'bg-indigo-50 border border-indigo-500 text-indigo-700 shadow-sm' : 'bg-white border border-slate-200 text-slate-600 hover:border-indigo-400'} rounded-xl" onclick="itemSaved('')">
+              <i class="fa-solid fa-pen-ruler mr-1.5"></i> New Measurement
+            </button>
+            ${availableSaved ? `
+              <button class="px-4 py-2.5 text-sm font-bold transition-colors ${selectedSaved ? 'bg-indigo-50 border border-indigo-500 text-indigo-700 shadow-sm' : 'bg-white border border-slate-200 text-slate-600 hover:border-indigo-400'} rounded-xl" onclick="itemSaved('${availableSaved.id}')">
+                <i class="fa-solid fa-folder-open mr-1.5"></i> Use Saved Measurement
+              </button>
+            ` : ''}
           </div>
-          <div class="flex items-center gap-2 pr-2">
-            <label class="text-xs font-semibold text-slate-500">Unit:</label>
-            <select class="text-xs border border-slate-200 rounded p-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 font-medium" onchange="itemUnit(this.value)">
-              <option value="in" ${piece.unit === 'in' ? 'selected' : ''}>in</option>
-              <option value="cm" ${piece.unit === 'cm' ? 'selected' : ''}>cm</option>
-            </select>
+          
+          <div class="flex items-center gap-3 md:pl-4 md:border-l border-slate-200 shrink-0">
+            <label class="text-sm font-bold text-slate-700">Unit:</label>
+            <div class="flex items-center bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+              <button class="px-4 py-2 text-sm font-bold transition-colors ${piece.unit === 'in' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-50'}" onclick="itemUnit('in')">in</button>
+              <button class="px-4 py-2 text-sm font-bold border-l border-slate-200 transition-colors ${piece.unit === 'cm' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-50'}" onclick="itemUnit('cm')">cm</button>
+            </div>
           </div>
         </div>`;
 
-        /* Measurement fields — grid matching original 2–5 column layout */
+        html += `<p class="text-xs text-slate-500 mb-5">${sourceSaved
+          ? 'Saved measurements loaded. Changed fields update this saved measurement when you save the order.'
+          : availableSaved ? 'Use the latest saved measurements for ' + itemEsc(rowName(row)) + ', or enter new measurements.'
+          : 'No saved measurements for this customer and garment. Enter new measurements below.'}</p>`;
+
+        /* Measurement fields grid */
         html += `
-        <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-5">
           ${profile.fields.map(f => {
             const isReq = profile.required.includes(f);
             const label = profile.labels[f] || f;
             const val = piece.values[f] ?? '';
-            const reqHtml = isReq ? ' <span class="text-red-500">*</span>' : '';
-            const borderClass = isReq ? 'border-red-200 focus:ring-red-500' : 'border-slate-200 focus:ring-indigo-500';
-            const labelClass = isReq ? 'text-slate-700 font-bold' : 'text-slate-500 font-semibold';
+            const borderClass = isReq ? (val === '' ? 'border-amber-300 bg-amber-50 focus:bg-white focus:border-indigo-500 focus:ring-indigo-500' : 'border-slate-200 focus:border-indigo-500 focus:ring-indigo-500') : 'border-slate-200 focus:border-indigo-500 focus:ring-indigo-500';
+            const labelClass = isReq ? 'text-slate-900 font-bold' : 'text-slate-600 font-semibold';
             return `
             <div class="col-span-1">
-              <label class="block text-xs ${labelClass} mb-1.5">${itemEsc(label)}${reqHtml}</label>
+              <label class="block text-sm ${labelClass} mb-2">${itemEsc(label)}${isReq ? ' <span class="text-red-500">*</span>' : ''}</label>
               <input type="number" step="any" min="0" max="999"
-                     class="w-full px-3 py-2 bg-slate-50 border ${borderClass} rounded-lg text-sm focus:outline-none focus:ring-2 text-slate-900"
-                     value="${itemEsc(val)}" oninput="itemMeasure('${f}', this.value); this.classList.remove('border-red-500')">
+                     class="w-full h-11 px-3 text-base font-medium bg-white border ${borderClass} rounded-xl focus:outline-none focus:ring-2 transition-all text-slate-900"
+                     value="${itemEsc(val)}" oninput="itemMeasure('${f}', this.value); this.classList.remove('border-amber-300', 'bg-amber-50'); this.classList.add('border-slate-200', 'focus:border-indigo-500')">
             </div>`;
           }).join('')}
         </div>`;
@@ -356,13 +454,9 @@
                  value="${itemEsc(s.date)}" oninput="newOrderState.date=this.value; this.classList.remove('border-red-500')">
         </div>
         <div>
-          <label class="block text-xs font-semibold text-slate-500 mb-1.5">Time Slot *</label>
-          <select class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900"
-                  onchange="newOrderState.slot=this.value; this.classList.remove('border-red-500')">
-            <option value="">Select Slot</option>
-            ${s.slot && !timeSlots.includes(s.slot) ? `<option value="${itemEsc(s.slot)}" selected>${itemEsc(s.slot)}</option>` : ''}
-            ${timeSlots.map(ts => `<option value="${itemEsc(ts)}" ${s.slot === ts ? 'selected' : ''}>${itemEsc(ts)}</option>`).join('')}
-          </select>
+          <label class="block text-xs font-semibold text-slate-500 mb-1.5">Delivery Time *</label>
+          <input type="time" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900"
+                 value="${itemEsc(s.slot)}" oninput="newOrderState.slot=this.value; this.classList.remove('border-red-500')">
         </div>
         <div>
           <label class="block text-xs font-semibold text-slate-500 mb-1.5">Priority *</label>
@@ -436,27 +530,30 @@
 
     /* ── Footer ───────────────────────────────────────────────────────── */
     html += `
-      <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-between">
-        <button class="bg-white border border-slate-200 text-slate-500 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-100" onclick="closeModal()">Cancel</button>
+      <div class="p-5 bg-slate-50 border-t border-slate-200 flex justify-between rounded-b-xl">
+        <button class="bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-100 transition-colors shadow-sm" onclick="currentView='list'; renderPage();">Cancel</button>
         <div class="flex gap-2">
-          ${wizardStep > minStep && !s.locked ? `<button class="bg-white border border-slate-200 text-slate-500 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-100" onclick="itemGo(-1)">Back</button>` : ''}
+          ${wizardStep > minStep && !s.locked ? `<button class="bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-100 transition-colors shadow-sm" onclick="itemGo(-1)">Back</button>` : ''}
           ${wizardStep < 5 && !s.locked
-            ? `<button class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700" onclick="itemGo(1)">Next <i class="fa-solid fa-arrow-right text-xs ml-1"></i></button>`
-            : `<button class="bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-600" onclick="itemSubmit(this)">Confirm &amp; ${isEdit ? 'Save' : 'Create'} <i class="fa-solid fa-check text-xs ml-1"></i></button>`
+            ? `<button class="bg-indigo-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors shadow-sm shadow-indigo-500/30" onclick="itemGo(1)">Next Step <i class="fa-solid fa-arrow-right text-xs ml-1.5"></i></button>`
+            : `<button class="bg-emerald-500 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-emerald-600 transition-colors shadow-sm shadow-emerald-500/30" onclick="itemSubmit(this)"><i class="fa-solid fa-check text-xs mr-1.5"></i> ${isEdit ? 'Save Changes' : 'Confirm & Create Order'}</button>`
           }
         </div>
-      </div>`;
+      </div>
+    </div>`;
 
     return html;
   }
 
-  window.modals['add-order-wizard']=renderItemEditor;
-  window.modals['edit-order']=d=>{
-    newOrderState={...blankOrderState(),editId:d.db_id,edit_version:d.edit_version,locked:d.items_locked,status:d.status,customerId:d.customer_id,customerName:d.customer,garments:structuredClone(d.garments),paid:d.paid,date:new Date(d.dueDate).toISOString().slice(0,10),slot:d.slot,priority:d.priority,tailorId:d.tailor_id,notes:d.notes};
+  pages.orderEditor = renderItemEditor;
+  
+  window.editOrder = d => {
+    newOrderState={...blankOrderState(),editId:d.db_id,edit_version:d.edit_version,locked:d.items_locked,status:d.status,customerId:d.customer_id,customerName:d.customer,garments:structuredClone(d.garments),paid:d.paid,date:d.schedule?.deliveryDate || '',slot:d.schedule?.deliveryTime || '',priority:d.priority,tailorId:d.tailor_id,notes:d.notes};
     newOrderState.garments.forEach(r=>r.originalQuantity=r.quantity);
     newOrderState.originalGarments=structuredClone(d.garments);
     newOrderState.originalTotal=d.amount;
     wizardStep=2;
-    if(!newOrderState.garments.length) return '<div class="p-6">This historical order needs the verified backfill before garment editing.</div>';
-    return renderItemEditor();
+    if(!newOrderState.garments.length) return toast('This historical order needs the verified backfill before garment editing.','error');
+    currentView = 'editor';
+    renderPage();
   };

@@ -14,12 +14,17 @@ class SmsLog extends Model
 
     public function order()
     {
-        return $this->belongsTo(Order::class);
+        return $this->belongsTo(Order::class)->withTrashed();
     }
 
     public function customer()
     {
-        return $this->belongsTo(Customer::class);
+        return $this->belongsTo(Customer::class)->withTrashed();
+    }
+
+    public function collectionOrders()
+    {
+        return $this->belongsToMany(Order::class,'collection_sms_orders')->withTrashed()->withPivot('reason');
     }
 
     /**

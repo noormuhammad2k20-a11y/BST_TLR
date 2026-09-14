@@ -41,8 +41,8 @@ final class OrderWorkflowMigrationTest extends TestCase
         $this->assertDatabaseHas('order_status_histories', ['order_id' => 1, 'to_status' => 'In Progress']);
         $this->assertSame(4, DB::table('order_status_histories')->count());
         $this->assertNotNull(DB::table('orders')->where('id', 5)->value('ready_sms_attempted_at'));
-        $this->assertSame(3, Settings::int('auto_status_pending_hours'));
-        $this->assertSame(24, Settings::int('auto_status_progress_delay'));
+        $this->assertSame('3', (string) DB::table('settings')->where('key', 'auto_status_pending_hours')->value('value'));
+        $this->assertSame('24', (string) DB::table('settings')->where('key', 'auto_status_progress_delay')->value('value'));
         $id = DB::table('orders')->insertGetId(['notes' => 'Default test']);
         $this->assertSame('Received', DB::table('orders')->where('id', $id)->value('status'));
         Settings::flush();

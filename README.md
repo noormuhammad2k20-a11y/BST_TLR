@@ -48,6 +48,18 @@ Run `php artisan queue:work --tries=3` when the queue connection is not `sync`.
 Run `php artisan schedule:run` every minute from Task Scheduler or cron. The
 scheduler advances configured order stages and uses overlap protection.
 
+For this Windows/XAMPP installation, `scripts/install-delivery-task.ps1` installs
+the delivery worker using `php-win.exe` and `scripts/delivery-background.php`.
+This calls the application service directly, without Artisan terminal detection;
+shell/process functions are disabled for the worker. Do not also schedule the
+same delivery check through `schedule:run` on this machine. The task uses a
+one-minute interval, prevents concurrent instances, and the runner takes a file
+lock. Its latest successful run is recorded in
+`storage/framework/delivery-background-status.json`; failures go to
+`storage/logs/delivery-background-errors.log` and return a nonzero task result.
+The default installer uses S4U for unattended execution (requires suitable
+Windows permissions); `-Interactive` requires the account to remain signed in.
+
 ## Upgrade and data reconciliation
 
 Back up the database and uploaded files before upgrading. Never run

@@ -132,8 +132,20 @@ class SettingController extends Controller
     }
 
     /**
-     * Shop logo / stamp upload. Stored on the public disk and referenced by URL.
+     * Read only the currently saved shop branding file from the public disk.
      */
+    public function branding(string $kind): \Symfony\Component\HttpFoundation\BinaryFileResponse
+    {
+        abort_unless(in_array($kind, ['logo', 'stamp'], true), 404);
+        $saved = Settings::str($kind.'_path');
+        $path = parse_url($saved, PHP_URL_PATH) ?: '';
+        // Only the saved public branding file is readable; never accept a path from the request.
+        abort_unless(preg_match('~(?:^|/)branding/([A-Za-z0-9_-]+\.(?:png|jpe?g|webp|svg))$~i', $path, $match), 404);
+        $file = Storage::disk('public')->path('branding/'.$match[1]);
+        abort_unless(is_file($file), 404);
+        return response()->file($file, ['Cache-Control' => 'private, no-cache', 'X-Content-Type-Options' => 'nosniff']);
+    }
+
     public function upload(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -155,7 +167,7 @@ class SettingController extends Controller
         return response()->json([
             'success' => true,
             'message' => ucfirst($validated['type']) . ' uploaded successfully.',
-            'url'     => $url,
+            'url'     => Settings::brandingUrl($validated['type']),
         ]);
     }
 

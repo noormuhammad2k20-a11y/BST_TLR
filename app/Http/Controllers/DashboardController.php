@@ -17,10 +17,10 @@ class DashboardController extends Controller
 
     public function index()
     {
-        // Keep statuses honest without needing a scheduler running.
-        $this->orders->flagOverdueOrders();
+        app(\App\Services\DeliveryAttentionService::class)->run();
 
         $stats = StatsService::dashboard();
+        $collection = app(\App\Services\CollectionBoard::class)->data();
 
         $dueToday = Order::with('customer:id,name,phone')
             ->dueToday()
@@ -43,7 +43,8 @@ class DashboardController extends Controller
             'recentOrders',
             'activityFeed',
             'revenueTrend',
-            'ordersJs'
+            'ordersJs',
+            'collection'
         ));
     }
 
@@ -57,6 +58,7 @@ class DashboardController extends Controller
         $days = in_array($days, [7, 30, 365], true) ? $days : 30;
 
         return response()->json([
+            'collection'=>app(\App\Services\CollectionBoard::class)->data(),
             'stats'     => StatsService::dashboard(),
             'activity'  => StatsService::activityFeed(),
             'due_today' => Order::with('customer:id,name')

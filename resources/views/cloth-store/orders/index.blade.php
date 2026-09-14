@@ -220,81 +220,120 @@
 
 <!-- ORDER VIEW MODAL -->
 <div id="orderModal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm">
-    <div class="min-h-screen flex items-center justify-center p-4">
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col">
+    <div class="min-h-screen flex items-center justify-center p-4 sm:p-6">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-5xl overflow-hidden flex flex-col">
             
-            <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                <h3 class="text-lg font-bold text-slate-900 flex items-center gap-2"><i class="fa-solid fa-file-invoice text-indigo-600"></i> Order Details</h3>
-                <button onclick="document.getElementById('orderModal').classList.add('hidden')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+            <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white">
+                <h3 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                    <div class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                        <i class="fa-solid fa-file-invoice"></i>
+                    </div>
+                    Order Details
+                </h3>
+                <button onclick="document.getElementById('orderModal').classList.add('hidden')" class="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
             </div>
 
-            <div class="p-6">
-                <!-- Top Row -->
-                <div class="flex justify-between items-start mb-8 pb-6 border-b border-slate-100">
-                    <div>
-                        <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Invoice Number</div>
-                        <div class="text-2xl font-black text-slate-900 tracking-tight" id="modal-inv">INV-XXX</div>
-                        <div class="mt-2 text-sm text-slate-500 flex gap-4">
-                            <span id="modal-date"><i class="fa-regular fa-calendar mr-1"></i> Date</span>
-                            <span id="modal-status-badge"></span>
-                        </div>
-                    </div>
-                    <div class="text-right">
-                        <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Customer</div>
-                        <div class="font-bold text-slate-800" id="modal-customer-name">Name</div>
-                        <div class="text-sm text-slate-500" id="modal-customer-phone">Phone</div>
-                    </div>
-                </div>
+            <div class="p-6 bg-slate-50/50">
+                <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                    
+                    <!-- Left Column: Details & Items -->
+                    <div class="lg:col-span-3 flex flex-col gap-6">
+                        
+                        <!-- Top Info Row -->
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <!-- Invoice Card -->
+                            <div class="bg-white p-5 rounded-xl border border-slate-100 shadow-sm flex flex-col justify-center">
+                                <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Invoice Number</div>
+                                <div class="flex items-center gap-3">
+                                    <div class="text-2xl font-black text-slate-900 tracking-tight" id="modal-inv">INV-XXX</div>
+                                    <div id="modal-status-badge"></div>
+                                </div>
+                                <div class="mt-3 text-sm text-slate-500 font-medium flex items-center" id="modal-date">
+                                    <i class="fa-regular fa-calendar mr-1"></i> Date
+                                </div>
+                            </div>
 
-                <!-- Items Table -->
-                <div class="mb-8">
-                    <h4 class="text-sm font-bold text-slate-900 mb-3">Itemized Bill</h4>
-                    <table class="w-full text-left text-sm border-collapse">
-                        <thead>
-                            <tr class="border-b border-slate-200 text-slate-500">
-                                <th class="py-2 font-semibold">Product</th>
-                                <th class="py-2 font-semibold text-center">Qty / Meters</th>
-                                <th class="py-2 font-semibold text-right">Unit Rate</th>
-                                <th class="py-2 font-semibold text-right">Total</th>
-                            </tr>
-                        </thead>
-                        <tbody id="modal-items-list" class="divide-y divide-slate-100">
-                            <!-- JS Injected -->
-                        </tbody>
-                    </table>
-                </div>
+                            <!-- Customer Card -->
+                            <div class="bg-white p-5 rounded-xl border border-slate-100 shadow-sm flex items-center gap-4">
+                                <div class="w-12 h-12 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center text-lg shrink-0">
+                                    <i class="fa-solid fa-user"></i>
+                                </div>
+                                <div class="min-w-0 flex-1">
+                                    <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Customer</div>
+                                    <div class="font-bold text-slate-800 text-lg truncate" id="modal-customer-name">Name</div>
+                                    <div class="text-sm text-slate-500 truncate mt-0.5" id="modal-customer-phone">Phone</div>
+                                </div>
+                            </div>
+                        </div>
 
-                <!-- Financials -->
-                <div class="flex justify-end">
-                    <div class="w-72 space-y-3">
-                        <div class="flex justify-between text-sm text-slate-600">
-                            <span>Subtotal:</span>
-                            <span class="font-semibold text-slate-900" id="modal-subtotal">Rs 0</span>
-                        </div>
-                        <div class="flex justify-between text-sm text-slate-600">
-                            <span>Discount:</span>
-                            <span class="font-semibold text-rose-600" id="modal-discount">Rs 0</span>
-                        </div>
-                        <div class="flex justify-between items-end pt-3 border-t border-slate-200">
-                            <span class="text-xs font-bold text-slate-800 uppercase">Total Amount:</span>
-                            <span class="text-xl font-black text-indigo-600" id="modal-total">Rs 0</span>
-                        </div>
-                        <div class="flex justify-between text-sm pt-2 border-t border-slate-100">
-                            <span class="text-slate-600">Paid (<span id="modal-method">Cash</span>):</span>
-                            <span class="font-bold text-emerald-600" id="modal-paid">Rs 0</span>
-                        </div>
-                        <div class="flex justify-between text-sm text-slate-600">
-                            <span>Remaining Due:</span>
-                            <span class="font-bold text-rose-600" id="modal-due">Rs 0</span>
+                        <!-- Items Table -->
+                        <div class="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
+                            <div class="px-5 py-3.5 border-b border-slate-100 bg-slate-50/50">
+                                <h4 class="text-sm font-bold text-slate-800">Itemized Bill</h4>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-left text-sm border-collapse">
+                                    <thead>
+                                        <tr class="bg-white border-b border-slate-100 text-slate-500 text-xs uppercase tracking-wider">
+                                            <th class="py-3 px-5 font-semibold">Product</th>
+                                            <th class="py-3 px-5 font-semibold text-center w-28">Qty/Mtr</th>
+                                            <th class="py-3 px-5 font-semibold text-right w-32">Unit Rate</th>
+                                            <th class="py-3 px-5 font-semibold text-right w-32">Total</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="modal-items-list" class="divide-y divide-slate-50">
+                                        <!-- JS Injected -->
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
+
+                    <!-- Right Column: Financials -->
+                    <div class="lg:col-span-1">
+                        <div class="bg-white rounded-xl border border-slate-100 shadow-sm p-5 sticky top-6">
+                            <h4 class="text-sm font-bold text-slate-800 mb-4 pb-3 border-b border-slate-100">Payment Summary</h4>
+                            
+                            <div class="space-y-3.5">
+                                <div class="flex justify-between items-center text-sm">
+                                    <span class="text-slate-500">Subtotal</span>
+                                    <span class="font-medium text-slate-900" id="modal-subtotal">Rs 0</span>
+                                </div>
+                                <div class="flex justify-between items-center text-sm">
+                                    <span class="text-slate-500">Discount</span>
+                                    <span class="font-medium text-rose-600" id="modal-discount">Rs 0</span>
+                                </div>
+                                
+                                <div class="pt-4 mt-2 border-t border-slate-100">
+                                    <div class="flex justify-between items-end mb-1">
+                                        <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Amount</span>
+                                        <span class="text-xl font-black text-indigo-600" id="modal-total">Rs 0</span>
+                                    </div>
+                                </div>
+
+                                <div class="pt-4 border-t border-slate-100 space-y-3">
+                                    <div class="flex justify-between items-center text-sm">
+                                        <span class="text-slate-500">Paid (<span id="modal-method" class="font-medium text-slate-700">Cash</span>)</span>
+                                        <span class="font-bold text-emerald-600" id="modal-paid">Rs 0</span>
+                                    </div>
+                                    <div class="flex justify-between items-center text-sm p-3 rounded-lg bg-rose-50 border border-rose-100/50">
+                                        <span class="text-rose-600 font-semibold">Remaining Due</span>
+                                        <span class="font-bold text-rose-700 text-base" id="modal-due">Rs 0</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
             </div>
 
-            <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
-                <button onclick="document.getElementById('orderModal').classList.add('hidden')" class="px-5 py-2.5 rounded-lg font-bold text-slate-600 hover:bg-slate-200 transition">Close</button>
-                <button id="modal-print-btn" class="px-6 py-2.5 rounded-lg font-bold bg-indigo-600 text-white hover:bg-indigo-700 transition shadow-md flex items-center gap-2">
-                    <i class="fa-solid fa-print"></i> Print Receipt
+            <div class="px-6 py-4 bg-white border-t border-slate-100 flex justify-end gap-3">
+                <button onclick="document.getElementById('orderModal').classList.add('hidden')" class="px-5 py-2.5 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-100 transition-colors">Close</button>
+                <button id="modal-print-btn" class="px-5 py-2.5 rounded-xl text-sm font-bold bg-indigo-600 text-white hover:bg-indigo-700 transition-colors shadow-sm shadow-indigo-200 flex items-center gap-2">
+                    <i class="fa-solid fa-print text-indigo-100"></i> Print Receipt
                 </button>
             </div>
         </div>
@@ -395,11 +434,11 @@
                 document.getElementById('modal-customer-phone').innerText = order.customer ? (order.customer.phone || '') : '';
 
                 let itemsHtml = order.items.map(i => `
-                    <tr>
-                        <td class="py-3 text-slate-800 font-medium">${i.product ? i.product.name : 'Unknown Product'}</td>
-                        <td class="py-3 text-center text-slate-600">${Number(i.quantity)}</td>
-                        <td class="py-3 text-right text-slate-600">Rs ${Number(i.unit_price).toLocaleString()}</td>
-                        <td class="py-3 text-right font-bold text-slate-900">Rs ${Number(i.total).toLocaleString()}</td>
+                    <tr class="hover:bg-slate-50/50 transition-colors group">
+                        <td class="py-3 px-5 text-slate-800 font-medium">${i.product ? i.product.name : 'Unknown Product'}</td>
+                        <td class="py-3 px-5 text-center text-slate-600">${Number(i.quantity)}</td>
+                        <td class="py-3 px-5 text-right text-slate-500">Rs ${Number(i.unit_price).toLocaleString()}</td>
+                        <td class="py-3 px-5 text-right font-bold text-slate-900">Rs ${Number(i.total).toLocaleString()}</td>
                     </tr>
                 `).join('');
                 document.getElementById('modal-items-list').innerHTML = itemsHtml;

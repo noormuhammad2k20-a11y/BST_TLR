@@ -36,7 +36,16 @@ class SmsService
     {
         $template = Settings::activeSmsTemplate($id);
 
-        return $template ? NotificationVariables::render($template['text'] ?? '', $variables) : null;
+        if (!$template) return null;
+        if (in_array($id, ['order-ready', 'collection-reminder', 'due-extended'], true)) {
+            preg_match_all('/\{([^{}]+)\}/', $template['text'] ?? '', $matches);
+            $unknown = array_diff($matches[1], array_keys($variables));
+            if ($unknown) throw new \InvalidArgumentException('Unsupported SMS placeholder: '.implode(', ', $unknown).'.');
+            if ($id === 'due-extended' && (empty($variables['oldDate']) || empty($variables['newDate']))) {
+                throw new \InvalidArgumentException('Missing reschedule date: oldDate and newDate are required.');
+            }
+        }
+        return NotificationVariables::render($template['text'] ?? '', $variables);
     }
 
     private static function request()
@@ -44,7 +53,7 @@ class SmsService
         return Http::connectTimeout(config('messaging.connect_timeout'))->timeout(config('messaging.timeout'));
     }
 
-    public static function send(?string $phone, string $message, ?int $orderId = null, ?int $customerId = null, ?string $templateId = null): array
+    public static function send(?string $phone, string $message, ?int $orderId = null, ?int $customerId = null, ?string $templateId = null, bool $recordLog = true): array
     {
         $provider = 'sms';
         $log = false;
@@ -73,10 +82,17 @@ class SmsService
                 'sendpk' => self::sendpk($phone, $message),
                 default => DeliveryResult::make($provider, error: 'Unknown SMS provider.'),
             };
-        } catch (\Throwable) {
-            $result = DeliveryResult::make($provider, error: 'SMS request could not complete. Delivery may be unknown; check before resending.');
+        } catch (\Throwable $error) {
+            preg_match('/cURL error (\d+)/i', $error->getMessage(), $curl);
+            $code = isset($curl[1]) ? (int)$curl[1] : null;
+            $notConnected = $error instanceof \Illuminate\Http\Client\ConnectionException && in_array($code, [5, 6, 7, 60, 77], true);
+            $result = DeliveryResult::make($provider, error: $notConnected
+                ? 'SMS provider connection failed before sending (cURL '.$code.'). Check network/provider address or TLS certificate configuration and retry.'
+                : 'SMS request could not complete. Delivery may be unknown; check before resending. '.DeliveryResult::safeText($error->getMessage()),
+                metadata: ['exception_type'=>class_basename($error), 'curl_code'=>$code, 'exception_message'=>DeliveryResult::safeText($error->getMessage(), 1500)]);
+            $result['status'] = $notConnected ? 'failed' : 'unknown';
         } finally {
-            if ($log) {
+            if ($log && $recordLog) {
                 DeliveryResult::log(SmsLog::class, ['phone' => mb_substr(DeliveryResult::safeText($phone), 0, 50), 'message' => DeliveryResult::safeText($message, 2000), 'template_id' => $templateId, 'order_id' => $orderId, 'customer_id' => $customerId], $result);
             }
         }
@@ -93,6 +109,10 @@ class SmsService
             $message = self::renderTemplate($id, NotificationVariables::variablesForOrder($order, $extra));
 
             return $message === null ? null : self::send($order->customer?->phone, $message, $order->id, $order->customer_id, $id);
+        } catch (\InvalidArgumentException $error) {
+            $result = DeliveryResult::make(self::provider(), error: $error->getMessage());
+            DeliveryResult::log(SmsLog::class, ['phone'=>$order->customer?->phone ?? '', 'message'=>'', 'template_id'=>$id, 'order_id'=>$order->id, 'customer_id'=>$order->customer_id], $result);
+            return $result;
         } catch (\Throwable) {
             return DeliveryResult::make('sms', error: 'SMS notification could not be prepared.');
         }
@@ -108,7 +128,7 @@ class SmsService
         $data = $response->json();
         $data = is_array($data) ? $data : [];
         $ok = $response->successful() && ($data['STATUS'] ?? '') === 'SUCCESSFUL' && ! empty($data['MESSAGE_ID']);
-        $metadata = ['http_status' => $response->status()];
+        $metadata = ['http_status' => $response->status(), 'response_body' => DeliveryResult::safeText($response->body(), 2000)];
         foreach (['STATUS', 'MESSAGE_ID', 'ERROR_CODE', 'ERROR_DESCRIPTION', 'NETWORK_NAME', 'RECEIVER_NUMBER', 'COUNTRY_CODE'] as $key) {
             if (isset($data[$key])) {
                 $metadata[$key] = DeliveryResult::safeText($data[$key]);
@@ -130,7 +150,7 @@ class SmsService
         $ok = $response->successful() && preg_match('/^OK\s+ID:([a-zA-Z0-9_-]+)\s*$/D', trim($response->body()), $matches);
 
         return DeliveryResult::make('sendpk', (bool) $ok, $ok ? null : self::sendpkError(trim($response->body())), $ok ? $matches[1] : null,
-            ['http_status' => $response->status()]);
+            ['http_status' => $response->status(), 'response_body' => DeliveryResult::safeText($response->body(), 2000)]);
     }
 
     private static function sendpkError(string $code): string

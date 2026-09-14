@@ -37,9 +37,31 @@ class Measurement extends Model
     public const REQUIRED_FIELDS = ['chest_losing', 'waist_losing', 'hip_losing'];
 
     /** Human label for one measurement column. */
-    public static function label(string $field): string
+    public static function label(string $field, ?string $fallback = null): string
     {
-        return ucwords(str_replace('_', ' ', $field));
+        return [
+            'shoulder_width' => 'Shoulder',
+            'sleeve_length' => 'Sleeves',
+            'chest_losing' => 'Losing',
+            'waist' => 'West',
+            'waist_losing' => 'Loasing',
+            'hip_losing' => 'Losing',
+            'armhole' => 'Armor',
+            'takai' => 'Takki',
+            'ghera' => 'Galla',
+            'patti' => 'F/Patti',
+            'measurement_notes' => 'Notes',
+        ][$field] ?? $fallback ?? ucwords(str_replace('_', ' ', $field));
+    }
+
+    /** Update only display names in historical profiles; retain keys and order. */
+    public static function displayProfile(array $profile): array
+    {
+        foreach ($profile['labels'] ?? [] as $field => $label) {
+            $profile['labels'][$field] = self::label($field, $label);
+        }
+
+        return $profile;
     }
 
     /**
@@ -62,7 +84,7 @@ class Measurement extends Model
 
     public function customer(): BelongsTo
     {
-        return $this->belongsTo(Customer::class);
+        return $this->belongsTo(Customer::class)->withTrashed();
     }
 
     public function piece(): BelongsTo
@@ -89,6 +111,12 @@ class Measurement extends Model
     public function order(): BelongsTo
     {
         return $this->belongsTo(Order::class);
+    }
+
+    /** Copies retained for individual orders are not additional customer saved sets. */
+    public function scopeSavedSets(Builder $query): Builder
+    {
+        return $query->whereDoesntHave('piece', fn (Builder $piece) => $piece->whereNotNull('profile->saved_measurement_id'));
     }
 
     public function scopeSearch(Builder $q, ?string $term): Builder

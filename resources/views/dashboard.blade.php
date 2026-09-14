@@ -259,6 +259,18 @@
 @endpush
 
 @section('content')
+<div id="collection-dashboard-alerts" class="page mb-6 {{ !$collection['settings']['dashboardEnabled'] || !$collection['settings']['alertsEnabled'] ? 'hidden' : '' }}">
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+    <h3 class="text-sm font-bold text-slate-900 mb-3">Delivery & Customer Reminder Alerts</h3>
+    <div class="flex flex-wrap gap-3 text-xs" id="collection-dashboard-links">
+      @foreach([['Notification Needed','needsNotification','customers need notification'],['Due Today','dueToday','customers due today'],['Reminder Due','reminderDue','customers need reminders'],['SMS Failed','smsFailed','customers with SMS failures'],['Upcoming','upcoming','upcoming customers']] as [$filter,$key,$label])
+        @if($key !== 'reminderDue' || $collection['settings']['reminderAlertsEnabled'])
+        <a class="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-600 hover:bg-slate-100" href="{{ route('delivery.index',['filter'=>$filter]) }}">{{ $collection['stats'][$key] }} {{ $label }}</a>
+        @endif
+      @endforeach
+    </div>
+  </div>
+</div>
 <div class="page flex justify-between items-center mb-6">
   <div>
     <h1 class="text-xl font-bold text-slate-900 tracking-tight">{{ $greeting }}, {{ auth()->user()->short_name }} {{ $greetingIcon }}</h1>
@@ -424,7 +436,8 @@
             $color = $colors[$index % count($colors)];
             $badgeColor = match($order->status) {
                 'Received', 'Pending' => 'badge-pending',
-                'Stitching' => 'badge-progress',
+                'In Progress', 'Stitching' => 'badge-progress',
+                'Ready for Verification' => 'badge-trial',
                 'Trial' => 'badge-trial',
                 'Ready' => 'badge-ready',
                 'Delivered', 'Completed' => 'badge-delivered',
@@ -901,6 +914,15 @@
     Atelier.poll(async () => {
       const data = await Atelier.api.get(@json(route('live.dashboard')));
       applyStats(data.stats);
+      if (data.collection) {
+        const {stats, settings} = data.collection;
+        document.getElementById('collection-dashboard-alerts').classList.toggle('hidden', !settings.alertsEnabled || !settings.dashboardEnabled);
+        document.getElementById('collection-dashboard-links').innerHTML = [
+          ['Notification Needed','needsNotification','customers need notification'], ['Due Today','dueToday','customers due today'],
+          ['Reminder Due','reminderDue','customers need reminders'], ['SMS Failed','smsFailed','customers with SMS failures'], ['Upcoming','upcoming','upcoming customers']
+        ].filter(([,key]) => key !== 'reminderDue' || settings.reminderAlertsEnabled).map(([filter,key,label]) =>
+          `<a class="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-600 hover:bg-slate-100" href="${@json(route('delivery.index'))}?filter=${encodeURIComponent(filter)}">${Number(stats[key]) || 0} ${label}</a>`).join('');
+      }
       activityFeed = data.activity;
       renderActivityFeed();
       revenueSeries = data.revenue;

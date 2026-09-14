@@ -334,7 +334,7 @@ class ReportAnalytics
             'measured'     => $measured,
             'on_time_rate' => $measured > 0 ? round($onTime / $measured * 100, 1) : 0.0,
             'open_orders'  => (clone $open)->count(),
-            'overdue'      => (clone $open)->whereNotNull('delivery_date')->whereDate('delivery_date', '<', now()->toDateString())->count(),
+            'overdue'      => (clone $open)->overdue()->count(),
             'due_today'    => (clone $open)->whereDate('delivery_date', now()->toDateString())->count(),
             'due_7_days'   => (clone $open)->whereBetween('delivery_date', [now()->startOfDay(), now()->addDays(7)->endOfDay()])->count(),
         ];

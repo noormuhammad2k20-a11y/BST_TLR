@@ -45,11 +45,14 @@ final class OrderItemsService
             'garments.*.fabric' => ['nullable','string','max:255'],
             'garments.*.style_notes' => ['nullable','string','max:2000'],
             'garments.*.pieces' => ['required','array','min:1','max:10000'],
-            'garments.*.pieces.*' => ['array:id,client_key,unit,measurement_id,values'],
+            'garments.*.pieces.*' => ['array:id,client_key,unit,measurement_id,values,saved_changes'],
             'garments.*.pieces.*.id' => ['nullable','integer','distinct'],
             'garments.*.pieces.*.client_key' => ['nullable','string','max:100'],
             'garments.*.pieces.*.unit' => ['required','in:in,cm'],
             'garments.*.pieces.*.measurement_id' => ['nullable','integer'],
+            'garments.*.pieces.*.saved_changes' => ['sometimes','array:values,unit'],
+            'garments.*.pieces.*.saved_changes.values' => ['sometimes','array'],
+            'garments.*.pieces.*.saved_changes.unit' => ['sometimes','in:in,cm'],
             'garments.*.pieces.*.values' => ['present','array'],
         ];
     }
@@ -81,23 +84,38 @@ final class OrderItemsService
                 if ($previous && $previous->piece_no !== $j + 1) $this->fail("garments.$i.pieces.$j.id", 'Retained pieces cannot be reordered.');
                 if ($old && $j < min($old->quantity, $row['quantity']) && $old->pieces->get($j)?->id !== ($piece['id'] ?? null)) $this->fail("garments.$i.pieces.$j.id", 'Retain existing piece IDs when changing quantity.');
                 if (!empty($piece['measurement_id'])) {
-                    $source = Measurement::where('customer_id', $customerId)->find($piece['measurement_id']);
+                    $source = Measurement::savedSets()->where('customer_id', $customerId)->lockForUpdate()->find($piece['measurement_id']);
                     if (!$source) $this->fail("garments.$i.pieces.$j.measurement_id", 'Select a measurement belonging to this customer.');
                     $sourceProfile = $source->piece?->profile['key'] ?? MeasurementProfiles::infer($source->garment_type ?? '');
                     if ($sourceProfile !== $profile['key']) $this->fail("garments.$i.pieces.$j.measurement_id", 'The saved measurement profile is incompatible.');
+                    $sourceProduct = $source->piece?->item?->product_service_id;
+                    $normalizeName = fn ($name) => preg_replace('/\s+/u', ' ', mb_strtolower(trim($name ?? '')));
+                    if ($sourceProduct ? $sourceProduct != $product->id : $normalizeName($source->garment_type) !== $normalizeName($product->name)) {
+                        $this->fail("garments.$i.pieces.$j.measurement_id", 'Select a saved measurement for this garment.');
+                    }
                     $piece['values'] = array_merge($source->only(Measurement::FIELDS), $source->details ?? []);
                     $piece['unit'] = $source->unit;
+                    $changes = array_map(fn ($value) => $value === '' ? null : $value, $piece['saved_changes']['values'] ?? []);
+                    if (isset($piece['saved_changes']['values'])) $piece['saved_changes']['values'] = $changes;
+                    if (array_diff(array_keys($changes), $profile['fields'])) $this->fail("garments.$i.pieces.$j.saved_changes", 'Only measurements for this garment may be updated.');
+                    $piece['values'] = array_replace($piece['values'], $changes);
+                    $piece['unit'] = $piece['saved_changes']['unit'] ?? $source->unit;
+                } elseif (!empty($piece['saved_changes'])) {
+                    $this->fail("garments.$i.pieces.$j.measurement_id", 'Select the saved measurement to update.');
                 }
                 $values = array_intersect_key($piece['values'], array_flip($profile['fields']));
                 $unchangedLegacy = $previous && $old->product_service_id === $product->id
                     && $previous->unit === $piece['unit'] && $this->sameValues($values, $previous->measurement, $profile['fields']);
                 $rules = [];
                 foreach ($profile['fields'] as $field) $rules[$field] = [!$unchangedLegacy && in_array($field, $profile['required']) ? 'required' : 'nullable','numeric','min:0','max:999','decimal:0,'.Settings::measurementDecimals()];
-                $validator = Validator::make($values, $rules);
+                $validator = Validator::make($values, $rules, [], Measurement::displayProfile($profile)['labels'] ?? Measurement::labels());
                 if ($validator->fails()) foreach ($validator->errors()->messages() as $field => $errors) $this->fail("garments.$i.pieces.$j.values.$field", $errors[0]);
                 if (!$unchangedLegacy && $profile['at_least_one'] && !count(array_filter($values, fn($v) => $v !== null && $v !== ''))) $this->fail("garments.$i.pieces.$j.values", 'Enter at least one alteration measurement.');
                 $piece['values'] = $values;
                 $piece['profile'] = $profile;
+                if (!empty($piece['measurement_id']) && $previous?->measurement?->id != $piece['measurement_id']) {
+                    $piece['profile']['saved_measurement_id'] = (int) $piece['measurement_id'];
+                }
                 $piece['unchanged'] = $unchangedLegacy;
             }
             unset($piece);
@@ -134,9 +152,25 @@ final class OrderItemsService
             $item->position = $i; $item->save(); $kept[] = $item->id;
             $pieceIds = [];
             foreach ($row['pieces'] as $j => $pc) {
+                if (!empty($pc['measurement_id']) && !empty($pc['saved_changes'])) {
+                    // Update the original set in the order transaction; omitted fields stay untouched.
+                    $source = Measurement::where('customer_id', $order->customer_id)->lockForUpdate()->findOrFail($pc['measurement_id']);
+                    $changes = $pc['saved_changes']['values'] ?? [];
+                    $columns = array_intersect_key($changes, array_flip(Measurement::FIELDS));
+                    $details = array_diff_key($changes, array_flip(Measurement::FIELDS));
+                    $source->fill($columns);
+                    if ($details) $source->details = array_replace($source->details ?? [], $details);
+                    if (isset($pc['saved_changes']['unit'])) $source->unit = $pc['saved_changes']['unit'];
+                    $source->save();
+                    \Illuminate\Support\Facades\Cache::forget('measurements.stats');
+                }
                 $piece = !empty($pc['id']) ? $item->pieces()->findOrFail($pc['id']) : $item->pieces()->make();
                 $piece->fill(['piece_no' => $j + 1, 'unit' => $pc['unit'], 'profile' => $pc['profile']])->save();
                 $pieceIds[] = $piece->id;
+                if (!empty($pc['measurement_id']) && $piece->measurement?->id == $pc['measurement_id']) {
+                    $firstMeasurement ??= $piece->measurement->id;
+                    continue;
+                }
                 if (($pc['unchanged'] ?? false) && $piece->measurement) {
                     $firstMeasurement ??= $piece->measurement->id;
                     continue;

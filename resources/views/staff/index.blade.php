@@ -124,6 +124,23 @@
   var staffQuery    = '';
   var profileTab    = 'overview';
   var profileData   = null;
+  var profileCache = new Map();
+  var profileRequests = new Map();
+
+  function loadProfile(id) {
+    if (profileRequests.has(id)) return profileRequests.get(id);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    const pending = Atelier.api.get(`/staff/${id}`, { signal: controller.signal })
+      .then(data => {
+        if (!data?.staff) throw new Error('Profile response was empty');
+        profileCache.set(id, data);
+        return data;
+      })
+      .finally(() => { clearTimeout(timeout); profileRequests.delete(id); });
+    profileRequests.set(id, pending);
+    return pending;
+  }
 
   /* ============= HELPERS ============= */
   function upsertStaff(payload) {
@@ -272,12 +289,21 @@
 
   /** Pulls fresh rows and stats without a page reload. */
   async function refreshStaff() {
+    if (profileRequests.size) return;
     const fresh = await Atelier.api.get(ROUTES.index + '?json=1');
     if (fresh?.staff) {
       staffList   = fresh.staff;
       STAFF_STATS = fresh.stats;
       renderStaff();
       updateStaffStats();
+      const profileId = profileData?.staff?.db_id;
+      if (profileId && document.getElementById('profile-body') && document.getElementById('modal-backdrop')?.classList.contains('show')) {
+        const latest = await loadProfile(profileId);
+        if (profileData?.staff?.db_id === profileId && document.getElementById('profile-body')) {
+          profileData = latest;
+          renderProfileBody();
+        }
+      }
     }
   }
 
@@ -295,7 +321,8 @@
       address:        val('address'),
       joining_date:   val('joining') || null,
       role:           val('role'),
-      salary_type:    val('salary-type'),
+      salary_type:    val('salary-type').split('|')[0],
+      payment_period: val('salary-type').split('|')[1] || 'Monthly',
       monthly_salary: parseFloat(val('monthly')) || 0,
       per_suit_rate:  parseFloat(val('rate')) || 0,
       is_active:      document.getElementById('sf-active')?.checked ? 1 : 0,
@@ -359,15 +386,24 @@
   /* ============= PROFILE ============= */
   window.openProfile = async function(id) {
     profileTab = 'overview';
-    profileData = null;
-    openModal('staff-profile', findStaff(id));
+    const staff = findStaff(id);
+    if (!staff) return;
+    profileData = profileCache.has(id)
+      ? { ...profileCache.get(id), staff, due: staff.due }
+      : { staff, due: staff.due, detailsLoading: true };
+    openModal('staff-profile', staff);
+    renderProfileBody();
 
     try {
-      profileData = await Atelier.api.get(`/staff/${id}`);
+      const data = await loadProfile(id);
+      if (profileData?.staff?.db_id !== id) return;
+      profileData = data;
       renderProfileBody();
     } catch (err) {
-      const body = document.getElementById('profile-body');
-      if (body) body.innerHTML = '<div class="text-sm text-slate-500 text-center py-8">Could not load this profile.</div>';
+      if (profileData?.staff?.db_id !== id) return;
+      profileData.detailsLoading = false;
+      profileData.detailsError = !profileCache.has(id);
+      renderProfileBody();
     }
   }
 
@@ -389,7 +425,13 @@
     }
 
     const s = profileData.staff;
-    const money = Atelier.money;
+    if (profileTab !== 'overview' && (profileData.detailsLoading || profileData.detailsError)) {
+      body.innerHTML = profileData.detailsError
+        ? `<div class="text-sm text-slate-500 text-center py-8">History could not load. <button class="text-indigo-600 font-semibold underline" onclick="openProfile(${Number(s.db_id)})">Retry</button></div>`
+        : '<div class="text-sm text-slate-400 text-center py-8"><i class="fa-solid fa-spinner fa-spin mr-2"></i> Loading history…</div>';
+      return;
+    }
+    const money = (value) => Atelier.money(value, true);
     const esc = Atelier.escapeHtml;
 
     const row = (k, v) => `<div class="flex justify-between text-sm"><span class="text-slate-500">${k}</span><span class="font-semibold text-slate-900 text-right max-w-[60%]">${v}</span></div>`;
@@ -411,8 +453,8 @@
             ${row('Paid as', esc(s.salary_type))}
             ${s.salary_type !== 'Per Suit' ? row('Monthly salary', money(s.monthly_salary)) : ''}
             ${s.salary_type !== 'Monthly' ? row('Per-suit rate', money(s.per_suit_rate)) : ''}
-            ${row('Stitching this month', money(d.stitching))}
-            ${row('Earned this month', money(d.earned))}
+            ${row(`${d.pieces} completed pieces`, money(d.stitching))}
+            ${row('Earned this period', money(d.earned))}
             ${row('Paid this month', money(d.paid))}
             <div class="flex justify-between border-t border-slate-200 pt-2 mt-2">
               <span class="font-bold text-slate-900">Remaining</span>
@@ -498,12 +540,12 @@
           <tbody class="divide-y divide-slate-100">
             ${list.map(p => `<tr>
               <td class="px-3 py-2 text-slate-500">${p.date}</td>
-              <td class="px-3 py-2 text-slate-600">${esc(p.period || '—')}</td>
+              <td class="px-3 py-2 text-slate-600" title="${p.summary ? esc(`${p.summary.pieces} pieces; rates: ${p.summary.rates.map(r => `${r.pieces} x ${money(r.rate)}`).join(', ')}; earned ${money(p.summary.earned)}; paid ${money(p.summary.paid)}; remaining ${money(p.summary.remaining)}`) : ''}">${esc(p.period || '—')}</td>
               <td class="px-3 py-2 text-slate-600">${esc(p.method)}</td>
               <td class="px-3 py-2"><span class="badge ${statusBadge[p.status] || 'badge-inactive'}">${esc(p.status)}</span></td>
               <td class="px-3 py-2 text-slate-500">${esc(p.notes || '—')}</td>
               <td class="px-3 py-2 text-right font-semibold text-slate-900">${money(p.amount)}</td>
-              <td class="px-3 py-2 text-right"><button class="text-slate-300 hover:text-red-500 transition-colors" title="Remove" onclick="deletePayment(${p.id}, ${s.db_id})"><i class="fa-solid fa-trash text-xs"></i></button></td>
+              <td class="px-3 py-2 text-right">${p.can_reverse ? `<button class="text-slate-300 hover:text-red-500 transition-colors" title="Reverse" onclick="deletePayment(${p.id}, ${s.db_id})"><i class="fa-solid fa-trash text-xs"></i></button>` : ''}</td>
             </tr>`).join('')}
           </tbody></table>`
         : '<div class="text-sm text-slate-400 text-center py-8">No salary payments recorded yet.</div>'}`;
@@ -515,16 +557,42 @@
     const s = findStaff(id);
     if (!s) return;
     openModal('staff-payment', s);
+    const el = document.getElementById('pay-amount');
+    el.dataset.operationKey = window.crypto?.randomUUID?.() || `staff-payment-${Date.now()}-${Math.random()}`;
+    window.staffPaymentDue = s.due;
+    previewPayment();
   }
 
+  let paymentDueRequest = 0;
+  window.previewPayment = function() {
+    const due = window.staffPaymentDue;
+    const el = document.getElementById('payment-summary');
+    if (!due || !el) return;
+    const cents = Math.round((parseFloat(document.getElementById('pay-amount').value) || 0) * 100);
+    el.textContent = `${due.pieces} pieces - Earned ${Atelier.money(due.earned, true)} - Paid ${Atelier.money((Math.round(due.paid * 100) + cents) / 100, true)} - Remaining ${Atelier.money(Math.max(0, Math.round(due.remaining * 100) - cents) / 100, true)}`;
+  };
+  window.refreshPaymentDue = async function(id) {
+    const request = ++paymentDueRequest;
+    const period = document.getElementById('pay-period').value;
+    window.staffPaymentDue = null;
+    try {
+      const res = await Atelier.api.get(`/staff/${id}?period=${encodeURIComponent(period)}`);
+      if (request !== paymentDueRequest || document.getElementById('pay-period')?.value !== period) return;
+      window.staffPaymentDue = res.due;
+      document.getElementById('pay-amount').value = res.due.remaining || '';
+      previewPayment();
+    } catch (err) { Atelier.reportError(err, 'Could not calculate this period'); }
+  };
+
   window.savePayment = async function(id, btn) {
+    if (!window.staffPaymentDue) { toast('Wait for the period calculation', 'error'); return; }
     const payload = {
       amount:  parseFloat(document.getElementById('pay-amount').value),
       method:  document.getElementById('pay-method').value,
       period:  document.getElementById('pay-period').value || null,
       paid_on: document.getElementById('pay-date').value || null,
       notes:   document.getElementById('pay-notes').value.trim() || null,
-      operation_key: window.crypto?.randomUUID?.() || `staff-payment-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      operation_key: document.getElementById('pay-amount').dataset.operationKey,
     };
 
     if (!payload.amount || payload.amount <= 0) { toast('Enter the amount paid', 'error'); return; }
@@ -639,8 +707,8 @@
             ${field('Role', `<input id="sf-role" list="role-options" value="${Atelier.escapeHtml(v.role || 'Tailor')}" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-colors">
               <datalist id="role-options">${ROLE_OPTIONS.map(r => `<option value="${r}">`).join('')}</datalist>`)}
             ${field('Joining Date', input('sf-joining', { type: 'date', value: v.joining_date || '' }))}
-            ${field('Salary Type', `<select id="sf-salary-type" onchange="renderSalaryHint()" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-colors">
-              ${SALARY_TYPES.map(t => `<option ${v.salary_type === t ? 'selected' : ''}>${t}</option>`).join('')}
+            ${field('Salary Type / Payment Period', `<select id="sf-salary-type" onchange="renderSalaryHint()" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-colors">
+              ${SALARY_TYPES.flatMap(t => ['Monthly', 'Weekly', 'Daily'].map(p => `<option value="${t}|${p}" ${v.salary_type === t && (v.payment_period || 'Monthly') === p ? 'selected' : ''}>${t} - ${p}</option>`)).join('')}
             </select>`)}
             ${field('Monthly Salary', input('sf-monthly', { type: 'number', min: 0, step: '0.01', value: v.monthly_salary || 0 }))}
             ${field('Per-Suit Stitching Rate', input('sf-rate', { type: 'number', min: 0, step: '0.01', value: v.per_suit_rate || 0 }))}
@@ -668,16 +736,16 @@
       <div class="p-5 border-b border-slate-200 flex justify-between items-center">
         <div>
           <div class="text-lg font-bold text-slate-900 tracking-tight">Record Salary Payment</div>
-          <div class="text-xs text-slate-500 mt-1">${Atelier.escapeHtml(s.name)} · ${Atelier.money(s.due.remaining)} remaining for ${s.due.period}</div>
+          <div id="payment-summary" class="text-xs text-slate-500 mt-1">${Atelier.escapeHtml(s.name)} · ${Atelier.money(s.due.remaining, true)} remaining for ${s.due.period}</div>
         </div>
         <button class="w-8 h-8 rounded-lg text-slate-400 hover:bg-slate-100 flex items-center justify-center" onclick="closeModal()"><i class="fa-solid fa-xmark text-sm"></i></button>
       </div>
       <div class="p-6">
         <div class="grid grid-cols-2 gap-4">
-          ${field('Amount *', input('pay-amount', { type: 'number', min: 0, step: '0.01', value: s.due.remaining || '' }))}
+          ${field('Amount *', input('pay-amount', { type: 'number', min: 0, step: '0.01', value: s.due.remaining || '', oninput: 'previewPayment()' }))}
           ${field('Method', `<select id="pay-method" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-colors">${PAY_METHODS.map(m => `<option>${m}</option>`).join('')}</select>`)}
-          ${field('For Month', input('pay-period', { type: 'month', value: s.due.period }))}
-          ${field('Paid On', input('pay-date', { type: 'date', value: new Date().toISOString().slice(0, 10) }))}
+          ${field('Payment Period', input('pay-period', { type: s.payment_period === 'Weekly' ? 'week' : s.payment_period === 'Daily' ? 'date' : 'month', value: s.due.period, oninput: `refreshPaymentDue(${s.db_id})` }))}
+          ${field('Paid On', input('pay-date', { type: 'date', value: @json(now()->toDateString()) }))}
           <div class="col-span-2">${field('Notes', input('pay-notes', { placeholder: 'Optional' }))}</div>
         </div>
         <p class="text-xs text-slate-500 mt-4">Tailor wages are kept entirely separate from customer payments and never appear in sales or revenue.</p>
@@ -700,14 +768,14 @@
           <div class="col-span-2">${field('Garment', input('wk-garment', { placeholder: 'e.g. Shalwar Kameez' }))}</div>
           ${field('Pieces *', input('wk-qty', { type: 'number', min: 0, step: '0.5', value: 1, oninput: 'previewWorkTotal()' }))}
           ${field('Rate per piece', input('wk-rate', { type: 'number', min: 0, step: '0.01', value: s.per_suit_rate, oninput: 'previewWorkTotal()' }))}
-          ${field('Completed On', input('wk-date', { type: 'date', value: new Date().toISOString().slice(0, 10) }))}
+          ${field('Completed On', input('wk-date', { type: 'date', value: @json(now()->toDateString()) }))}
           ${field('Notes', input('wk-notes', { placeholder: 'Optional' }))}
         </div>
         <div class="mt-4 bg-slate-50 border border-slate-100 rounded-lg p-3 flex justify-between items-center">
           <span class="text-sm text-slate-500">Stitching amount</span>
           <span class="text-lg font-bold text-slate-900" id="wk-total">${Atelier.money(s.per_suit_rate)}</span>
         </div>
-        <p class="text-xs text-slate-500 mt-3">Work completed through an order is credited automatically when the order is delivered. Use this for alterations, repairs and counter jobs.</p>
+        <p class="text-xs text-slate-500 mt-3">An assigned tailor is credited automatically when an order is marked Ready. Delivery does not count it again. Use this for alterations, repairs and counter jobs.</p>
       </div>
       <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">
         <button class="bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-100 transition-colors" onclick="closeModal()">Cancel</button>
@@ -715,9 +783,6 @@
       </div>`,
 
     'staff-profile': (s) => {
-      const modalElement = document.getElementById('modal-content');
-      if (modalElement) modalElement.classList.add('modal-xl');
-
       return `
         <div class="p-5 border-b border-slate-200 flex justify-between items-center">
           <div class="flex items-center gap-3">
@@ -750,7 +815,7 @@
 
   /** Explains what the chosen salary type actually means for this person. */
   window.renderSalaryHint = function() {
-    const type = document.getElementById('sf-salary-type')?.value;
+    const type = document.getElementById('sf-salary-type')?.value.split('|')[0];
     const el = document.getElementById('salary-hint');
     if (!el) return;
 
@@ -764,6 +829,7 @@
   Atelier.onPageReady(() => {
     updateStaffStats();
     renderStaff();
+    Atelier.poll(refreshStaff, 10000);
   });
 </script>
 @endpush

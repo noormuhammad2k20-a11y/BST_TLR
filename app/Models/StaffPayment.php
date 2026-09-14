@@ -17,6 +17,7 @@ class StaffPayment extends Model
 
     protected $casts = [
         'amount'  => 'decimal:2',
+        'earnings_snapshot' => 'array',
         'paid_on' => 'date',
         'reversed_at' => 'datetime',
     ];

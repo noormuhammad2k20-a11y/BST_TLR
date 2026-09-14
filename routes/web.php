@@ -21,6 +21,12 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SearchController;
 use App\Http\Controllers\PwaController;
 
+Route::get('license', [\App\Http\Controllers\LicenseController::class, 'show'])
+    ->withoutMiddleware(\App\Http\Middleware\ApplyShopSettings::class)->name('license.show');
+Route::post('license', [\App\Http\Controllers\LicenseController::class, 'install'])
+    ->withoutMiddleware(\App\Http\Middleware\ApplyShopSettings::class)
+    ->middleware('throttle:6,1')->name('license.install');
+
 /*
 |--------------------------------------------------------------------------
 | PWA — must stay public so the app is installable before sign-in
@@ -49,11 +55,15 @@ Route::post('logout', [LoginController::class, 'logout'])
 | Authenticated application
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth', 'active', 'business', \App\Http\Middleware\ReconcileOrderTimestamps::class])->group(function () {
+Route::middleware(['auth', 'active', 'business'])->group(function () {
+    Route::get('receipts/branding/{kind}', [SettingController::class, 'branding'])
+        ->whereIn('kind', ['logo', 'stamp'])->name('receipts.branding');
 
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
 
     /* -------------------- Live / polling endpoints -------------------- */
+    Route::post('orders/{order}/retry-sms', [OrderController::class, 'retrySms'])->name('orders.retry-sms');
+
     Route::prefix('live')->name('live.')->group(function () {
         Route::get('dashboard', [DashboardController::class, 'live'])->name('dashboard');
         Route::get('counters', [DashboardController::class, 'counters'])->name('counters');
@@ -74,8 +84,13 @@ Route::middleware(['auth', 'active', 'business', \App\Http\Middleware\ReconcileO
     Route::post('customers/import/discard', [ImportController::class, 'discard'])->name('customers.import.discard');
     Route::get('customers/import/{token}/issues', [ImportController::class, 'issues'])->name('customers.import.issues');
 
+    Route::get('customers/{customer}/ledger', [\App\Http\Controllers\CustomerLedgerController::class,'show'])->name('customers.ledger');
+    Route::post('customers/{customer}/ledger/payments', [\App\Http\Controllers\CustomerLedgerController::class,'receive'])->name('customers.ledger.payments');
+    Route::post('customers/{customer}/ledger/charges', [\App\Http\Controllers\CustomerLedgerController::class,'charge'])->name('customers.ledger.charges');
     Route::get('customers/{customer}/summary', [CustomerController::class, 'summary'])
         ->name('customers.summary');
+    Route::post('customers/{customer}/restore', [CustomerController::class, 'restore'])->whereNumber('customer')->name('customers.restore');
+    Route::delete('customers/{customer}/permanent', [CustomerController::class, 'permanentlyDelete'])->whereNumber('customer')->name('customers.permanent');
     Route::post('customers/{customer}/sms', [CustomerController::class, 'sendSms'])
         ->middleware('throttle:6,1')->name('customers.sms');
     Route::resource('customers', CustomerController::class)
@@ -121,6 +136,10 @@ Route::middleware(['auth', 'active', 'business', \App\Http\Middleware\ReconcileO
     Route::post('reports/target', [ReportController::class, 'target'])->name('reports.target');
 
     /* ----------------------------- Delivery --------------------------- */
+    Route::get('delivery/orders/{order}/receipt', [DeliveryController::class, 'receipt'])->name('delivery.receipt');
+    Route::get('delivery/sms-history',[DeliveryController::class,'history'])->name('delivery.sms-history');
+    Route::post('delivery/sms/{sms}/resolve',[DeliveryController::class,'resolveSms'])->name('delivery.sms.resolve');
+    Route::post('delivery/orders/{order}/collect',[DeliveryController::class,'collect'])->name('delivery.collect');
     Route::patch('delivery/{delivery}/status', [DeliveryController::class, 'updateStatus'])
         ->name('delivery.status');
     // Collection notices for several customers at once. These garments are
@@ -169,6 +188,8 @@ Route::middleware(['auth', 'active', 'business', \App\Http\Middleware\ReconcileO
 
     /* ----------------------------- Settings --------------------------- */
     Route::middleware('role:admin')->group(function () {
+        Route::get('settings/sidebar-appearance', [\App\Http\Controllers\SidebarAppearanceController::class, 'show'])->name('settings.sidebar-appearance.show');
+        Route::put('settings/sidebar-appearance', [\App\Http\Controllers\SidebarAppearanceController::class, 'update'])->name('settings.sidebar-appearance.update');
         Route::get('settings', [SettingController::class, 'index'])->name('settings.index');
         Route::put('settings', [SettingController::class, 'update'])->name('settings.update');
         Route::post('settings/upload', [SettingController::class, 'upload'])->name('settings.upload');

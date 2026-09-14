@@ -25,6 +25,7 @@ class UpdateOrderRequest extends FormRequest
             'status'             => ['required', Rule::in(array_merge(\App\Models\Order::ALL_STATUSES, [$this->route('order')?->status]))],
             'priority'           => ['required', Rule::in(['Normal', 'High', 'Express'])],
             'delivery_date'      => ['nullable', 'date'],
+            'delivery_time' => ['sometimes', 'date_format:H:i'],
             'time_slot'          => ['nullable', 'string', 'max:100'],
             'notes'              => ['nullable', 'string', 'max:2000'],
         ];

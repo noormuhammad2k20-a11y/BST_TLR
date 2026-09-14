@@ -1,0 +1,53 @@
+Delivery Page (http://127.0.0.1:8000/delivery) - Complete Details
+
+Ye page "Delivery Management" ke liye banaya gaya hai jahan tailor apne tayar shuda (ready) kapron, unki delivery dates, aur customers ko SMS bhejne ka system manage kar sakta hai.
+
+### 1. Page Kaise Work Karta Hai? (How it works)
+- Jab kisi order ke kapre sil kar tayar ho jatay hain aur unka status "Ready" hota hai, tou wo is page par show hotay hain.
+- Is page se aap customers ko SMS bhej kar bata saktay hain ke unke kapre tayar hain (Order Ready for Collection).
+- Aap dekh saktay hain ke kon se orders ki delivery aaj (Due Today) karni hai, aur kon se orders overdue (waqt guzar chuka hai) ho gaye hain.
+- Jab customer apne kapre lene aata hai, tou aap yahin se order ko "Delivered" mark kar saktay hain (Check mark daba kar).
+
+### 2. Top Stats / Cards (Jin par click kar ke filter hota hai)
+In boxes par click karne se table ka data filter ho jata hai:
+- **Ready Customers:** Total kitne customers ke kapre tayar hain.
+- **Ready:** Kitne kapre shelf par hain jo abhi collect hone hain.
+- **Due Today:** Kitne kapron ka aaj wada (promise date) kiya gaya tha.
+- **Reminder Due:** Kin customers ko follow-up SMS (reminder) bhejne ka time aa gaya hai.
+- **Overdue:** Kin orders ki due date guzar chuki hai aur unko follow-up ki zaroorat hai.
+
+### 3. Top Buttons (Upar diye gaye main buttons)
+- **"Extend Due Dates" (Calendar Icon):** Is button par click karne se ek popup (modal) open hota hai jis se aap tamam pending orders ki due date aage barha saktay hain (jaise agar chuttiyon ki wajah se kaam late ho).
+- **"Notify Ready Orders" (Message Icon):** Jin orders ka status 'Notification Needed' hai, un sabhi customers ko ek sath SMS bhej kar notify karne ke liye ye button use hota hai.
+
+### 4. Filter Pills (Table ke upar wale chote buttons)
+Table ke upar alag alag tabs/buttons hain jin ko click kar ke aap specific orders dekh saktay hain:
+- **All:** Sab tayar orders dekhein.
+- **Ready:** Wo orders jo ready hain par abhi collect nahi hue.
+- **Due Today:** Sirf aaj ki due date wale orders.
+- **Notification Needed:** Jin customers ko abhi tak kapre tayar hone ka SMS nahi bheja gaya.
+- **Reminder Due:** Jin ko pehle SMS bheja tha par wo abhi tak nahi aaye, unko dobara yaad dilane wale orders.
+- **Upcoming:** Aane wale dino ki deliveries.
+- **SMS Failed:** Jin customers ko SMS bheja par send nahi hua (fail ho gaya).
+- **Overdue:** Jin ki date nikal chuki hai.
+
+### 5. Table aur uske columns (List of Orders)
+Table mein har row ek order ko zahir karti hai, jis mein ye details hoti hain:
+- **Checkbox:** Bulk SMS bhejne ke liye orders ko select karne ke liye.
+- **Order ID:** Order ka number.
+- **Customer:** Customer ka naam aur phone number.
+- **Garment:** Kapre ki kism (Garment) aur kitne pieces hain.
+- **Due Date:** Delivery ki date aur kapre kab tayar hue thay.
+- **Status:** Badge show hota hai (Ready, Scheduled, Delivered, Overdue aur sath mein tick icon agar notify ho chuka ho).
+- **SMS History:** Kitne SMS bheje gaye aur kab. Is par click kar ke poori history ka popup khul jata hai.
+- **Reminder:** Kitne din se wait kar rahe hain aur agla reminder kab bhejna hai.
+- **Actions:** (Right side par chote buttons)
+
+### 6. Action Buttons (Har table row ke end mein diye gaye buttons)
+- **Eye Icon (View Order):** Ise click karne se ek bada popup khulta hai jis mein order ki full detail, payment (Advance aur Balance Due), aur collection timeline (Order Created -> Ready -> Collected) nazar aati hai. Agar payment balance baki hai tou alert show karta hai ke "Collect the balance before handing over".
+- **Message Icon (Send SMS):** Agar customer ko SMS bhejna ya reminder dena hai tou ise click kar ke confirm kiya jata hai aur direct SMS send hota hai.
+- **Check Icon (Mark Delivered):** Jab customer kapre le jaye, tou isay click kar ke confirm karte hain. Is se order ka status "Delivered" ho jata hai aur wo successfully record ho jata hai.
+- **User Icon (View Customer):** Ise click karne se customer ki profile/page open ho jata hai jahan uski purani history waghaira hogi.
+
+### 7. Bulk Action Bar (Selection ke baad)
+- Jab aap table mein kisi order ko tick (checkbox) karte hain, toh table ke upar ek blue bar zahir hoti hai (Bulk Bar) jis par **"Clear"** aur **"Send SMS"** ke buttons hotay hain. Yahan se aap ek sath multiple selected customers ko SMS bhej saktay hain.

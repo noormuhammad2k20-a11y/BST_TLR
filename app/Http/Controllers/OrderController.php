@@ -27,7 +27,7 @@ class OrderController extends Controller
 
     public function index()
     {
-        $this->service->flagOverdueOrders();
+        app(\App\Services\DeliveryAttentionService::class)->run();
 
         $orders = Order::query()
             ->with(['customer:id,name,phone,city', 'staff:id,name'])
@@ -42,9 +42,9 @@ class OrderController extends Controller
             ->select('id', 'code', 'name', 'phone', 'email', 'type', 'city', 'notes', 'created_at')
             ->withCount('orders')
             ->withSum('orders as orders_total', 'total')
-            ->with(['measurements' => fn ($q) => $q->select(
-                array_merge(['id', 'customer_id', 'garment_type', 'unit', 'details', 'order_item_piece_id'], \App\Models\Measurement::FIELDS)
-            )])
+            ->with(['measurements' => fn ($q) => $q->savedSets()->select(
+                array_merge(['id', 'customer_id', 'garment_type', 'unit', 'details', 'order_item_piece_id', 'updated_at'], \App\Models\Measurement::FIELDS)
+            )->with('piece.item')])
             ->orderBy('name')
             ->get()
             ->map(fn (Customer $c) => [
@@ -57,9 +57,10 @@ class OrderController extends Controller
                 'city'         => $c->city,
                 'orders'       => $c->orders_count,
                 'spent'        => (float) ($c->orders_total ?? 0),
+                'due'          => app(\App\Services\CustomerLedger::class)->statement($c)['due'],
                 'since'        => $c->created_at?->format('M Y'),
                 'notes'        => $c->notes ?? '',
-                'measurements' => $c->measurements->map(fn($m) => array_merge($m->toArray(), ['profile_key' => $m->piece?->profile['key'] ?? \App\Services\MeasurementProfiles::infer($m->garment_type)])),
+                'measurements' => $c->measurements->map(fn($m) => array_merge($m->attributesToArray(), ['product_service_id' => $m->piece?->item?->product_service_id, 'profile_key' => $m->piece?->profile['key'] ?? \App\Services\MeasurementProfiles::infer($m->garment_type)])),
             ]);
 
         $activeServices = ProductService::active()
@@ -73,27 +74,11 @@ class OrderController extends Controller
         // login accounts, so a tailor who never signs in can still be assigned.
         $tailors = Staff::active()->orderBy('name')->get(['id', 'name', 'per_suit_rate']);
 
-        $timeSlots = $this->timeSlots();
-
-        $autoStatus = [
-            'enabled'       => Settings::bool('auto_status_enabled'),
-            'unit'          => Settings::str('auto_status_unit') === 'minutes' ? 'minutes' : 'hours',
-            // Delay per status, so the board can count down every automated hop
-            // rather than only the first one. Zero means "not automated".
-            'delays'        => collect(Order::AUTO_ADVANCE)
-                ->map(fn (array $stage) => Settings::int($stage['setting']))
-                ->all(),
-            'next'          => collect(Order::AUTO_ADVANCE)
-                ->map(fn (array $stage) => $stage['to'])
-                ->all(),
-            'pending_hours' => max(Settings::int('auto_status_pending_hours'), 1),
-        ];
-
         $extensionReasons = $this->extensionReasons();
 
         return view('orders.index', compact(
             'orders', 'customers', 'activeServices', 'tailors',
-            'timeSlots', 'autoStatus', 'extensionReasons'
+            'extensionReasons'
         ));
     }
 
@@ -117,6 +102,8 @@ class OrderController extends Controller
 
     public function show(Order $order): JsonResponse
     {
+        app(\App\Services\OrderAutoProgress::class)->run();
+        $order->refresh();
         $order->load([
             'customer',
             'staff:id,name',
@@ -187,39 +174,36 @@ class OrderController extends Controller
         ]);
     }
 
-    /** Explicit collection notice; notification acceptance does not prove delivery. */
     public function notify(Request $request, Order $order): JsonResponse
     {
-        $validated = $request->validate(['mark_ready' => ['nullable', 'boolean']]);
-        if (($validated['mark_ready'] ?? false) && $order->status !== 'Ready') {
-            $order = $this->service->changeStatus($order, 'Ready', 'Marked ready before notifying the customer');
-        }
-        $result = $this->dispatchCustomerNotice($order->load('customer'), 'order-ready');
-        if ($result['sent'] && $result['status'] !== 'duplicate') $this->service->markNotified($order);
-        return response()->json(['success' => true,
-            'message' => $result['sent'] ? 'Collection notice accepted for sending.' : $result['error'],
-            'notification' => $result, 'order' => $this->serialize($order->refresh()->loadPaymentTotals())]);
+        $action = $this->service->markReady($order);
+        $fresh = $action['order'];
+        $sms = $fresh->ready_sms_state ?? 'not_sent';
+        return response()->json(['success' => true, 'changed' => $action['changed'],
+            'message' => $action['notification']['message'],
+            'notification' => ['sent' => $sms === 'sent', 'status' => $sms],
+            'order' => $this->serialize($fresh->loadPaymentTotals())]);
+    }
+
+    public function retrySms(Request $request, Order $order): JsonResponse
+    {
+        $data = $request->validate(['attempt_id' => ['required', 'uuid']]);
+        $result = \App\Services\CustomerNotificationDispatcher::dispatch('order-ready', $order, ['retry_attempt' => $data['attempt_id']]);
+        return response()->json(['success' => true, 'notification' => $result,
+            'message' => $result['sent'] ? 'Pickup SMS accepted.' : ($result['error'] ?? 'SMS retry failed.'),
+            'order' => $this->serialize($order->fresh()->loadPaymentTotals())]);
     }
 
     public function bulkNotify(Request $request): JsonResponse
     {
         $validated = $request->validate(['order_ids' => ['required', 'array', 'min:1', 'max:200'],
             'order_ids.*' => ['integer', 'exists:orders,id']]);
-        $orders = Order::with('customer:id,name,phone')->whereIn('id', $validated['order_ids'])
-            ->where('status', 'Ready for Verification')->get();
-        if ($orders->isEmpty()) return response()->json(['success' => false,
-            'message' => 'None of the selected orders are awaiting verification.', 'sent' => 0], 422);
-        $accepted = 0; $failed = [];
-        foreach ($orders as $order) {
-            $order = $this->service->changeStatus($order, 'Ready', 'Garments manually verified by staff');
-            $result = $this->dispatchCustomerNotice($order, 'order-ready');
-            if (!$result['sent']) { $failed[] = $order->display_number; continue; }
-            if ($result['status'] !== 'duplicate') $this->service->markNotified($order);
-            $accepted++;
+        $ids = array_values(array_unique($validated['order_ids']));
+        foreach (Order::whereIn('id', $ids)->get() as $order) {
+            $this->service->prepareForCollection($order);
         }
-        return response()->json(['success' => true, 'sent' => $accepted, 'accepted' => $accepted,
-            'promoted' => $orders->count(), 'skipped' => count($validated['order_ids']) - $orders->count(),
-            'failed' => $failed, 'message' => sprintf('%d notice(s) accepted; %d failed. %d order(s) marked Ready.', $accepted, count($failed), $orders->count())]);
+        $result = app(\App\Services\CollectionNotifications::class)->sendOrders($ids);
+        return response()->json($result + ['ready'=>$result['promoted'], 'accepted'=>$result['sent'], 'sms_failed'=>count($result['failed'])]);
     }
 
     /**
@@ -254,14 +238,14 @@ class OrderController extends Controller
 
             $this->service->changeStatus(
                 $order,
-                $order->status === 'Overdue' ? 'Stitching' : $order->status,
+                $order->status === 'Overdue' ? 'In Progress' : $order->status,
                 sprintf('Delivery extended by %d day(s): %s', $validated['days'], $validated['reason'])
             );
 
             // Tell the customer, using the shop's DUE DATE EXTENDED template.
             $result = $this->dispatchCustomerNotice($order->fresh()->load('customer'), 'due-extended', [
-                'newDate' => Dates::format($order->fresh()->delivery_date, 'To be confirmed'),
-                'oldDate' => Dates::format($oldDate, 'the original date'),
+                'newDate' => Dates::format($order->fresh()->delivery_date, ''),
+                'oldDate' => Dates::format($oldDate, ''),
                 'reason'  => $validated['reason'],
             ]);
 
@@ -309,15 +293,18 @@ class OrderController extends Controller
         return response()->json([
             'success' => true,
             'config'  => $config,
+            'payment_due' => $order->balance_due,
+            'dues' => app(\App\Services\CustomerLedger::class)->orderDues($order),
+            'customer_due' => $order->customer ? app(\App\Services\CustomerLedger::class)->statement($order->customer)['due'] : $order->balance_due,
             'receipt' => [
                 'store'       => $config['show_logo'] ? (Settings::str('store_name') ?: 'Atelier') : null,
-                'logo'        => $config['show_logo'] ? (Settings::str('logo_path') ?: null) : null,
+                'logo'        => $config['show_logo'] ? (Settings::brandingUrl('logo') ?: null) : null,
                 'tagline'     => Settings::str('tagline') ?: null,
                 'address'     => Settings::str('address') ?: null,
                 'phone'       => Settings::str('phone') ?: null,
                 'footer'      => $config['footer'] ?: null,
                 'terms'       => $config['show_terms'] ? ($config['terms'] ?: null) : null,
-                'stamp'       => $config['show_stamp'] ? (Settings::str('stamp_path') ?: null) : null,
+                'stamp'       => $config['show_stamp'] ? (Settings::brandingUrl('stamp') ?: null) : null,
                 'width'       => $config['width'],
                 'order'       => $order->display_number,
                 'invoice'     => $order->display_invoice,
@@ -380,7 +367,7 @@ class OrderController extends Controller
      */
     public function live(): JsonResponse
     {
-        // Statuses were reconciled on the normal page/action request.
+        app(\App\Services\OrderAutoProgress::class)->run();
 
         $orders = Order::query()
             ->with('customer:id,name,phone')
@@ -394,11 +381,11 @@ class OrderController extends Controller
             'counts' => [
                 'All'         => $orders->count(),
                 'Received' => $orders->where('status', 'Received')->count(),
-                'Ready for Verification' => $orders->where('status', 'Ready for Verification')->count(),
                 'Ready' => $orders->where('status', 'Ready')->count(),
                 'Delivered' => $orders->where('status', 'Delivered')->count(),
-                'Pending'     => $orders->where('status', 'Pending')->count(),
-                'Stitching' => $orders->where('status', 'Stitching')->count(),
+                'Pending' => $orders->where('status', 'Pending')->count(),
+                'Stitching' => $orders->whereIn('status', ['Stitching', 'In Progress'])->count(),
+                'Ready for Verification' => $orders->where('status', 'Ready for Verification')->count(),
                 'Overdue'     => $orders->filter(fn (Order $o) => $o->is_overdue)->count(),
                 'Due Today'   => $orders->filter(fn (Order $o) => $o->is_due_today)->count(),
             ],
@@ -440,7 +427,7 @@ class OrderController extends Controller
             $clean = rtrim(rtrim(number_format((float) $value, 2, '.', ''), '0'), '.');
 
             $rows[] = [
-                'label' => $profile['labels'][$field] ?? Measurement::label($field),
+                'label' => Measurement::label($field, $profile['labels'][$field] ?? null),
                 'value' => $clean === '' ? '0' : $clean,
             ];
         }
@@ -581,7 +568,7 @@ class OrderController extends Controller
             'garments' => $order->lineItems()->with('pieces.measurement')->get()->map(fn($item) => [
                 'id' => $item->id, 'product_service_id' => $item->product_service_id, 'name' => $item->name,
                 'quantity' => $item->quantity, 'unit_price' => $item->unit_price, 'subtotal' => $item->subtotal, 'fabric' => $item->fabric ?? '', 'style_notes' => $item->style_notes ?? '',
-                'pieces' => $item->pieces->map(fn($piece) => ['id' => $piece->id, 'unit' => $piece->unit, 'profile' => $piece->profile,
+                'pieces' => $item->pieces->map(fn($piece) => ['id' => $piece->id, 'unit' => $piece->unit, 'profile' => Measurement::displayProfile($piece->profile ?? []),
                     'values' => $piece->measurement ? array_merge($piece->measurement->only(Measurement::FIELDS), $piece->measurement->details ?? []) : (object)[]])->all(),
             ])->all(),
             'id'        => $order->display_number,
@@ -599,6 +586,7 @@ class OrderController extends Controller
             'advance'   => (float) $order->advance,
             'paid'      => round($paid, 2),
             'balance'   => round(max((float) $order->total - $paid, 0), 2),
+            ...app(\App\Services\CustomerLedger::class)->orderDues($order),
             'due'       => $order->due_label,
             'dueDate'   => $order->delivery_date?->toIso8601String() ?? now()->toIso8601String(),
             'slot'      => $order->time_slot ?? '',
@@ -616,6 +604,9 @@ class OrderController extends Controller
             'stageSince' => $order->stage_since_at->toIso8601String(),
             'notified'  => $order->notified_at !== null,
             'notes'     => $order->notes ?? '',
+            'schedule' => \App\Services\DeliveryTiming::describe($order),
+            'smsState' => $order->ready_sms_state ?? ($order->notified_at ? 'sent' : 'not_sent'),
+            'smsAttemptId' => $order->ready_sms_attempt_id,
             'overdue'   => $order->is_overdue,
             'atRisk'    => $order->is_at_risk,
             'dueToday'  => $order->is_due_today,
@@ -628,14 +619,6 @@ class OrderController extends Controller
     private function dispatchCustomerNotice(Order $order, string $templateId, array $extra = []): array
     {
         return \App\Services\CustomerNotificationDispatcher::dispatch($templateId, $order, $extra);
-    }
-
-    /**
-     * @return array<int, string>
-     */
-    private function timeSlots(): array
-    {
-        return Settings::list('delivery_slots');
     }
 
     /**

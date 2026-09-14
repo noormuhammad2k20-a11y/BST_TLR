@@ -16,10 +16,23 @@ class Customer extends Model
         'last_visit_at'  => 'datetime',
         'loyalty_score'  => 'float',
         'is_active'      => 'boolean',
+        'anonymized_at'  => 'datetime',
     ];
 
     protected static function booted(): void
     {
+        static::saving(function (Customer $customer) {
+            if ($customer->anonymized_at) return;
+            if ($customer->isDirty('phone')) {
+                // Formatting-only edits must not break an existing legacy duplicate.
+                if ($customer->exists && \App\Services\CustomerLifecycle::phoneKey($customer->phone)
+                    === \App\Services\CustomerLifecycle::phoneKey($customer->getRawOriginal('phone'))) return;
+                if ($existing = \App\Services\CustomerLifecycle::matchingPhone((string)$customer->phone, $customer->id)) {
+                    \App\Services\CustomerLifecycle::rejectDuplicate($existing);
+                }
+                $customer->phone_key = \App\Services\CustomerLifecycle::phoneKey($customer->phone);
+            }
+        });
         // Give every customer a stable, human-readable code without needing a
         // second write: the code is derived from the auto-increment id.
         static::created(function (Customer $customer) {

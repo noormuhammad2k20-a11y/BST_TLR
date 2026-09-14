@@ -11,8 +11,10 @@
       'phone'    => $appSettings['phone'],
       'email'    => $appSettings['email'],
       'website'  => $appSettings['website'],
-      'logo'     => $appSettings['logo_path'],
-      'stamp'    => $appSettings['stamp_path'],
+      'logo'     => \App\Services\Settings::brandingUrl('logo'),
+      'stamp'    => \App\Services\Settings::brandingUrl('stamp'),
+      'showLogo' => (bool) $appSettings['receipt_show_logo'],
+      'showStamp'=> (bool) $appSettings['receipt_show_stamp'],
       'footer'   => $appSettings['receipt_footer'],
       'terms'    => $appSettings['invoice_terms'],
       'currency' => $appSettings['currency'],
@@ -417,6 +419,7 @@
     }
     .modal.modal-lg { max-width: 800px; }
     .modal.modal-xl { max-width: 1000px; }
+    .modal.modal-staff-profile { max-width: 1120px; }
     .modal-backdrop.show .modal { transform: scale(1) translateY(0); }
 
     /* Drawer */
@@ -603,31 +606,63 @@
     #sidebar .nav-item.active { background-color: var(--sb-fill, #4F46E5) !important; color: #fff !important; font-weight: 600; border-radius: 8px; }
     #sidebar .nav-item.active::before { display: none; }
     #sidebar .sb-badge { background-color: var(--sb-active, #f1f5f9) !important; color: var(--sb-muted, #64748b) !important; transition: all 0.35s; }
-    #sidebar .sb-foot { border-top-color: var(--sb-border, #e2e8f0) !important; transition: border-color 0.35s; }
-    #sidebar .sb-user-link:hover { background-color: var(--sb-hover, #f8fafc) !important; }
-    #sidebar .avatar { background-color: var(--sb-logo-bg, #0f172a) !important; transition: background-color 0.35s; }
-    #sidebar .sb-uname { color: var(--sb-text, #0f172a) !important; transition: color 0.35s; }
-    #sidebar .sb-urole { color: var(--sb-muted, #94a3b8) !important; transition: color 0.35s; }
-    #sidebar .fa-ellipsis-vertical { color: var(--sb-muted, #94a3b8) !important; }
 
-    /* Quick palette popover & swatches */
-    #sb-palette-popover {
-      position: absolute; bottom: calc(100% + 8px); left: 50%;
-      transform: translateX(-50%) scale(0.95); opacity: 0; pointer-events: none;
-      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1); z-index: 60;
+    /* === SIDEBAR COLLAPSE === */
+    #sidebar {
+      transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1), transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s ease, background-color 0.35s ease, border-color 0.35s ease;
     }
-    #sb-palette-popover.show { transform: translateX(-50%) scale(1); opacity: 1; pointer-events: auto; }
-    .sb-swatch {
-      width: 36px; height: 36px; border-radius: 10px; cursor: pointer;
-      border: 3px solid transparent; transition: all 0.15s ease; position: relative;
+    #app-shell {
+      transition: margin-left 0.3s cubic-bezier(0.16, 1, 0.3, 1), margin-right 0.3s cubic-bezier(0.16, 1, 0.3, 1);
     }
-    .sb-swatch:hover { transform: scale(1.15); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
-    .sb-swatch.active { border-color: #4F46E5; box-shadow: 0 0 0 3px rgba(79,70,229,0.25); }
-    .sb-swatch .sb-check {
-      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-      font-size: 11px; opacity: 0; transition: opacity 0.15s;
+    @media (min-width: 768px) {
+      body.sidebar-collapsed #sidebar { width: 5rem; }
+      body.sidebar-collapsed #app-shell { margin-left: 5rem !important; }
+      html[dir="rtl"] body.sidebar-collapsed #app-shell { margin-left: 0 !important; margin-right: 5rem !important; }
+      
+      body.sidebar-collapsed #sidebar .sb-name,
+      body.sidebar-collapsed #sidebar .sb-sub,
+      body.sidebar-collapsed #sidebar .sb-label,
+      body.sidebar-collapsed #sidebar .sb-badge,
+      body.sidebar-collapsed #sidebar .sb-dropdown-chevron,
+      body.sidebar-collapsed #sidebar #sb-more-chevron,
+      body.sidebar-collapsed #sidebar .sb-child-active-dot,
+      body.sidebar-collapsed #sidebar .sb-text,
+      body.sidebar-collapsed #sidebar .sb-collapse-text {
+        display: none !important;
+      }
+      
+      body.sidebar-collapsed #sidebar .sb-head { padding-left: 0; padding-right: 0; justify-content: center; }
+      body.sidebar-collapsed #sidebar .nav-item { padding-left: 0; padding-right: 0; justify-content: center; }
+      body.sidebar-collapsed #sidebar .sb-dropdown-body { display: none !important; }
+      body.sidebar-collapsed .collapse-arrow { transform: rotate(180deg); transform-origin: center; }
+      body.sidebar-collapsed #sidebar .sb-logo { margin: 0; }
+      
+      body.sidebar-collapsed #sidebar .nav-item { position: relative; }
+      body.sidebar-collapsed #sidebar .nav-item:hover::after {
+        content: attr(title);
+        position: absolute;
+        left: 100%;
+        top: 50%;
+        transform: translateY(-50%);
+        margin-left: 0.5rem;
+        background: #0f172a;
+        color: #fff;
+        padding: 6px 10px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 500;
+        white-space: nowrap;
+        z-index: 50;
+        pointer-events: none;
+        opacity: 1;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      }
+      html.theme-dark body.sidebar-collapsed #sidebar .nav-item:hover::after {
+        background: #1e293b; border: 1px solid #334155;
+      }
     }
-    .sb-swatch.active .sb-check { opacity: 1; }
+
+
 
     /* ==================================================================
        Print
@@ -671,7 +706,6 @@
       #confirmation-modal,
       .modal-overlay,
       .modal-backdrop,
-      #sb-palette-popover,
       .no-print,
       [data-no-print] { display: none !important; }
 
@@ -707,73 +741,7 @@
       a[href]::after { content: none !important; }
     }
   </style>
-  <script id="sidebar-theme-init">
-    // Sidebar Theme — applied before first paint to prevent flash.
-    (function() {
-      var T = window.SIDEBAR_THEMES = {
-        white:    { n:'Classic White', bg:'#ffffff', text:'#0f172a', muted:'#64748b', border:'#e2e8f0', hover:'#f8fafc', active:'#eef2ff', accent:'#4F46E5', fill:'#4F46E5', logoBg:'#0f172a', logoText:'#fff', swatch:'#ffffff' },
-        slate:    { n:'Slate',         bg:'#0f172a', text:'#e2e8f0', muted:'#94a3b8', border:'#1e293b', hover:'#1e293b', active:'#1e2544', accent:'#818cf8', fill:'#4f46e5', logoBg:'#1e293b', logoText:'#e2e8f0', swatch:'#0f172a' },
-        graphite: { n:'Graphite',      bg:'#1c1c1e', text:'#e5e5e7', muted:'#8e8e93', border:'#2c2c2e', hover:'#2c2c2e', active:'#2a2a30', accent:'#64b5f6', fill:'#2563eb', logoBg:'#2c2c2e', logoText:'#e5e5e7', swatch:'#1c1c1e' },
-        navy:     { n:'Navy',          bg:'#1b2a4a', text:'#dce4f0', muted:'#8899b3', border:'#243556', hover:'#243556', active:'#253e68', accent:'#7dd3fc', fill:'#2563eb', logoBg:'#243556', logoText:'#dce4f0', swatch:'#1b2a4a' },
-        midnight: { n:'Midnight',      bg:'#111827', text:'#e5e7eb', muted:'#9ca3af', border:'#1f2937', hover:'#1f2937', active:'#1f1b3d', accent:'#a78bfa', fill:'#7c3aed', logoBg:'#1f2937', logoText:'#e5e7eb', swatch:'#111827' },
-        espresso: { n:'Espresso',      bg:'#1a1512', text:'#e8e0d8', muted:'#a09080', border:'#2a231e', hover:'#2a231e', active:'#352a1e', accent:'#d4a574', fill:'#92400e', logoBg:'#2a231e', logoText:'#e8e0d8', swatch:'#1a1512' },
-        steel:    { n:'Steel',         bg:'#293548', text:'#dce2ec', muted:'#8494a7', border:'#354460', hover:'#354460', active:'#3a5068', accent:'#5eead4', fill:'#0d9488', logoBg:'#354460', logoText:'#dce2ec', swatch:'#293548' },
-        onyx:     { n:'Onyx',          bg:'#09090b', text:'#e4e4e7', muted:'#71717a', border:'#18181b', hover:'#18181b', active:'#1e1e22', accent:'#fbbf24', fill:'#b45309', logoBg:'#18181b', logoText:'#e4e4e7', swatch:'#09090b' },
-      };
-
-      /* Display preferences live in the database so they follow the account
-         across devices. They are applied here, before first paint, to avoid a
-         flash of the previous theme. */
-      var D = window.APP_DISPLAY = @json($appDisplay);
-
-      function applySidebar(key) {
-        var t = T[key] || T.white;
-        var s = document.documentElement.style;
-        s.setProperty('--sb-bg', t.bg);
-        s.setProperty('--sb-text', t.text);
-        s.setProperty('--sb-muted', t.muted);
-        s.setProperty('--sb-border', t.border);
-        s.setProperty('--sb-hover', t.hover);
-        s.setProperty('--sb-active', t.active);
-        s.setProperty('--sb-accent', t.accent);
-        s.setProperty('--sb-logo-bg', t.logoBg);
-        s.setProperty('--sb-logo-text', t.logoText);
-        s.setProperty('--sb-fill', t.fill);
-        D.sidebarTheme = key;
-      }
-
-      /** Resolves light/dark/system into the class the stylesheet keys off. */
-      function prefersDark(mode) {
-        return mode === 'dark'
-          || (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-      }
-
-      function applyDisplay(overrides) {
-        Object.assign(D, overrides || {});
-
-        var root = document.documentElement;
-        root.classList.toggle('theme-dark', prefersDark(D.colorMode));
-        root.classList.toggle('compact-tables', !!D.compactTables);
-        root.style.setProperty('--brand', D.primaryColor || '#4F46E5');
-
-        var meta = document.querySelector('meta[name="theme-color"]');
-        if (meta) meta.setAttribute('content', prefersDark(D.colorMode) ? '#0B1120' : '#0F172A');
-
-        applySidebar(D.sidebarTheme);
-      }
-
-      window.applySidebarTheme = function (key) { applyDisplay({ sidebarTheme: key }); };
-      window.getActiveSidebarTheme = function () { return D.sidebarTheme || 'white'; };
-      window.applyDisplaySettings = applyDisplay;
-
-      applyDisplay();
-
-      // "System" has to keep tracking the OS after the page has loaded.
-      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function () {
-        if (D.colorMode === 'system') applyDisplay();
-      });
-    })();
-  </script>
+  @include('appearance.sidebar')
   @stack('styles')
 </head>
 
@@ -781,7 +749,7 @@
   <div id="app" class="flex min-h-screen">
     @include('layouts.sidebar')
 
-    <div class="flex-1 ml-64 flex flex-col">
+    <div id="app-shell" class="flex-1 ml-64 flex flex-col">
       @include('layouts.header')
 
       <main class="p-8 flex-1 bg-slate-50" id="spa-main">
@@ -1062,10 +1030,12 @@
       } else {
         content.innerHTML = '<div class="p-6">Unknown modal</div>';
       }
-      content.classList.remove('modal-xl', 'modal-lg');
-      if (name === 'add-order-wizard' || name === 'order-details' || name === 'customer-360') {
+      content.classList.remove('modal-xl', 'modal-lg', 'modal-staff-profile');
+      if (name === 'staff-profile') {
+        content.classList.add('modal-staff-profile');
+      } else if (name === 'add-order-wizard' || name === 'order-details' || name === 'customer-360' || name === 'delivery-details' || name === 'add-measurement') {
         content.classList.add('modal-xl');
-      } else if (name === 'add-measurement' || name === 'view-measurement'
+      } else if (name === 'view-measurement'
                  || name === 'thermal-receipt') {
         /* The receipt modal shows the customer slip and the workshop slip side
            by side, which needs roughly twice the width of a single 80mm slip. */
@@ -1229,7 +1199,7 @@
         .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
       const badgeClass = (status) => ({
-        'Received': 'badge-pending', 'Pending': 'badge-pending', 'Stitching': 'badge-progress', 'Ready for Verification': 'badge-trial',
+        'Received': 'badge-pending', 'In Progress': 'badge-progress',
         'Ready': 'badge-ready', 'Delivered': 'badge-delivered', 'Completed': 'badge-delivered',
       }[status] || 'badge-overdue');
 
@@ -1327,10 +1297,13 @@
 
       function poll(fn, interval = 30000) {
         let stopped = false;
+        let running = false;
 
         async function tick() {
-          if (stopped || document.hidden) return;
-          try { await fn(); } catch (e) { /* stay silent: polling must never nag */ }
+          if (stopped || running || document.hidden) return;
+          running = true;
+          try { await fn(); } catch (e) { /* polling stays quiet */ }
+          finally { running = false; }
         }
 
         const timer = setInterval(tick, interval);
@@ -1592,18 +1565,11 @@
       }
 
       function bindPrefetch() {
-        // The sidebar is the main navigation surface — warm it immediately so
-        // the very first click is already instant.
-        if ('requestIdleCallback' in window) {
-          requestIdleCallback(() => {
-            document.querySelectorAll('aside a[href]').forEach(a => prefetch(a.href));
-          }, { timeout: 2000 });
-        }
-
-        // Hovering anything else warms it too.
+        // Fetch only navigation the user is approaching; loading every sidebar
+        // page queues expensive work ahead of profile/API requests on local PHP.
         document.addEventListener('mouseover', (e) => {
           const a = e.target.closest?.('a[href]');
-          if (a && !a.target && !a.hasAttribute('download')) prefetch(a.href);
+          if (a && !a.target && !a.hasAttribute('download') && inFlight.size === 0) prefetch(a.href);
         }, { passive: true });
 
         // Touch has no hover; pointerdown still buys us ~100ms before the tap.

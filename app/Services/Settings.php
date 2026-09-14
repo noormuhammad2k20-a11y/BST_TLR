@@ -57,6 +57,7 @@ class Settings
         'invoice_terms'          => ['rule' => 'nullable|string|max:1000', 'default' => '',   'group' => 'invoice'],
 
         /* ----------------------------- Thermal printer -------------------- */
+        'delivery_print_receipt' => ['rule' => 'boolean', 'default' => '1', 'group' => 'printer'],
         'printer_width'        => ['rule' => 'nullable|in:58mm,80mm', 'default' => '80mm', 'group' => 'printer'],
         'receipt_show_logo'    => ['rule' => 'boolean', 'default' => '1', 'group' => 'printer'],
         'receipt_show_phone'   => ['rule' => 'boolean', 'default' => '1', 'group' => 'printer'],
@@ -75,7 +76,6 @@ class Settings
         'browser_notifications' => ['rule' => 'boolean', 'default' => '1', 'group' => 'notifications'],
         'sound_alerts'          => ['rule' => 'boolean', 'default' => '0', 'group' => 'notifications'],
         'payment_toasts'        => ['rule' => 'boolean', 'default' => '1', 'group' => 'notifications'],
-        'alert_days_before'     => ['rule' => 'nullable|integer|min:0|max:30', 'default' => '1', 'group' => 'notifications'],
         'repeat_alerts'         => ['rule' => 'boolean', 'default' => '1', 'group' => 'notifications'],
         'repeat_alert_hours'    => ['rule' => 'nullable|integer|min:1|max:72', 'default' => '3', 'group' => 'notifications'],
         'low_stock_alert'       => ['rule' => 'nullable|integer|min:0|max:9999', 'default' => '10', 'group' => 'notifications'],
@@ -86,24 +86,24 @@ class Settings
         'notify_low_stock'      => ['rule' => 'boolean', 'default' => '1', 'group' => 'notifications'],
 
         /* -------------------------------- Workflow ------------------------ */
-        'auto_status_enabled'       => ['rule' => 'boolean', 'default' => '1', 'group' => 'workflow'],
-        // Three timed stages only. Zero pauses a hop; verification/collection remain manual.
-        'auto_status_unit'          => ['rule' => 'nullable|in:hours,minutes', 'default' => 'hours', 'group' => 'workflow'],
-        'auto_status_received_delay'=> ['rule' => 'nullable|integer|min:0|max:10080', 'default' => '1', 'group' => 'workflow'],
-        'auto_status_pending_hours' => ['rule' => 'nullable|integer|min:0|max:10080', 'default' => '1', 'group' => 'workflow'],
-        'auto_status_progress_delay'=> ['rule' => 'nullable|integer|min:0|max:10080', 'default' => '24', 'group' => 'workflow'],
-        'auto_status_verify_delay'  => ['rule' => 'nullable|integer|min:0|max:10080', 'default' => '0', 'group' => 'workflow'],
-        'auto_status_ready_delay'   => ['rule' => 'nullable|integer|min:0|max:10080', 'default' => '0', 'group' => 'workflow'],
-        'auto_delivery_update'      => ['rule' => 'boolean', 'default' => '0', 'group' => 'workflow'],
-        // How long before the delivery date an unfinished order starts warning.
-        'at_risk_hours'             => ['rule' => 'nullable|integer|min:1|max:336', 'default' => '24', 'group' => 'workflow'],
-        'delivery_slots'    => ['rule' => 'nullable|string|max:500', 'default' => '11:00 AM - 12:00 PM|3:00 PM - 4:00 PM|5:00 PM - 6:00 PM', 'group' => 'workflow'],
+        'delivery_alert_hours' => ['rule' => 'required|integer|min:1|max:24', 'default' => '4', 'group' => 'workflow'],
         'extension_reasons' => ['rule' => 'nullable|string|max:500', 'default' => 'Power Outage|Fabric Delay|Public Holiday|Staff Shortage|Machine Repair', 'group' => 'workflow'],
 
         /* ----------------------------- Theme & display -------------------- */
+        'delivery_alerts_enabled' => ['rule'=>'boolean','default'=>'1','group'=>'collection'],
+        'delivery_alert_before_days' => ['rule'=>'required|integer|min:0|max:365','default'=>'1','group'=>'collection'],
+        'delivery_overdue_alerts_enabled' => ['rule'=>'boolean','default'=>'1','group'=>'collection'],
+        'collection_reminder_alerts_enabled' => ['rule'=>'boolean','default'=>'1','group'=>'collection'],
+        'collection_reminder_enabled' => ['rule'=>'boolean','default'=>'1','group'=>'collection'],
+        'collection_reminder_days' => ['rule'=>'required|integer|min:1|max:365','default'=>'7','group'=>'collection'],
+        'collection_reminder_sms_enabled' => ['rule'=>'boolean','default'=>'1','group'=>'collection'],
+        'delivery_dashboard_alerts_enabled' => ['rule'=>'boolean','default'=>'1','group'=>'collection'],
         'color_mode'     => ['rule' => 'nullable|in:light,dark,system', 'default' => 'light', 'group' => 'theme'],
         'primary_color'  => ['rule' => 'nullable|regex:/^#[0-9A-Fa-f]{6}$/', 'default' => '#4F46E5', 'group' => 'theme'],
         'sidebar_theme'  => ['rule' => 'nullable|in:white,slate,graphite,navy,midnight,espresso,steel,onyx', 'default' => 'white', 'group' => 'theme'],
+        // Included in backup/restore, but only the dedicated validated endpoint
+        // may write this pair. General Settings forms cannot submit stale copies.
+        'sidebar_appearance' => ['rule' => 'prohibited', 'default' => null, 'json' => true, 'group' => 'appearance'],
         'compact_tables' => ['rule' => 'boolean',                       'default' => '0', 'group' => 'theme'],
         'rows_per_page'  => ['rule' => 'nullable|integer|min:5|max:100', 'default' => '10', 'group' => 'theme'],
 
@@ -198,6 +198,9 @@ class Settings
     {
         $all = self::all();
         $all['sms_templates'] = self::smsTemplates();
+        foreach (['logo', 'stamp'] as $kind) {
+            $all[$kind.'_path'] = self::brandingUrl($kind);
+        }
 
         foreach (self::SCHEMA as $key => $meta) {
             if (!empty($meta['secret']) && filled($all[$key] ?? null)) {
@@ -207,6 +210,15 @@ class Settings
         }
 
         return $all;
+    }
+
+    /** Serve saved branding through the app, including subdirectory XAMPP installs. */
+    public static function brandingUrl(string $kind): string
+    {
+        $saved = self::str($kind.'_path');
+        return $saved === '' ? '' : route('receipts.branding', [
+            'kind' => $kind, 'v' => substr(hash('sha256', $saved), 0, 12),
+        ]);
     }
 
     /** Drop the memo after a write so the next read sees fresh values. */
@@ -439,6 +451,14 @@ class Settings
             ->map(function (array $default) use ($saved) {
                 $override = $saved->get($default['id']);
 
+                $legacyTexts = [
+                    '{shopName}: Dear {customerName}, your {garmentSummary} is ready for collection. Order: {orderID}. Balance due: {remainingBalance}. For assistance, call {shopPhone}.',
+                    '{shopName}: Dear {customerName}, your {garmentSummary} for order {orderID} is still awaiting collection. Please collect your garments. Balance due: {remainingBalance}. For assistance, call {shopPhone}.',
+                    '{shopName}: Dear {customerName}, the delivery date for order {orderID} has been updated from {oldDate} to {newDate}. Reason: {reason}. We apologize for the inconvenience.',
+                ];
+                if ($override && in_array($override['text'] ?? '', $legacyTexts, true)) $override['text'] = $default['text'];
+                if ($override && in_array($default['id'], ['order-ready', 'collection-reminder', 'due-extended'], true)) $override['name'] = $default['name'];
+
                 if ($override && SmsTemplateContent::containsRomanUrdu($override['text'] ?? '')) {
                     $override['text'] = $default['text'];
                 }
@@ -467,10 +487,11 @@ class Settings
     {
         return [
             ['id' => 'order-created',    'name' => 'ORDER CREATED',       'active' => true, 'event' => 'order.created',   'text' => "{shopName}: Dear {customerName}, your order {orderID} has been received. {garmentSummary}. Total: {totalAmount}, Advance: {advancePaid}, Balance: {remainingBalance}. Due: {dueDate}. Thank you."],
-            ['id' => 'order-ready',      'name' => 'ORDER READY',         'active' => true, 'event' => 'order.ready',     'text' => "{shopName}: Dear {customerName}, your {garmentSummary} is ready for collection. Order: {orderID}. Balance due: {remainingBalance}. For assistance, call {shopPhone}."],
+            ['id' => 'order-ready',      'name' => 'ORDER READY',         'active' => true, 'event' => 'order.ready',     'text' => "{shopName}: Dear {customerName}, good news! Your order {orderID} is now ready for collection. Balance due: Rs {remainingBalance}. Please collect your garments at your convenience. For assistance, contact us at {shopPhone}. Thank you for choosing {shopName}."],
+            ['id'=>'collection-reminder','name'=>'READY ORDER REMINDER','active'=>true,'event'=>'order.collection-reminder','text'=>"{shopName}: Dear {customerName}, this is a friendly reminder that your order {orderID} is ready and still awaiting collection. Balance due: Rs {remainingBalance}. Kindly collect your garments at your convenience. For assistance, call {shopPhone}. Thank you."],
             ['id' => 'payment-received', 'name' => 'PAYMENT RECEIVED',    'active' => true, 'event' => 'payment.received', 'text' => "{shopName}: Dear {customerName}, we have received your payment of {paidAmount} for order {orderID}. Remaining balance: {remainingBalance}. Thank you."],
             ['id' => 'due-reminder',     'name' => 'DUE DATE REMINDER',   'active' => true, 'event' => 'order.due',       'text' => "{shopName}: Reminder for {customerName}: Order {orderID} ({garmentSummary}) is scheduled for delivery on {dueDate}. Balance due: {remainingBalance}. Contact: {shopPhone}."],
-            ['id' => 'due-extended',     'name' => 'DUE DATE EXTENDED',   'active' => true, 'event' => 'order.extended',   'text' => "{shopName}: Dear {customerName}, the delivery date for order {orderID} has been updated from {oldDate} to {newDate}. Reason: {reason}. We apologize for the inconvenience."],
+            ['id' => 'due-extended',     'name' => 'DELIVERY RESCHEDULED',   'active' => true, 'event' => 'order.extended',   'text' => "{shopName}: Dear {customerName}, delivery for order {orderID} has been rescheduled from {oldDate} to {newDate}. Reason: {reason}. We sincerely apologize for the inconvenience and appreciate your patience. For assistance, contact {shopPhone}."],
             ['id' => 'final-receipt',    'name' => 'FINAL RECEIPT',       'active' => true, 'event' => 'order.delivered',  'text' => "{shopName}: Dear {customerName}, order {orderID} is fully paid. Total: {totalAmount}. Balance: {remainingBalance}. Thank you for choosing {shopName}."],
         ];
     }

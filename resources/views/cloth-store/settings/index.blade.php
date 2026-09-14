@@ -15,6 +15,8 @@
   </div>
 </div>
 
+@include('license.status')
+
 <div class="page flex gap-6">
   <!-- Settings Sidebar -->
   <div class="w-64 shrink-0">
@@ -155,20 +157,7 @@
 
       <!-- Panel: System & Backup -->
       <div id="panel-system" class="settings-panel hidden">
-        <h2 class="text-lg font-bold text-slate-800 border-b border-slate-200 pb-3 mb-5">11. Appearance</h2>
-        <div class="mb-8">
-          <label class="block text-xs font-bold text-slate-700 uppercase mb-2">Theme Mode</label>
-          <div class="flex gap-4">
-             <label class="cursor-pointer">
-                <input type="radio" name="theme_mode" value="light" {{ $settings['theme_mode'] == 'light' ? 'checked' : '' }} class="hidden peer">
-                <div class="px-4 py-2 border border-slate-200 rounded-lg text-sm peer-checked:border-indigo-600 peer-checked:bg-indigo-50 peer-checked:text-indigo-700 font-medium"><i class="fa-solid fa-sun mr-1"></i> Light Mode</div>
-             </label>
-             <label class="cursor-pointer">
-                <input type="radio" name="theme_mode" value="dark" {{ $settings['theme_mode'] == 'dark' ? 'checked' : '' }} class="hidden peer">
-                <div class="px-4 py-2 border border-slate-200 rounded-lg text-sm peer-checked:border-indigo-600 peer-checked:bg-slate-900 peer-checked:text-white font-medium"><i class="fa-solid fa-moon mr-1"></i> Dark Mode</div>
-             </label>
-          </div>
-        </div>
+        <sidebar-appearance-settings class="mb-8"></sidebar-appearance-settings>
 
         <h2 class="text-lg font-bold text-slate-800 border-b border-slate-200 pb-3 mb-5">12. Backup & Data</h2>
         <div class="bg-indigo-50 border border-indigo-100 rounded-lg p-5 flex items-center justify-between mb-4">

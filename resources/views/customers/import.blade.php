@@ -68,7 +68,7 @@
       <div class="p-5 space-y-3 text-sm text-slate-600">
         <p>Your own column names are fine — nothing has to be renamed. The next step shows every column and lets you point it at the right field.</p>
         <p>One row per customer. Any measurement columns on that row become a measurement sheet for them.</p>
-        <p class="text-xs text-slate-400">Recognised headings include Name, Mobile No, City, Chest, Chest Losing, Ghera, Koni, Pancho and many spellings of each.</p>
+        <p class="text-xs text-slate-400">Recognised headings include Name, Mobile No, City, Chest, Losing, Galla, Koni, Pancho and many spellings of each.</p>
         <a href="{{ route('customers.import.template') }}"
            class="inline-flex items-center gap-2 text-xs font-semibold text-slate-900 hover:underline pt-1">
           <i class="fa-solid fa-download text-[10px]"></i> Download a blank template

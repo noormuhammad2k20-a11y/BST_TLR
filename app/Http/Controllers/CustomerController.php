@@ -6,6 +6,7 @@ use App\Models\Customer;
 use App\Models\Order;
 use App\Services\ActivityLogger;
 use App\Services\StatsService;
+use App\Services\CustomerLifecycle;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -46,15 +47,20 @@ class CustomerController extends Controller
                 'cid'     => $o->customer?->display_code,
                 'status'  => $o->status,
                 'amount'  => (float) $o->total,
-                'balance' => (float) $o->balance,
+                'balance' => $o->balance_due,
                 'due'     => $o->due_label,
                 'garment' => $o->primary_item_name,
                 'date'    => $o->created_at->format('M d, Y'),
             ]);
 
         $stats = $this->stats();
+        $stats['with_dues'] = $customers->where('due','>',0)->count();
+        $archivedCustomers = Customer::onlyTrashed()->whereNull('anonymized_at')
+            ->withCount('orders')->withSum('orders as orders_total','total')
+            ->withSum('orders as orders_balance','balance')->orderBy('name')->get()
+            ->map(fn (Customer $c) => $this->serialize($c));
 
-        return view('customers.index', compact('customers', 'orders', 'stats'));
+        return view('customers.index', compact('customers', 'archivedCustomers', 'orders', 'stats'));
     }
 
     public function store(Request $request)
@@ -105,10 +111,7 @@ class CustomerController extends Controller
 
     public function destroy(Request $request, Customer $customer)
     {
-        $name = $customer->name;
-        $customer->delete();
-
-        ActivityLogger::log('Deleted Customer', "{$name} was removed", 'customers', null, [], 'deleted');
+        app(CustomerLifecycle::class)->archive($customer);
         $this->flush();
 
         if ($request->expectsJson()) {
@@ -116,6 +119,24 @@ class CustomerController extends Controller
         }
 
         return redirect()->route('customers.index')->with('success', 'Customer archived; history retained.');
+    }
+
+    public function restore(int $customer): JsonResponse
+    {
+        $record = app(CustomerLifecycle::class)->restore($customer);
+        $this->flush();
+        return response()->json(['success'=>true,'message'=>'Customer restored successfully.',
+            'customer'=>$this->serialize($record->loadCount('orders')->loadSum('orders as orders_total','total')->loadSum('orders as orders_balance','balance'))]);
+    }
+
+    public function permanentlyDelete(Request $request, int $customer): JsonResponse
+    {
+        $data = $request->validate(['confirmation'=>['required','string',Rule::in(['DELETE'])]]);
+        $result = app(CustomerLifecycle::class)->permanentlyDelete($customer,$data['confirmation']);
+        $this->flush();
+        return response()->json(['success'=>true,'result'=>$result,'message'=>$result === 'anonymized'
+            ? 'Personal customer data removed. Orders, payments, invoices and business history retained.'
+            : 'Customer permanently deleted.']);
     }
 
     /**
@@ -138,11 +159,11 @@ class CustomerController extends Controller
                 'garment' => $o->primary_item_name,
                 'status'  => $o->status,
                 'amount'  => (float) $o->total,
-                'balance' => (float) $o->balance,
+                'balance' => $o->balance_due,
                 'due'     => $o->due_label,
                 'date'    => $o->created_at->format('M d, Y'),
             ]),
-            'measurements' => $customer->measurements()->latest()->get()->map(fn ($m) => [
+            'measurements' => $customer->measurements()->savedSets()->latest()->get()->map(fn ($m) => [
                 'id'           => $m->id,
                 'garment_type' => $m->garment_type,
                 'unit'         => $m->unit,
@@ -167,6 +188,13 @@ class CustomerController extends Controller
 
     private function validated(Request $request, ?Customer $customer = null): array
     {
+        $phone = $request->input('phone');
+        if (is_string($phone)) {
+            $phoneChanged = !$customer || CustomerLifecycle::phoneKey($phone) !== CustomerLifecycle::phoneKey($customer->phone);
+            if ($phoneChanged && ($existing = CustomerLifecycle::matchingPhone($phone, $customer?->id))) {
+                CustomerLifecycle::rejectDuplicate($existing);
+            }
+        }
         return $request->validate([
             'name'    => ['required', 'string', 'max:255'],
             'phone'   => [
@@ -185,7 +213,8 @@ class CustomerController extends Controller
 
     private function serialize(Customer $c): array
     {
-        $spent = (float) ($c->orders_total ?? 0);
+        $ledger = app(\App\Services\CustomerLedger::class)->statement($c);
+        $spent = (float) $ledger['sales'];
         $count = (int) ($c->orders_count ?? 0);
 
         return [
@@ -200,12 +229,16 @@ class CustomerController extends Controller
             'orders'    => $count,
             'spent'     => $spent,
             'avg'       => $count > 0 ? round($spent / $count) : 0,
-            'due'       => (float) ($c->orders_balance ?? 0),
+            'due'       => (float) $ledger['due'],
+            'paid'      => (float) $ledger['paid'],
+            'payment_status' => $ledger['status'],
             'lastVisit' => $c->last_visit_label,
             'since'     => $c->created_at?->format('M Y'),
             'loyalty'   => $c->loyalty,
-            'behavior'  => $c->behavior_label,
+            'behavior'  => $ledger['status'],
             'notes'     => $c->notes ?? '',
+            'archived'  => $c->trashed(),
+            'archived_at' => $c->deleted_at?->format('d M Y'),
         ];
     }
 

@@ -139,7 +139,7 @@ class DatabaseSeeder extends Seeder
             $customerIds[] = DB::table('customers')->where('phone',$phone)->value('id');
         }
 
-        $statuses=['Delivered','Delivered','Ready','Ready for Verification','Stitching','Delivered','Ready','Ready','Delivered','Ready'];
+        $statuses=['Delivered','Delivered','Ready','In Progress','In Progress','Delivered','Ready','Ready','Delivered','Ready'];
         foreach (range(0,9) as $i) {
             $number='SEED-ORD-'.str_pad((string)($i+1),3,'0',STR_PAD_LEFT);
             if (DB::table('orders')->where('order_number',$number)->exists()) continue;
@@ -155,8 +155,8 @@ class DatabaseSeeder extends Seeder
                 'garment'=>$services[$i][0],'fabric'=>['Wash & Wear','Cotton','Lawn','Khaddar','Boski'][$i%5],
                 'items'=>json_encode([['name'=>$services[$i][0],'qty'=>($i%3)+1,'price'=>$services[$i][2]]]),
                 'total'=>$total,'advance'=>$advance,'balance'=>$total-$advance,'status'=>$statuses[$i],
-                'priority'=>$i%4===0?'High':'Normal','progress'=>in_array($statuses[$i],['Delivered','Ready'])?100:65,
-                'delivery_date'=>$created->copy()->addDays(10),'time_slot'=>'4:00 PM - 5:00 PM',
+                'priority'=>$i%4===0?'High':'Normal','progress'=>in_array($statuses[$i],['Delivered','Ready'])?100:40,
+                'delivery_date'=>$created->copy()->addDays(10)->setTime(17,0),'time_slot'=>'5:00 PM',
                 'completed_at'=>$completed,'delivered_at'=>$statuses[$i]==='Delivered'?$completed->copy()->addDay():null,
                 'created_at'=>$created,'updated_at'=>now(),
             ]);
@@ -169,7 +169,7 @@ class DatabaseSeeder extends Seeder
             ]);
             $measurementId=DB::table('measurements')->where('order_id',$order->id)->value('id');
             DB::table('orders')->where('id',$order->id)->update(['measurement_id'=>$measurementId]);
-            if ($statuses[$i] !== 'Stitching') {
+            if ($statuses[$i] !== 'In Progress') {
                 DB::table('staff_work_logs')->updateOrInsert(['order_id'=>$order->id], [
                     'staff_id'=>$tailor->id,'garment'=>$services[$i][0],'quantity'=>($i%3)+1,
                     'rate'=>$tailor->per_suit_rate,'amount'=>$tailor->per_suit_rate*(($i%3)+1),
@@ -195,7 +195,7 @@ class DatabaseSeeder extends Seeder
 
         // Backfill a stitching entry for every preserved order whose garment
         // was already finished, without altering existing work-log history.
-        $finished=DB::table('orders')->whereIn('status',['Ready','Ready for Verification','Delivered','Completed'])
+        $finished=DB::table('orders')->whereIn('status',['Ready','Delivered'])
             ->whereNotNull('staff_id')->orderBy('id')->get();
         foreach($finished as $order) {
             if(DB::table('staff_work_logs')->where('order_id',$order->id)->exists()) continue;
@@ -351,7 +351,7 @@ class DatabaseSeeder extends Seeder
             $isRead = $index >= 6;
             $message = match ($order->status) {
                 'Delivered' => "{$order->order_number} for {$order->customer_name} was delivered successfully.",
-                'Ready', 'Ready for Verification' => "{$order->order_number} for {$order->customer_name} is ready for collection.",
+                'Ready' => "{$order->order_number} for {$order->customer_name} is ready for collection.",
                 default => "Stitching is in progress for {$order->order_number} ({$order->customer_name}).",
             };
 

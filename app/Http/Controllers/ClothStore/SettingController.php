@@ -71,7 +71,7 @@ class SettingController extends Controller
         'notif_customer_due' => '1',
         'notif_expense_created' => '0',
 
-        'theme_mode' => 'light'
+
     ];
 
     public function index()

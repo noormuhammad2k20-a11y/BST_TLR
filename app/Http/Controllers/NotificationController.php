@@ -37,9 +37,7 @@ class NotificationController extends Controller
      */
     public function live(): JsonResponse
     {
-        // Raise any due-date reminders the shop's alert rules now call for.
-        // Throttled internally, so polling this endpoint cannot spam the bell.
-        NotificationService::sweepDueOrders();
+        // Read-only: scheduled delivery attention creates alerts.
 
         return response()->json([
             'unread'        => NotificationService::unreadCount(),

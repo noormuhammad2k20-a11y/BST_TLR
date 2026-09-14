@@ -20,6 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // Timezone and language come from Settings, so they have to be applied
         // before any controller resolves a date or renders a translated string.
         $middleware->web(append: [
+            \App\Http\Middleware\EnsureLicensed::class,
             \App\Http\Middleware\ApplyShopSettings::class,
         ]);
 

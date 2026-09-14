@@ -51,6 +51,11 @@ class Staff extends Model
         return $this->hasMany(StaffPayment::class)->whereNull('reversed_at')->whereNull('reverses_payment_id')->orderByDesc('paid_on');
     }
 
+    public function paymentHistory(): HasMany
+    {
+        return $this->hasMany(StaffPayment::class)->orderByDesc('paid_on')->orderByDesc('id');
+    }
+
     public function workLogs(): HasMany
     {
         return $this->hasMany(StaffWorkLog::class)->orderByDesc('completed_on');
@@ -115,41 +120,44 @@ class Staff extends Model
         return (float) ($this->payments_sum_amount ?? $this->payments()->sum('amount'));
     }
 
-    /**
-     * What the shop owes this person for a given month.
-     *
-     * Monthly staff are owed their salary; piece-rate staff are owed whatever
-     * they stitched that month; "Both" is exactly what it says. Whatever has
-     * already been handed over for that month comes off the top.
-     */
+    /** Earnings use the rate stored at completion; payments settle one calendar period. */
     public function dueFor(?string $period = null): array
     {
-        $period ??= now()->format('Y-m');
-
-        [$year, $month] = array_map('intval', explode('-', $period));
-
-        $earnedFromWork = (float) $this->workLogs()
-            ->whereYear('completed_on', $year)
-            ->whereMonth('completed_on', $month)
-            ->sum('amount');
-
-        $salary = match ($this->salary_type) {
-            'Monthly'  => (float) $this->monthly_salary,
-            'Per Suit' => $earnedFromWork,
-            default    => (float) $this->monthly_salary + $earnedFromWork,
-        };
-
-        $paid = (float) $this->payments()->where('period', $period)->sum('amount');
-
-        $remaining = round(max($salary - $paid, 0), 2);
+        $period ??= \App\Services\StaffPayPeriod::current($this->payment_period ?? 'Monthly');
+        [$start, $end, $frequency] = \App\Services\StaffPayPeriod::bounds($period);
+        $work = $this->workLogs()->where('completed_on', '>=', $start->toDateString())->where('completed_on', '<', $end->addDay()->toDateString())->get();
+        $workCents = $work->sum(fn ($w) => (int) round((float) $w->amount * 100));
+        // A monthly retainer is apportioned by calendar day for shorter cycles.
+        $salaryCents = 0;
+        if (in_array($this->salary_type, ['Monthly', 'Both'], true)) {
+            $monthlyCents = (int) round((float) $this->monthly_salary * 100);
+            for ($day = $start; $day->lte($end); $day = $day->addDay()) {
+                $salaryCents += (int) round($monthlyCents * $day->day / $day->daysInMonth)
+                    - (int) round($monthlyCents * ($day->day - 1) / $day->daysInMonth);
+            }
+        }
+        $earnedCents = $salaryCents + ($this->salary_type === 'Monthly' ? 0 : $workCents);
+        $paidCents = (int) round((float) $this->payments()->where('period', $period)->sum('amount') * 100);
+        $remaining = max($earnedCents - $paidCents, 0) / 100;
 
         return [
-            'period'    => $period,
-            'earned'    => round($salary, 2),
-            'stitching' => round($earnedFromWork, 2),
-            'paid'      => round($paid, 2),
+            'period' => $period,
+            'payment_period' => $frequency,
+            'period_start' => $start->toDateString(),
+            'period_end' => $end->toDateString(),
+            'pieces' => (float) $work->sum('quantity'),
+            'rate' => $work->pluck('rate')->unique()->count() === 1 ? (float) $work->first()->rate : null,
+            'configured_rate' => (float) $this->per_suit_rate,
+            'rates' => $work->groupBy('rate')->map(fn ($logs, $rate) => [
+                'rate' => (float) $rate, 'pieces' => (float) $logs->sum('quantity'),
+                'earned' => round((float) $logs->sum('amount'), 2),
+            ])->values()->all(),
+            'earned' => $earnedCents / 100,
+            'stitching' => $workCents / 100,
+            'paid' => $paidCents / 100,
             'remaining' => $remaining,
-            'status'    => $salary <= 0 ? 'Pending' : ($remaining <= 0 ? 'Paid' : ($paid > 0 ? 'Partial' : 'Pending')),
+            'credit' => max($paidCents - $earnedCents, 0) / 100,
+            'status' => $earnedCents <= 0 ? 'Pending' : ($remaining <= 0 ? 'Paid' : ($paidCents > 0 ? 'Partial' : 'Pending')),
         ];
     }
 }

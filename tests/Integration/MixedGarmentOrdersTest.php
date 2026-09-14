@@ -31,7 +31,7 @@ class MixedGarmentOrdersTest extends TestCase
         $garment=ProductService::create(['name'=>'Test garment '.uniqid(),'type'=>'Service','category'=>'Service','status'=>'Active','price'=>'100','measurement_profile'=>'generic']);
         $accessory=ProductService::create(['name'=>'Test accessory '.uniqid(),'type'=>'Product','category'=>'Other','status'=>'Active','price'=>'50','measurement_profile'=>'accessory','requires_measurements'=>false]);
         $piece=['unit'=>'in','values'=>['length'=>40,'chest'=>38,'waist'=>34,'chest_losing'=>2,'waist_losing'=>2,'hip_losing'=>2]];
-        return ['customer_id'=>$customer->id,'advance'=>'50','delivery_date'=>now()->addDays(5)->toDateString(),'garments'=>[
+        return ['customer_id'=>$customer->id,'advance'=>'50','delivery_time'=>'17:00','delivery_date'=>now()->addDays(5)->toDateString(),'garments'=>[
             ['product_service_id'=>$garment->id,'quantity'=>2,'unit_price'=>'100.00','pieces'=>[$piece,$piece]],
             ['product_service_id'=>$accessory->id,'quantity'=>1,'unit_price'=>'50.00','pieces'=>[['unit'=>'cm','values'=>[]]]],
         ]];
@@ -69,7 +69,7 @@ class MixedGarmentOrdersTest extends TestCase
         $html=$this->get('/orders')->assertOk()->getContent();
         file_put_contents(base_path('dev/artifacts/mixed-orders-browser.html'),$html);
         $order=Order::findOrFail($id);$edit=$this->edit($order);
-        $edit['status']='Pending';$edit['priority']='Normal';
+        $edit['status']=$order->status;$edit['priority']='Normal';
         $this->putJson('/orders/'.$id,$edit)->assertOk();
         $this->putJson('/orders/'.$id,$edit)->assertUnprocessable()->assertJsonValidationErrors('edit_version');
     }
@@ -77,7 +77,7 @@ class MixedGarmentOrdersTest extends TestCase
     public function test_saved_measurements_copy_without_transferring_ownership(): void
     {
         $payload=$this->payload();
-        $sheet=Measurement::create(['customer_id'=>$payload['customer_id'],'garment_type'=>'Generic stitching','unit'=>'cm','is_template'=>true,
+        $sheet=Measurement::create(['customer_id'=>$payload['customer_id'],'garment_type'=>ProductService::findOrFail($payload['garments'][0]['product_service_id'])->name,'unit'=>'cm','is_template'=>true,
             'length'=>100,'chest'=>96,'waist'=>86,'chest_losing'=>2,'waist_losing'=>2,'hip_losing'=>2]);
         foreach($payload['garments'][0]['pieces'] as &$piece) {$piece['measurement_id']=$sheet->id;$piece['values']=[];} unset($piece);
         $order=app(OrderService::class)->create($payload);
@@ -88,6 +88,62 @@ class MixedGarmentOrdersTest extends TestCase
         $payload['garments'][0]['pieces'][0]['measurement_id']=$foreign->id;
         $this->expectException(ValidationException::class);app(OrderService::class)->create($payload);
     }
+    public function test_new_measurement_updates_only_changed_fields_on_the_original_saved_set(): void
+    {
+        $payload = $this->payload();
+        $name = ProductService::findOrFail($payload['garments'][0]['product_service_id'])->name;
+        $sheet = Measurement::create(['customer_id'=>$payload['customer_id'], 'garment_type'=>$name, 'unit'=>'in', 'is_template'=>true,
+            'length'=>40, 'chest'=>38, 'waist'=>34, 'chest_losing'=>2, 'waist_losing'=>2, 'hip_losing'=>2,
+            'details'=>['custom_note'=>'Keep this exactly', 'thigh'=>23]]);
+        $other = Measurement::create(['customer_id'=>$payload['customer_id'], 'garment_type'=>'Other garment', 'unit'=>'in', 'length'=>40]);
+        $before = $sheet->refresh()->getAttributes();
+        $count = Measurement::savedSets()->where('customer_id',$payload['customer_id'])->count();
+        foreach ($payload['garments'][0]['pieces'] as &$piece) {
+            $piece['measurement_id']=$sheet->id;
+            $piece['saved_changes']=['values'=>['length'=>42]];
+            $piece['values']=[];
+        }
+        unset($piece);
+        $response = $this->postJson('/orders',$payload)->assertCreated();
+        $sheet->refresh();
+        $this->assertEquals(42,$sheet->length);
+        foreach ($before as $key=>$value) {
+            if (!in_array($key,['length','updated_at'])) $this->assertSame($value,$sheet->getAttributes()[$key],$key.' changed unexpectedly');
+        }
+        $this->assertEquals(40,$other->fresh()->length);
+        $this->assertSame($count,Measurement::savedSets()->where('customer_id',$payload['customer_id'])->count());
+        $order = Order::findOrFail($response->json('order.db_id'));
+        foreach ($order->lineItems->first()->pieces as $piece) $this->assertEquals(42,$piece->measurement->length);
+        $this->assertTrue(Measurement::savedSets()->whereKey($sheet->id)->exists());
+    }
+
+    public function test_failed_order_does_not_update_saved_measurement(): void
+    {
+        $payload=$this->payload();
+        $sheet=Measurement::create(['customer_id'=>$payload['customer_id'], 'garment_type'=>ProductService::findOrFail($payload['garments'][0]['product_service_id'])->name,
+            'unit'=>'in','length'=>40,'chest'=>38,'waist'=>34,'chest_losing'=>2,'waist_losing'=>2,'hip_losing'=>2]);
+        $payload['garments'][0]['pieces'][0]['measurement_id']=$sheet->id;
+        $payload['garments'][0]['pieces'][0]['saved_changes']=['values'=>['length'=>42]];
+        $payload['garments'][0]['pieces'][1]['values']=[];
+        $this->postJson('/orders',$payload)->assertUnprocessable();
+        $this->assertEquals(40,$sheet->fresh()->length);
+    }
+
+    public function test_saved_measurement_rejects_another_garment_with_the_same_profile(): void
+    {
+        $payload = $this->payload();
+        $sheet = Measurement::create(['customer_id'=>$payload['customer_id'], 'garment_type'=>'Unrelated garment', 'unit'=>'in', 'chest'=>38]);
+        $payload['garments'][0]['pieces'][0]['measurement_id'] = $sheet->id;
+        $before = Order::count();
+        try {
+            app(OrderService::class)->create($payload);
+            $this->fail('Must reject an unrelated garment even when its profile matches.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('garments.0.pieces.0.measurement_id', $exception->errors());
+        }
+        $this->assertSame($before, Order::count());
+    }
+
     public function test_quantity_removal_archives_only_trailing_piece(): void
     {
         $order=app(OrderService::class)->create($this->payload()); $edit=$this->edit($order);
@@ -210,8 +266,9 @@ class MixedGarmentOrdersTest extends TestCase
         $variables=\App\Services\NotificationVariables::variablesForOrder($order);
         $this->assertSame('3',$variables['quantity']);
         foreach($order->lineItems as $item) $this->assertStringContainsString($item->name,$variables['garmentSummary']);
-        foreach (array_slice(Order::WORKFLOW, 1) as $status) app(OrderService::class)->changeStatus($order, $status);
+        foreach (array_slice(Order::WORKFLOW, 1, -1) as $status) app(OrderService::class)->changeStatus($order, $status);
         $this->assertDatabaseHas('staff_work_logs',['order_id'=>$order->id,'quantity'=>2,'amount'=>'40.00']);
+        app(OrderService::class)->changeStatus($order, 'Delivered');
         app(OrderService::class)->update($order,['notes'=>'Keep original work credit']);
         $this->assertSame(1,\App\Models\StaffWorkLog::where('order_id',$order->id)->count());
     }
@@ -230,7 +287,7 @@ class MixedGarmentOrdersTest extends TestCase
     public function test_legacy_flat_http_requests_require_measurements_and_normalize_pieces(): void
     {
         $p=$this->payload();$flat=['customer_id'=>$p['customer_id'],'product_service_id'=>$p['garments'][0]['product_service_id'],
-            'garment'=>'Generic stitching','quantity'=>2,'total'=>'200','advance'=>'0','delivery_date'=>$p['delivery_date']];
+            'garment'=>'Generic stitching','quantity'=>2,'total'=>'200','advance'=>'0','delivery_date'=>$p['delivery_date'],'delivery_time'=>'17:00'];
         $this->postJson('/orders',$flat)->assertUnprocessable();
         $flat['measurements']=$p['garments'][0]['pieces'][0]['values'];
         $response=$this->postJson('/orders',$flat)->assertCreated();

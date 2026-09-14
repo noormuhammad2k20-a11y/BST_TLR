@@ -3,10 +3,8 @@
   $counters = $layoutCounters ?? ['unread_notifications' => 0];
 @endphp
 <header class="bg-white/70 backdrop-blur-xl border-b border-slate-200 px-8 h-16 flex items-center gap-4 sticky top-0 z-30">
-  <div class="flex items-center gap-2 text-sm">
-    <span class="text-slate-400 font-medium" data-shop-name>{{ $appSettings['store_name'] ?: 'Atelier' }}</span>
-    <i class="fa-solid fa-chevron-right text-[9px] text-slate-300"></i>
-    <span class="font-semibold text-slate-900" id="bc-current">@yield('title', 'Dashboard')</span>
+  <div class="flex items-center pl-3.5 py-1 border-l-[3px] border-indigo-500 rounded-sm">
+    <h1 class="text-base sm:text-[17px] font-bold text-slate-900 tracking-tight whitespace-nowrap" id="bc-current">@yield('title', 'Dashboard')</h1>
   </div>
 
   <div class="ml-8 flex-1 max-w-md relative">
@@ -111,130 +109,194 @@
 </header>
 
 <style>
-  /* ── System Switcher: Premium Segmented Control ── */
+  /* ── System Switcher: Elite Class Luxury Animation Profile ── */
   .system-switcher {
     position: relative;
+    user-select: none;
+    -webkit-user-select: none;
+    perspective: 1000px; /* Deep, luxury 3D */
   }
 
   .system-switcher__track {
     position: relative;
     display: flex;
-    background: linear-gradient(135deg, #f1f5f9 0%, #e8edf4 100%);
-    padding: 3px;
-    border-radius: 10px;
-    border: 1px solid rgba(226, 232, 240, 0.8);
-    box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
-    gap: 2px;
+    /* Sophisticated metallic/frosted gradient */
+    background: linear-gradient(135deg, #f1f5f9, #e2e8f0, #f8fafc);
+    background-size: 200% 200%;
+    animation: trackGradient 8s ease infinite;
+    
+    /* Clean, precise inner carving */
+    box-shadow: 
+      inset 0 3px 6px rgba(15, 23, 42, 0.1), 
+      inset 0 1px 2px rgba(15, 23, 42, 0.15), 
+      inset 0 -2px 3px rgba(255, 255, 255, 0.9),
+      0 1px 1px rgba(255, 255, 255, 0.7);
+    padding: 6px;
+    border-radius: 999px;
+    gap: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.8);
+    transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s ease;
+  }
+
+  @keyframes trackGradient {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+
+  /* Elite Anticipation Press */
+  .system-switcher__track.is-switching {
+    transform: scale(0.97) rotateX(3deg);
+    box-shadow: 
+      inset 0 8px 16px rgba(15, 23, 42, 0.15), 
+      inset 0 2px 4px rgba(15, 23, 42, 0.1);
   }
 
   .system-switcher__slider {
     position: absolute;
-    top: 3px;
-    bottom: 3px;
-    left: 3px;
-    border-radius: 8px;
-    background: linear-gradient(135deg, #ffffff 0%, #f8faff 100%);
-    box-shadow:
-      0 1px 3px rgba(15, 23, 42, 0.08),
-      0 2px 8px rgba(15, 23, 42, 0.04),
-      inset 0 1px 0 rgba(255, 255, 255, 0.9);
-    transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1),
-                width 0.35s cubic-bezier(0.16, 1, 0.3, 1);
-    z-index: 0;
+    top: 6px;
+    bottom: 6px;
+    left: 6px;
+    border-radius: 999px;
+    /* Ceramic/Glass clean white */
+    background: linear-gradient(180deg, #ffffff 0%, #fdfdfd 40%, #f1f5f9 100%);
+    box-shadow: 
+      inset 0 2px 3px rgba(255, 255, 255, 1),
+      0 4px 10px rgba(15, 23, 42, 0.08),  
+      0 2px 4px rgba(15, 23, 42, 0.05);   
+    z-index: 1;
+    /* Luxury physics curve */
+    transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+                width 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+                box-shadow 0.4s ease;
+  }
+
+  /* High-end glass reflection */
+  .system-switcher__slider::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 999px;
+    background: linear-gradient(110deg, transparent 25%, rgba(255,255,255,0.8) 45%, rgba(255,255,255,0.8) 55%, transparent 75%);
+    background-size: 200% 200%;
+    background-position: -150% -150%;
+    pointer-events: none;
+    opacity: 0.6;
+  }
+  
+  .system-switcher:hover .system-switcher__slider::after,
+  .system-switcher__track.is-switching .system-switcher__slider::after {
+    animation: glassShineInfinite 2.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    opacity: 1;
+  }
+
+  @keyframes glassShineInfinite {
+    0% { background-position: 200% 200%; }
+    100% { background-position: -200% -200%; }
+  }
+
+  /* Elite Light Trail during warp */
+  .system-switcher__track.is-switching .system-switcher__slider {
+    background: linear-gradient(180deg, #ffffff 0%, #eef2ff 100%);
+    box-shadow: 
+      inset 0 2px 3px rgba(255, 255, 255, 1),
+      0 0 20px rgba(99, 102, 241, 0.5), /* Elegant wide glow */
+      0 0 40px rgba(79, 70, 229, 0.3), /* Deep trail */
+      0 4px 10px rgba(15, 23, 42, 0.1);
   }
 
   .system-switcher__btn {
     position: relative;
-    z-index: 1;
+    z-index: 2;
     display: flex;
     align-items: center;
-    gap: 7px;
-    padding: 6px 14px;
-    font-size: 12px;
-    font-weight: 500;
-    letter-spacing: 0.01em;
-    color: #94a3b8;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px 20px;
+    font-size: 13.5px;
+    font-weight: 700;
+    color: #64748b;
+    text-shadow: 0 1px 1px rgba(255, 255, 255, 0.9);
     border: none;
     background: transparent;
     cursor: pointer;
-    border-radius: 7px;
-    transition: color 0.25s ease, transform 0.15s ease;
+    border-radius: 999px;
+    transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
     white-space: nowrap;
-    user-select: none;
-    -webkit-user-select: none;
+    outline: none;
   }
 
   .system-switcher__btn:hover:not(.active) {
-    color: #64748b;
-  }
-
-  .system-switcher__btn:active {
-    transform: scale(0.97);
+    color: #334155;
+    transform: translateY(-1px);
   }
 
   .system-switcher__btn.active {
-    color: #0f172a;
-    font-weight: 600;
+    color: #0f172a; 
+    text-shadow: 0 0 15px rgba(99, 102, 241, 0.4), 0 1px 2px rgba(255, 255, 255, 1);
+    letter-spacing: 0.3px;
   }
 
+  /* Sophisticated icon interaction */
   .system-switcher__btn i {
-    font-size: 11px;
-    transition: transform 0.3s ease, color 0.25s ease;
+    font-size: 14px;
+    width: 16px;
+    text-align: center;
+    transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1), color 0.6s ease, filter 0.6s ease, opacity 0.6s ease;
+    opacity: 0.6;
   }
 
   .system-switcher__btn.active i {
     color: var(--brand, #4F46E5);
+    transform: scale(1.15) translateY(-1px);
+    filter: drop-shadow(0 2px 6px rgba(79, 70, 229, 0.4));
+    opacity: 1;
+    animation: eliteFloat 3s ease-in-out infinite alternate;
   }
 
-  .system-switcher__btn:hover i {
-    transform: scale(1.12);
+  @keyframes eliteFloat {
+    0% { transform: scale(1.15) translateY(-1px); }
+    100% { transform: scale(1.15) translateY(-3px); }
   }
 
-  /* Active indicator dot */
-  .system-switcher__btn.active::after {
-    content: '';
-    position: absolute;
-    bottom: 2px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 4px;
-    height: 4px;
-    border-radius: 50%;
-    background: var(--brand, #4F46E5);
-    opacity: 0.6;
-    animation: switcherDotIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  }
-
-  @keyframes switcherDotIn {
-    from { opacity: 0; transform: translateX(-50%) scale(0); }
-    to   { opacity: 0.6; transform: translateX(-50%) scale(1); }
-  }
-
-  /* ── Dark Mode Adaptation ── */
+  /* ── Dark Mode Elite Adaptation ── */
   html.theme-dark .system-switcher__track {
-    background: linear-gradient(135deg, #1e293b 0%, #172033 100%);
-    border-color: rgba(30, 41, 59, 0.9);
-    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+    background: linear-gradient(135deg, #1e293b, #0f172a, #1e293b);
+    box-shadow: 
+      inset 0 3px 8px rgba(0, 0, 0, 0.6), 
+      inset 0 1px 3px rgba(0, 0, 0, 0.8),
+      inset 0 -1px 2px rgba(255, 255, 255, 0.03),
+      0 1px 1px rgba(255, 255, 255, 0.05);
+    border-color: rgba(0,0,0,0.6);
   }
 
   html.theme-dark .system-switcher__slider {
-    background: linear-gradient(135deg, #334155 0%, #293548 100%);
-    box-shadow:
-      0 1px 3px rgba(0, 0, 0, 0.3),
-      0 2px 8px rgba(0, 0, 0, 0.15),
-      inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    background: linear-gradient(180deg, #334155 0%, #1e293b 100%);
+    box-shadow: 
+      inset 0 1px 1px rgba(255, 255, 255, 0.1), 
+      0 4px 10px rgba(0, 0, 0, 0.5);
+  }
+  
+  html.theme-dark .system-switcher__track.is-switching .system-switcher__slider {
+    box-shadow: 
+      inset 0 1px 1px rgba(255, 255, 255, 0.1), 
+      0 0 20px rgba(129, 140, 248, 0.4),
+      0 0 40px rgba(99, 102, 241, 0.2);
   }
 
   html.theme-dark .system-switcher__btn {
     color: #64748b;
-  }
-
-  html.theme-dark .system-switcher__btn:hover:not(.active) {
-    color: #94a3b8;
+    text-shadow: 0 -1px 1px rgba(0, 0, 0, 0.8);
   }
 
   html.theme-dark .system-switcher__btn.active {
-    color: #f1f5f9;
+    color: #f8fafc;
+    text-shadow: 0 0 15px rgba(129, 140, 248, 0.3), 0 1px 2px rgba(0, 0, 0, 0.8);
+  }
+
+  html.theme-dark .system-switcher__btn.active i {
+    color: #818cf8;
+    filter: drop-shadow(0 2px 6px rgba(129, 140, 248, 0.3));
   }
 
   /* ── Header Profile Dropdown ── */
@@ -255,22 +317,20 @@
     background: var(--bg-muted) !important;
   }
 
-  /* ── Responsive: hide text on small screens ── */
+  /* ── Responsive ── */
   @media (max-width: 768px) {
     .system-switcher__btn span {
       display: none;
     }
     .system-switcher__btn {
-      padding: 6px 10px;
+      padding: 8px 14px;
     }
   }
 </style>
 
 <script>
   /**
-   * System Switcher — slides an animated pill behind the active button.
-   * Persists the choice in localStorage and dispatches a 'systemSwitch'
-   * custom event on document so other modules can react.
+   * System Switcher — Elite Class Animation
    */
   (function () {
     const track  = document.getElementById('switcher-track');
@@ -279,41 +339,92 @@
 
     if (!track || !slider || !btns.length) return;
 
-    function positionSlider(activeBtn, animate) {
+    let isSwitching = false;
+    const isReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    function positionSlider(activeBtn, animate, phase = 'normal') {
       const trackRect = track.getBoundingClientRect();
       const btnRect   = activeBtn.getBoundingClientRect();
-      const offset    = btnRect.left - trackRect.left - 3; // subtract padding
+      let offset      = btnRect.left - trackRect.left - 5; 
+      let width       = btnRect.width;
 
-      if (!animate) slider.style.transition = 'none';
-      slider.style.width     = btnRect.width + 'px';
+      if (!animate || isReducedMotion) {
+        slider.style.transition = 'none';
+      } else if (phase === 'stretch') {
+        // Elite Warp: Hyper-fast, sleek stretch with light trail
+        const stretchAmount = 20; 
+        width += stretchAmount; 
+        offset -= stretchAmount / 2; 
+        // Apple-style exponential curve for intense speed and smooth landing
+        slider.style.transition = 'transform 1.4s cubic-bezier(0.85, 0, 0.15, 1), width 1.2s cubic-bezier(0.85, 0, 0.15, 1)';
+      } else if (phase === 'settle') {
+        // Lock into place beautifully
+        slider.style.transition = 'transform 0.8s cubic-bezier(0.16, 1, 0.3, 1), width 0.8s cubic-bezier(0.16, 1, 0.3, 1)';
+      } else {
+        // Normal fast transition
+        slider.style.transition = 'transform 0.5s ease, width 0.5s ease';
+      }
+
+      slider.style.width     = width + 'px';
       slider.style.transform = 'translateX(' + offset + 'px)';
-      if (!animate) {
+      
+      if (!animate || isReducedMotion) {
         void slider.offsetWidth; // force reflow
         slider.style.transition = '';
       }
     }
 
-    window.switchSystem = function (system) {
-      localStorage.setItem('activeSystem', system);
-      if (system === 'cloth') {
-        window.location.href = '/cloth-store';
-        return;
-      }
+    window.switchSystem = function (system, isInitial = false) {
+      if (isSwitching) return; 
+      
+      const currentSystem = localStorage.getItem('activeSystem') || 'tailor';
+      if (!isInitial && system === currentSystem) return;
+
       const target = document.getElementById('btn-' + (system === 'cloth' ? 'cloth' : 'tailor'));
       if (!target) return;
 
-      btns.forEach(b => b.classList.remove('active'));
-      target.classList.add('active');
-      positionSlider(target, true);
+      if (isInitial || isReducedMotion) {
+        btns.forEach(b => b.classList.remove('active'));
+        target.classList.add('active');
+        positionSlider(target, false);
+        return;
+      }
 
-      document.body.setAttribute('data-system', system);
-
-      document.dispatchEvent(new CustomEvent('systemSwitch', { detail: { system } }));
+      // ── START ELITE TRANSITION (2.5 Seconds) ──
+      isSwitching = true;
+      track.classList.add('is-switching');
+      
+      // Phase 1: Anticipation press down
+      
+      // Phase 2: Hyper-speed warp
+      setTimeout(() => {
+        btns.forEach(b => b.classList.remove('active'));
+        target.classList.add('active');
+        positionSlider(target, true, 'stretch');
+      }, 300);
+      
+      // Phase 3: Perfect snap settle
+      setTimeout(() => {
+        positionSlider(target, true, 'settle');
+      }, 1500); // Wait longer for the 1.4s warp to almost finish
+      
+      // Phase 4: Redirect
+      setTimeout(() => {
+        isSwitching = false;
+        track.classList.remove('is-switching');
+        localStorage.setItem('activeSystem', system);
+        
+        if (system === 'cloth') {
+          window.location.href = '/cloth-store';
+        } else {
+          window.location.href = '/';
+        }
+      }, 2500);
     };
 
-    // Restore persisted choice (default: tailor)
+    // Restore persisted choice on load
     const saved = localStorage.getItem('activeSystem') || 'tailor';
-    window.switchSystem(saved);
+    window.switchSystem(saved, true);
 
     // Re-position after fonts/layout settle
     window.addEventListener('load', function () {

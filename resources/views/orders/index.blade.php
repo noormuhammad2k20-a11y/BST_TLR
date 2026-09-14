@@ -34,163 +34,96 @@
      mechanical margin. Setting the slip to the paper width pushes the right
      column off the edge.
      ========================================================================== */
-  .slip {
-    width: 72mm;
-    box-sizing: border-box;
-    padding: 3mm 2mm 4mm;
-    background: #fff;
-    color: #000;
-    font-family: 'Courier New', ui-monospace, 'Cascadia Mono', monospace;
-    font-size: 12px;
-    line-height: 1.45;
-    -webkit-font-smoothing: none;
+  @include('receipts.slip-styles')
+  /* Workshop-only containment; customer receipt styles are unchanged. */
+  .slip-workshop, .slip-workshop * { box-sizing: border-box; }
+  .slip-workshop .slip-row .k {
+    flex: 0 0 auto; white-space: nowrap; word-break: normal;
   }
-
-  /* Rules ------------------------------------------------------------------ */
-  .slip-rule    { border-top: 1px dashed #000; margin: 2mm 0; }
-  .slip-rule-s  { border-top: 1px solid  #000; margin: 2mm 0; }
-  .slip-rule-d  { border-top: 3px double #000; margin: 2mm 0; }
-
-  /* Header ----------------------------------------------------------------- */
-  .slip-hd     { text-align: center; }
-  .slip-logo   { max-width: 34mm; max-height: 16mm; margin: 0 auto 1.5mm; display: block; }
-  .slip-shop   { font-size: 17px; font-weight: 700; letter-spacing: .06em; line-height: 1.2; }
-  .slip-tag    { font-size: 10px; font-style: italic; margin-top: .5mm; }
-  .slip-meta   { font-size: 10px; line-height: 1.35; margin-top: 1mm; }
-
-  /* The copy marker. Inverted so the tailor can tell the two slips apart at a
-     glance from across the workshop, without reading anything. */
-  .slip-kind {
-    background: #000; color: #fff;
-    text-align: center; font-weight: 700;
-    font-size: 11px; letter-spacing: .22em;
-    padding: 1mm 0; margin: 2mm 0;
+  .slip-workshop .slip-row .v {
+    flex: 0 1 auto; min-width: 0; white-space: normal;
+    word-break: normal; overflow-wrap: anywhere;
   }
-  .slip-kind.ghost {
-    background: #fff; color: #000;
-    border: 1px solid #000; letter-spacing: .18em;
+  .slip-workshop .slip-piece, .slip-workshop .slip-kind,
+  .slip-workshop .slip-mgrid { width: 100%; max-width: 100%; }
+  .slip-workshop .slip-kind, .slip-workshop .slip-note {
+    word-break: normal; overflow-wrap: anywhere;
   }
-
-  /* Rows ------------------------------------------------------------------- */
-  .slip-row {
-    display: flex; justify-content: space-between;
-    align-items: baseline; gap: 3mm;
+  .slip-workshop .slip-mgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .slip-workshop .slip-mcell { min-width: 0; }
+  .slip-workshop .slip-mcell .l {
+    white-space: normal; overflow: visible; text-overflow: clip;
+    word-break: normal; overflow-wrap: anywhere;
   }
-  .slip-row .k { flex: 1 1 auto; min-width: 0; word-break: break-word; }
-  .slip-row .v {
-    flex: 0 0 auto; text-align: right; white-space: nowrap;
-    font-variant-numeric: tabular-nums;
+  .slip-workshop .slip-mcell .n {
+    flex: 0 1 auto; min-width: 0; max-width: 50%; overflow-wrap: anywhere;
   }
-  .slip-sec {
-    font-size: 10px; font-weight: 700; letter-spacing: .14em;
-    margin: 2mm 0 1mm;
-  }
-  .slip-sub  { font-size: 10px; padding-left: 3mm; }
-  .slip-bold { font-weight: 700; }
-
-  /* The one number the customer looks for. */
-  .slip-total {
-    display: flex; justify-content: space-between; align-items: baseline;
-    font-size: 15px; font-weight: 700; padding: 1.5mm 0;
-  }
-
-  /* Deadline block on the job card — deliberately the loudest thing on it. */
-  .slip-due {
-    text-align: center; border: 2px solid #000;
-    padding: 1.5mm 1mm; margin: 2mm 0;
-  }
-  .slip-due .lbl { font-size: 9px; letter-spacing: .2em; }
-  .slip-due .val { font-size: 14px; font-weight: 700; line-height: 1.25; }
-
-  /* Measurements ----------------------------------------------------------- */
-  .slip-mgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 3mm; }
-  .slip-mcell {
-    display: flex; justify-content: space-between; gap: 1mm;
-    border-bottom: 1px dotted #666;
-    padding: .6mm 0; font-size: 11px;
-  }
-  .slip-mcell .l {
-    flex: 1 1 auto; min-width: 0;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-  .slip-mcell .n {
-    flex: 0 0 auto; padding-left: 2mm;
-    font-weight: 700; font-variant-numeric: tabular-nums;
-  }
-
-  /* Hanging indent, so a wrapped instruction lines up under its own text
-     rather than under the bullet. */
-  .slip-note { font-size: 11px; padding-left: 3mm; text-indent: -3mm; }
-
-  /* Sign-off boxes the workshop ticks as the garment moves along. */
-  .slip-sign { display: flex; gap: 2mm; margin-top: 3mm; text-align: center; font-size: 9px; }
-  .slip-sign > div { flex: 1; }
-  .slip-sign .line { border-bottom: 1px solid #000; height: 7mm; }
-
-  /* pre-line so a footer the shop typed across several lines actually prints
-     across several lines, instead of collapsing into one run-on paragraph. */
-  .slip-foot {
-    text-align: center; font-size: 10px; line-height: 1.4;
-    white-space: pre-line;
-  }
-
-  /* Software credit. Deliberately the smallest thing on the slip: it belongs
-     to us, not to the customer's transaction. Four fixed lines — the developer
-     name appears here and nowhere else on the slip. */
-  .slip-credit {
-    text-align: center; font-size: 9px; line-height: 1.45;
-    margin-top: 2.5mm; color: #444;
-  }
-  /* The two facts a customer might actually need again — who built it and the
-     number to call — carry the weight. The connective wording around them
-     stays light so the block reads in one glance. */
-  .slip-credit .name  { font-weight: 700; color: #000; }
-  .slip-credit .sys   { font-weight: 600; font-size: 8.5px; letter-spacing: .03em; color: #222; }
-  .slip-credit .tel   { font-weight: 700; color: #000; letter-spacing: .04em; }
-  .slip-credit .ty    { font-size: 9.5px; color: #444; margin-top: 1mm; }
-  .slip-code {
-    text-align: center; font-size: 13px; font-weight: 700;
-    letter-spacing: .18em; margin-top: 2mm;
-  }
-
-  /* On-screen preview only — never printed. */
-  .slip-preview {
-    box-shadow: 0 1px 3px rgba(15, 23, 42, .12), 0 8px 24px rgba(15, 23, 42, .08);
-    border-radius: 2px;
-  }
-  .slip-label {
-    font-family: Inter, system-ui, sans-serif;
-    font-size: 11px; font-weight: 700; letter-spacing: .12em;
-    text-transform: uppercase; color: #64748b;
-    text-align: center; margin-bottom: 8px;
-  }
-
   /* === PRINT =============================================================== */
   @media print {
-    body * { visibility: hidden; }
+    /* Reset inherited A4 sizing, and honor the driver's selected thermal form.
+       auto is the paper size, not automatic roll cutting/content height. */
+    @page thermal80 { size: auto; margin: 0; }
+
+    html.printing-thermal, html.printing-thermal body {
+      page: thermal80;
+      width: 72mm !important; min-width: 0 !important; max-width: 72mm !important;
+      height: auto !important; min-height: 0 !important; max-height: none !important;
+      margin: 0 !important; padding: 0 !important;
+      display: block !important; position: static !important;
+      overflow: visible !important; transform: none !important; zoom: 1 !important;
+    }
+    html.printing-thermal body > :not(#thermal-print-area) { display: none !important; }
+    html.printing-thermal body * { visibility: hidden; }
 
     #thermal-print-area, #thermal-print-area * { visibility: visible; }
 
     #thermal-print-area {
-      position: absolute; left: 0; top: 0;
-      width: 80mm; margin: 0; padding: 0;
+      position: static; width: 100%; max-width: 100%; min-width: 0;
+      height: auto; max-height: none; overflow: visible;
+      margin: 0; padding: 0; transform: none; zoom: 1;
       background: #fff !important;
       display: block !important;
     }
 
     #thermal-print-area .slip {
-      width: 76mm;
+      box-sizing: border-box; width: 100%; max-width: 100%; min-width: 0;
+      margin: 0;
       box-shadow: none !important;
       border-radius: 0 !important;
       padding: 2mm 2mm 6mm;
     }
 
-    /* Each slip is its own page, so the printer cuts between the customer's
-       receipt and the workshop copy instead of handing over one long strip. */
-    #thermal-print-area .slip { break-after: page; page-break-after: always; }
-    #thermal-print-area .slip:last-child { break-after: auto; page-break-after: auto; }
+    /* Long customer/order values must wrap rather than widen the print canvas. */
+    #thermal-print-area .slip-row .v {
+      flex: 0 1 auto; min-width: 0; white-space: normal; overflow-wrap: anywhere;
+    }
 
-    @page { size: 80mm auto; margin: 0; }
+    /* Both copies share normal roll flow; only individual logical blocks avoid breaks. */
+    #thermal-print-area .slip {
+      display: block; height: auto; min-height: 0; max-height: none;
+      break-before: auto; page-break-before: auto;
+      break-after: auto; page-break-after: auto;
+      break-inside: auto; page-break-inside: auto;
+    }
+    #thermal-print-area .slip:last-child { padding-bottom: 2mm; }
+    #thermal-print-area .slip-due { break-inside: avoid; page-break-inside: avoid; }
+
+    #thermal-print-area .slip-workshop,
+    #thermal-print-area .slip-workshop #job-measure-body {
+      display: block; height: auto; max-height: none; overflow: visible;
+    }
+    #thermal-print-area .slip-workshop .slip-piece {
+      break-inside: avoid; page-break-inside: avoid;
+    }
+    #thermal-print-area .slip-workshop .slip-piece > .slip-kind {
+      break-after: avoid; page-break-after: avoid;
+    }
+    /* If a piece exceeds a full page the browser may relax its avoid rule,
+       while keeping each measurement row and the sign-off boxes intact. */
+    #thermal-print-area .slip-workshop .slip-mcell,
+    #thermal-print-area .slip-workshop .slip-sign {
+      break-inside: avoid; page-break-inside: avoid;
+    }
   }
 
 </style>
@@ -214,7 +147,7 @@
   var customers = @json($customers);
   var activeServices = @json($activeServices);
   var tailors = @json($tailors);
-  var timeSlots = @json($timeSlots);
+
 
   var ROUTES = {
     index:      @json(route('orders.index')),
@@ -255,10 +188,11 @@
   var newOrderState;
   var blankOrderState;
   var extensionReasons = @json($extensionReasons);
-  var autoStatus = @json($autoStatus);
+  var autoStatus = { enabled: false };
   var WORKFLOW = ['Received', 'Pending', 'Stitching', 'Ready for Verification', 'Ready', 'Delivered'];
   var viewMode = 'table';
   var wizardStep = 1;
+  var currentView = 'list';
   var orderFilterStatus = 'All';
   var orderSearchTerm = '';
   var orderSort = { key: 'createdAt', dir: 'desc' };
@@ -417,8 +351,13 @@
   async function refreshOrders() {
     try {
       const data = await Atelier.api.get(ROUTES.live);
+      const detail = document.querySelector('[data-order-detail-id]');
+      const detailId = detail ? Number(detail.dataset.orderDetailId) : null;
+      const oldStatus = orders.find(o => o.db_id === detailId)?.status;
       orders = data.orders.map(hydrate);
-      renderPage();
+      if (currentView !== 'editor') renderPage();
+      if (detailId && document.getElementById('modal-backdrop')?.classList.contains('show') &&
+          orders.find(o => o.db_id === detailId)?.status !== oldStatus) openOrderDetails(detailId);
     } catch (err) { /* polling stays quiet */ }
   }
 
@@ -452,6 +391,14 @@
 
   function updateBulkStatusState() {
     const has = selectedOrderIds.size > 0;
+    const select = document.getElementById('bulkStatusSelect');
+    if (select) {
+      const selected = orders.filter(o => selectedOrderIds.has(o.id));
+      const previous = select.value;
+      const allowed = WORKFLOW.filter(status => selected.length && selected.every(o => (o.allowed || []).includes(status)));
+      select.innerHTML = '<option value="">Move selected to…</option>' + allowed.map(status => `<option value="${status}">${status}</option>`).join('');
+      if (allowed.includes(previous)) select.value = previous;
+    }
 
     ['bulkStatusSelect', 'bulkStatusBtn'].forEach(id => {
       const el = document.getElementById(id);
@@ -694,6 +641,7 @@
 
   window.changeOrderStatus = async function(dbId, status, note = null) {
     const order = orders.find(o => o.db_id === dbId);
+    if (status === 'Delivered') return collectWithPayment(dbId, refreshOrders);
 
     if (order && Array.isArray(order.allowed) && !order.allowed.includes(status)) {
       toast(`${order.id} ${order.status} se seedha ${status} par nahi ja sakta`, 'error');
@@ -806,7 +754,9 @@
       tagline:     shop.tagline,
       address:     shop.address,
       phone:       shop.phone,
-      logo:        shop.logo,
+      logo:        shop.showLogo !== false ? shop.logo : null,
+      show_logo:   shop.showLogo !== false,
+      stamp:       shop.showStamp ? shop.stamp : null,
       footer:      shop.footer,
       terms:       shop.terms,
       order:       o.id,
@@ -865,12 +815,14 @@
 
       if (pieces.length > 0) {
         body.innerHTML = pieces.map(pc => `
+          <div class="slip-piece">
           <div class="slip-kind ghost" style="margin:1.5mm 0 1mm">${Atelier.escapeHtml(pc.garment || "Garment")} · PIECE ${pc.piece} (${Atelier.escapeHtml(pc.unit || "")})</div>
           ${grid(pc.rows)}
           ${pc.notes ? `<div class="slip-note">&bull; ${Atelier.escapeHtml(pc.notes)}</div>` : ''}
+          </div>
         `).join('');
       } else if (rows.length) {
-        body.innerHTML = grid(rows);
+        body.innerHTML = `<div class="slip-piece">${grid(rows)}</div>`;
       } else {
         body.innerHTML = '<div style="text-align:center;font-size:10px">No measurements recorded for this customer</div>';
       }
@@ -980,11 +932,17 @@
     const c = customers.find(x => x.db_id === dbId);
     if (!c) return;
 
+    if (newOrderState.customerId != c.db_id) {
+      newOrderState.garments.forEach(row => row.pieces.forEach(piece => {
+        piece.values = {}; delete piece.measurement_id; delete piece.saved_measurement_id; delete piece.saved_changes; delete piece.measurement_mode;
+      }));
+    }
     newOrderState.customerId = c.db_id;
     newOrderState.customerName = c.name;
     newOrderState.customerPhone = c.phone;
     wizardStep = 2;
-    openModal('add-order-wizard');
+    currentView = 'editor';
+    renderPage();
   };
 
   function generateCustomerCard(c, isRecent) {
@@ -996,6 +954,7 @@
           <div>
             <div class="text-sm font-semibold text-slate-900">${c.name}</div>
             <div class="text-xs text-slate-500">${c.phone} &middot; ${c.orders} previous orders</div>
+            <div class="text-xs font-semibold ${Number(c.due)>0?'text-red-500':'text-emerald-600'}">Previous balance: ${Atelier.money(c.due || 0)}</div>
           </div>
           ${isRecent ? '<span class="badge badge-progress px-1.5 py-0.5 text-[10px]">Recent</span>' : ''}
         </div>
@@ -1013,7 +972,7 @@
    *
    * @param {'both'|'customer'|'tailor'} which
    */
-  window.printThermal = function(which = 'both') {
+  window.printThermal = async function(which = 'both') {
     const ids = which === 'customer' ? ['slip-customer']
               : which === 'tailor'   ? ['slip-tailor']
               : ['slip-customer', 'slip-tailor'];
@@ -1021,33 +980,67 @@
     const slips = ids.map(id => document.getElementById(id)).filter(Boolean);
     if (!slips.length) return;
 
+    if (document.getElementById('thermal-print-area')) return;
     const area = document.createElement('div');
     area.id = 'thermal-print-area';
+    area.hidden = true;
 
     slips.forEach(slip => {
       const copy = slip.cloneNode(true);
       copy.removeAttribute('id');
       copy.classList.remove('slip-preview');
+      copy.querySelectorAll('img').forEach(img => {
+        img.src = new URL(img.getAttribute('src'), document.baseURI).href;
+        img.loading = 'eager';
+      });
       area.appendChild(copy);
     });
 
     document.body.appendChild(area);
-    window.print();
-    document.body.removeChild(area);
+    try {
+      // Clones can still be fetching/decoding even when the preview is loaded.
+      // Wait for every enabled branding image; never print a broken image.
+      await Promise.all(Array.from(area.querySelectorAll('img'), img => new Promise((resolve, reject) => {
+        const timer = setTimeout(() => finish(new Error('Receipt image timed out. Please retry printing.')), 15000);
+        const finish = error => {
+          clearTimeout(timer);
+          img.onload = img.onerror = null;
+          error ? reject(error) : resolve();
+        };
+        const loaded = async () => {
+          try {
+            if (!img.naturalWidth) throw new Error('Receipt image could not load. Check the saved logo/stamp and retry.');
+            if (img.decode) await img.decode();
+            finish();
+          } catch (error) { finish(error); }
+        };
+        img.onload = loaded;
+        img.onerror = () => finish(new Error('Receipt image could not load. Check the saved logo/stamp and retry.'));
+        if (img.complete) loaded();
+      })));
+      area.hidden = false;
+      document.documentElement.classList.add('printing-thermal');
+      window.print();
+    } catch (error) {
+      Atelier.reportError(error, 'Could not print receipt images');
+    } finally {
+      document.documentElement.classList.remove('printing-thermal');
+      area.remove();
+    }
   };
 
   window.modals = window.modals || {};
   Object.assign(window.modals, {
     'order-details': (d) => `
-      <div class="p-5 border-b border-slate-200 flex justify-between items-center">
+      <div data-order-detail-id="${d.db_id}" class="p-5 border-b border-slate-200 flex justify-between items-center shrink-0">
         <div class="flex items-center gap-3">
           <div class="text-lg font-bold text-slate-900 tracking-tight">Order ${d ? d.id : 'Details'}</div>
           <span class="badge ${['Received', 'Pending'].includes(d.status) ? 'badge-pending' : d.status === 'Stitching' ? 'badge-progress' : d.status === 'Ready for Verification' ? 'badge-trial' : d.status === 'Ready' ? 'badge-ready' : d.status === 'Delivered' ? 'badge-delivered' : 'badge-overdue'}">${d.status}</span>
         </div>
         <button class="w-8 h-8 rounded-lg text-slate-400 hover:bg-slate-100 flex items-center justify-center" onclick="closeModal()"><i class="fa-solid fa-xmark text-sm"></i></button>
       </div>
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-0">
-        <div class="lg:col-span-2 p-6 border-r border-slate-200">
+      <div class="flex-1 min-h-0 overflow-y-auto grid grid-cols-1 lg:grid-cols-3 gap-0">
+        <div class="lg:col-span-2 p-6 border-b lg:border-b-0 lg:border-r border-slate-200">
           <div class="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-3">Garments and pieces</div>
           ${(d.garments||[]).map(item=>`<div class="border border-slate-200 rounded-lg p-3 mb-3"><div class="flex justify-between"><b>${Atelier.escapeHtml(item.name)} × ${item.quantity}</b><span>${Atelier.money(item.subtotal)}</span></div><p class="text-xs text-slate-500">${Atelier.money(item.unit_price)} each · ${Atelier.escapeHtml(item.fabric||'')}</p><p class="text-sm">${Atelier.escapeHtml(item.style_notes||'')}</p>${item.pieces.map((piece,index)=>`<details class="text-xs mt-2"><summary>${Atelier.escapeHtml(item.name)} · Piece ${index+1} (${Atelier.escapeHtml(piece.unit)})</summary><div class="grid grid-cols-2 gap-2 p-2">${Object.entries(piece.values).filter(([key,value])=>value!==null&&value!=='').map(([key,value])=>`<span>${Atelier.escapeHtml(piece.profile.labels[key]||key)}: ${Atelier.escapeHtml(String(value))}</span>`).join('')||'No measurements recorded / not required'}</div></details>`).join('')}</div>`).join('')}
           <div class="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-3">Auto Status Timeline</div>
@@ -1061,7 +1054,7 @@
                   { label: 'Stitching', icon: 'fa-scissors', status: 'Stitching' },
                   { label: 'Ready for Verification', icon: 'fa-clipboard-check', status: 'Ready for Verification' },
                   { label: 'Ready', icon: 'fa-check', status: 'Ready' },
-                  { label: 'Delivered', icon: 'fa-truck', status: 'Delivered' },
+                  ...(['Ready','Delivered','Completed'].includes(d.status) ? [{ label: 'Delivered', icon: 'fa-handshake', status: 'Delivered' }] : []),
                 ];
 
                 /* Where the order stands. "Completed" is Delivered by another
@@ -1120,10 +1113,13 @@
             </div>
           </div>
           <div class="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-3 mt-4">Payment Summary</div>
+          <a href="/customers/${d.customer_id}/ledger" class="block text-xs text-indigo-600 font-semibold mb-3">Customer Ledger / Receive Payment</a>
           <div class="bg-slate-50 p-4 rounded-lg space-y-2 text-sm">
             <div class="flex justify-between"><span class="text-slate-500">Total:</span> <span class="font-semibold text-slate-900">${Atelier.money(d.amount)}</span></div>
             <div class="flex justify-between"><span class="text-slate-500">Advance:</span> <span class="font-semibold text-slate-900">${Atelier.money(d.paid !== undefined ? d.paid : d.advance)}</span></div>
-            <div class="flex justify-between border-t border-slate-200 pt-2"><span class="font-bold text-red-500">Balance Due:</span> <span class="font-bold text-red-500">${Atelier.money(d.balance !== undefined ? d.balance : (d.amount - d.advance))}</span></div>
+<div class="flex justify-between border-t border-slate-200 pt-2"><span>Current Order Due:</span><strong>${Atelier.money(d.current_order_due)}</strong></div>
+<div class="flex justify-between text-red-500"><span>Previous Due:</span><strong>${Atelier.money(d.previous_due)}</strong></div>
+<div class="flex justify-between border-t border-slate-200 pt-2"><strong>Customer Total Due:</strong><strong>${Atelier.money(d.customer_total_due)}</strong></div>
           </div>
           ${d.notes ? `
             <div class="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2 mt-4">Order Notes</div>
@@ -1131,10 +1127,10 @@
           ` : ''}
         </div>
       </div>
-      <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">
-        <button class="bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-100 flex items-center gap-2 transition-colors" onclick="closeModal(); window.openReceipt(${d.db_id})"><i class="fa-solid fa-print text-xs"></i> Print Receipt</button>
-        <button class="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-800 flex items-center gap-2 transition-colors shadow-sm" onclick="closeModal(); openModal('edit-order', ${JSON.stringify(d).replace(/"/g, '&quot;')})"><i class="fa-solid fa-pen-to-square text-xs"></i> Edit Details</button>
-        <button class="bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-600 flex items-center gap-2 transition-colors shadow-sm shadow-emerald-500/30" ${d.status === 'Ready for Verification' ? '' : 'disabled title="Staff can verify garments once stitching is complete."'} onclick="confirmReadyAndSend(${d.db_id})"><i class="fa-solid fa-comment-sms text-xs"></i> Mark Ready & Send SMS</button>
+      <div class="p-4 sm:p-5 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row flex-wrap justify-end gap-3 sm:gap-2 shrink-0">
+        <button class="w-full sm:w-auto justify-center bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-100 flex items-center gap-2 transition-colors" onclick="closeModal(); window.openReceipt(${d.db_id})"><i class="fa-solid fa-print text-xs"></i> Print Receipt</button>
+        <button class="w-full sm:w-auto justify-center bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-800 flex items-center gap-2 transition-colors shadow-sm" onclick="closeModal(); editOrder(${JSON.stringify(d).replace(/"/g, '&quot;')})"><i class="fa-solid fa-pen-to-square text-xs"></i> Edit Details</button>
+        <button class="w-full sm:w-auto justify-center bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-600 flex items-center gap-2 transition-colors shadow-sm shadow-emerald-500/30" ${d.status === 'Ready for Verification' ? '' : 'disabled title="Staff can verify garments once stitching is complete."'} onclick="confirmReadyAndSend(${d.db_id})"><i class="fa-solid fa-comment-sms text-xs"></i> Mark Ready & Send SMS</button>
       </div>
     `,
     'bulk-sms-confirm': () => `
@@ -1193,8 +1189,8 @@
       const customerSlip = `
         <div class="slip slip-preview" id="slip-customer">
           <div class="slip-hd">
-            ${o.logo ? `<img src="/storage/${esc(o.logo)}" class="slip-logo" alt="">` : ''}
-            <div class="slip-shop">${esc((o.store || 'Atelier').toUpperCase())}</div>
+            ${o.show_logo !== false && o.logo ? `<img src="${esc(new URL(o.logo, document.baseURI).href)}" class="slip-logo" alt="">` : ''}
+            ${o.show_logo !== false ? `<div class="slip-shop">${esc((o.store || 'Atelier').toUpperCase())}</div>` : ''}
             ${o.tagline ? `<div class="slip-tag">${esc(o.tagline)}</div>` : ''}
             <div class="slip-meta">
               ${o.address ? `<div>${esc(o.address)}</div>` : ''}
@@ -1232,6 +1228,7 @@
             <div class="val">${esc(o.due || 'To be confirmed')}</div>
           </div>
 
+          ${o.stamp ? `<div style="text-align:center; margin:8px 0"><img src="${esc(new URL(o.stamp, document.baseURI).href)}" style="max-height:48px; max-width:100%; opacity:.85" alt=""></div>` : ''}
           ${o.terms ? `<div class="slip-foot" style="margin-top:2mm">${esc(o.terms)}</div>` : ''}
 
           <div class="slip-rule"></div>
@@ -1247,9 +1244,9 @@
 
       /* -------------------------------- tailor -------------------------- */
       const tailorSlip = `
-        <div class="slip slip-preview" id="slip-tailor">
+        <div class="slip slip-preview slip-workshop" id="slip-tailor">
           <div class="slip-hd">
-            <div class="slip-shop" style="font-size:14px">${esc((o.store || 'Atelier').toUpperCase())}</div>
+            ${o.show_logo !== false ? `<div class="slip-shop" style="font-size:14px">${esc((o.store || 'Atelier').toUpperCase())}</div>` : ''}
           </div>
 
           <div class="slip-kind">WORKSHOP COPY</div>
@@ -1427,7 +1424,7 @@
               <button class="px-3 py-1 text-xs font-medium ${viewMode === 'table' ? 'bg-slate-900 text-white' : 'text-slate-500'} rounded-md transition-colors" onclick="viewMode='table'; renderPage()"><i class="fa-solid fa-table text-[10px]"></i> Table</button>
               <button class="px-3 py-1 text-xs font-medium ${viewMode === 'kanban' ? 'bg-slate-900 text-white' : 'text-slate-500'} rounded-md transition-colors" onclick="viewMode='kanban'; renderPage()"><i class="fa-solid fa-columns text-[10px]"></i> Kanban</button>
             </div>
-            <button class="bg-slate-900 text-white px-3.5 py-2 rounded-lg text-xs font-medium hover:bg-slate-800 flex items-center gap-2 transition-colors shadow-sm" onclick="newOrderState = blankOrderState(); wizardStep=1; openModal('add-order-wizard')"><i class="fa-solid fa-plus text-[10px]"></i> Create Order</button>
+            <button class="bg-slate-900 text-white px-3.5 py-2 rounded-lg text-xs font-medium hover:bg-slate-800 flex items-center gap-2 transition-colors shadow-sm" onclick="newOrderState = blankOrderState(); wizardStep=1; currentView='editor'; renderPage()"><i class="fa-solid fa-plus text-[10px]"></i> Create Order</button>
           </div>
         </div>
         
@@ -1452,7 +1449,6 @@
                 <span class="text-xs text-slate-500 mr-2" id="selected-count-text"></span>
                 <select id="bulkStatusSelect" class="h-8 px-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
                   <option value="">Move selected to…</option>
-                  ${WORKFLOW.map(st => `<option value="${st}">${st}</option>`).join('')}
                 </select>
                 <button id="bulkStatusBtn" class="bg-slate-900 text-white px-4 py-2 rounded-lg text-xs font-medium hover:bg-slate-800 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm" onclick="confirmBulkStatus(this)" disabled>
                   <i class="fa-solid fa-arrow-right-arrow-left text-[10px]"></i> Move
@@ -1508,7 +1504,7 @@
                       </td>
                       <td class="px-5 py-3 text-right whitespace-nowrap flex justify-end">
                         <button class="w-8 h-8 rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-900 inline-flex items-center justify-center transition-colors mr-1" title="View" onclick="openOrderDetails(${o.db_id})"><i class="fa-regular fa-eye text-xs"></i></button>
-                        <button class="w-8 h-8 rounded-md text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 inline-flex items-center justify-center transition-colors mr-1" title="Edit" onclick="openModal('edit-order', ${orderDataStr})"><i class="fa-solid fa-pen-to-square text-xs"></i></button>
+                        <button class="w-8 h-8 rounded-md text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 inline-flex items-center justify-center transition-colors mr-1" title="Edit" onclick="editOrder(${orderDataStr})"><i class="fa-solid fa-pen-to-square text-xs"></i></button>
                         <span class="inline-block m-0">
                           <button type="button" onclick="deleteOrder(${o.db_id}, '${o.id}')" class="w-8 h-8 rounded-md text-slate-400 hover:bg-red-50 hover:text-red-600 inline-flex items-center justify-center transition-colors" title="Delete">
                             <i class="fa-solid fa-trash text-xs"></i>
@@ -1549,7 +1545,7 @@
                         <div class="text-xs font-bold text-slate-900">${o.id}</div>
                         <div class="flex items-center gap-1">
                            ${o.notified ? '<i class="fa-solid fa-comment-sms text-emerald-500 text-xs"></i>' : ''}
-                           <button class="text-slate-300 hover:text-indigo-600 transition-colors" onclick="event.stopPropagation(); openModal('edit-order', ${orderDataStr})"><i class="fa-solid fa-pen-to-square text-[10px]"></i></button>
+                           <button class="text-slate-300 hover:text-indigo-600 transition-colors" onclick="event.stopPropagation(); editOrder(${orderDataStr})"><i class="fa-solid fa-pen-to-square text-[10px]"></i></button>
                            <button type="button" onclick="event.stopPropagation(); deleteOrder(${o.db_id}, '${o.id}')" class="text-slate-300 hover:text-red-600 transition-colors"><i class="fa-solid fa-trash text-[10px]"></i></button>
                         </div>
                       </div>
@@ -1624,6 +1620,11 @@
     const container = document.getElementById('page-container');
     if (!container) return;
 
+    if (typeof currentView !== 'undefined' && currentView === 'editor' && pages.orderEditor) {
+      container.innerHTML = pages.orderEditor();
+      return;
+    }
+
     container.innerHTML = pages.orders();
     updateBulkSmsButtonState();
 
@@ -1666,7 +1667,8 @@
           toast('That customer could not be found — please pick one below', 'warning');
         }
         wizardStep = 1;
-        openModal('add-order-wizard');
+        currentView = 'editor';
+        renderPage();
       }
 
       handled = true;
@@ -1685,12 +1687,13 @@
   }
 
   @include('orders.item-editor')
+  @include('delivery.payment-dialog')
 
   Atelier.onPageReady(() => {
     renderPage();
     handleIncomingIntent();
 
-    // Statuses reconcile on navigation, refresh, and user actions; no timed AJAX.
+    Atelier.poll(refreshOrders, 10000);
   });
 </script>
 @endpush

@@ -46,7 +46,7 @@ class LayoutComposer
         return [
             'colorMode'     => Settings::str('color_mode') ?: 'light',
             'primaryColor'  => Settings::str('primary_color') ?: '#4F46E5',
-            'sidebarTheme'  => Settings::str('sidebar_theme') ?: 'white',
+            'sidebarAppearance' => app(\App\Services\SidebarAppearance::class)->current(),
             'compactTables' => Settings::bool('compact_tables'),
             'rowsPerPage'   => Settings::rowsPerPage(),
             'dateFormat'    => Settings::jsDateFormat(),

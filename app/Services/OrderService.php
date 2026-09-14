@@ -53,6 +53,8 @@ class OrderService
             $priced  = Decimal::value((string)($data['total'] ?? '0'));
             $advance = Decimal::value((string)($data['advance'] ?? '0'));
             $status  = 'Received';
+            $deliveryAt = DeliveryTiming::promise($data);
+            if (!$deliveryAt) throw ValidationException::withMessages(['delivery_date' => 'A promised delivery date and time is required.']);
 
             // Tax and service charge that are configured as *exclusive* are
             // added here, so the stored total is always what the customer
@@ -80,8 +82,8 @@ class OrderService
                 'status'             => $status,
                 'priority'           => $data['priority'] ?? 'Normal',
                 'progress'           => Order::progressFor($status),
-                'delivery_date'      => $data['delivery_date'] ?? null,
-                'time_slot'          => $data['time_slot'] ?? null,
+                'delivery_date'      => $deliveryAt,
+                'time_slot'          => $deliveryAt->format('g:i A'),
                 'notes'              => $data['notes'] ?? null,
             ]);
 
@@ -152,6 +154,7 @@ class OrderService
     {
         return DB::transaction(function () use ($order, $data) {
             $order=Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
+            $previousDeliveryDate = $order->delivery_date?->copy();
             if (!isset($data['garments']) && $order->items_migrated_at) {
                 $data = app(OrderItemsService::class)->normalizeLegacyUpdate($order,$data);
             }
@@ -171,6 +174,9 @@ class OrderService
             }
             $previousStatus = $order->status;
             $newStatus      = $data['status'] ?? $previousStatus;
+            if ($newStatus === 'Ready' && $previousStatus !== 'Ready') {
+                throw ValidationException::withMessages(['status'=>'Use Send SMS to mark this order Ready after the notification succeeds.']);
+            }
             if ($newStatus !== $previousStatus && !$order->canMoveTo($newStatus)) {
                 throw ValidationException::withMessages(['status' => 'Follow the order workflow one stage at a time.']);
             }
@@ -196,8 +202,9 @@ class OrderService
                 'product_service_id' => $data['product_service_id'] ?? null,
             ], fn ($v) => $v !== null));
 
-            if (array_key_exists('delivery_date', $data)) {
-                $order->delivery_date = $data['delivery_date'];
+            if (array_intersect(['delivery_date', 'delivery_time', 'time_slot'], array_keys($data))) {
+                $order->delivery_date = DeliveryTiming::promise($data, $order);
+                $order->time_slot = $order->delivery_date?->format('g:i A');
             }
 
             if (array_key_exists('notes', $data)) {
@@ -251,6 +258,14 @@ class OrderService
             }
 
             $this->syncDelivery($order);
+            if ($previousDeliveryDate?->toDateTimeString() !== $order->delivery_date?->toDateTimeString()) {
+                CustomerNotificationDispatcher::dispatch('due-extended', $order, [
+                    'oldDate' => Dates::format($previousDeliveryDate, ''),
+                    'newDate' => Dates::format($order->delivery_date, ''),
+                    'reason' => $data['reason'] ?? '',
+                ]);
+            }
+
 
             ActivityLogger::updated(
                 $order,
@@ -265,22 +280,51 @@ class OrderService
         });
     }
 
+    /** Staff verifies physical readiness; Ready is earned by an accepted SMS. */
+    public function markReady(Order $order): array
+    {
+        $this->prepareForCollection($order);
+        $before = $order->fresh()->status;
+        $notification = app(CollectionNotifications::class)->sendOrders([$order->id]);
+        $fresh = $order->fresh()->load('customer');
+        return ['changed'=>$before !== 'Ready' && $fresh->status === 'Ready','order'=>$fresh,'notification'=>$notification];
+    }
+
+    public function prepareForCollection(Order $order): void
+    {
+        DB::transaction(function () use ($order) {
+            $locked = Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
+            if (!in_array($locked->status, Order::UNVERIFIED_STATUSES, true)) return false;
+            if ($locked->status !== 'Ready for Verification') {
+                $this->changeStatus($locked, 'Ready for Verification', 'Garments physically checked by operator');
+            }
+            return true;
+        });
+    }
+
     /**
      * Status-only transition, used by the kanban board and quick actions.
      */
-    public function changeStatus(Order $order, string $status, ?string $note = null): Order
+    public function changeStatus(Order $order, string $status, ?string $note = null, bool $smsConfirmed = false): Order
     {
+        if ($status === 'Ready' && !$smsConfirmed && $order->status !== 'Ready') {
+            if (DB::transactionLevel() > 0) throw ValidationException::withMessages(['status'=>'Send the collection SMS outside an open transaction.']);
+            return $this->markReady($order)['order'];
+        }
         return DB::transaction(function () use ($order, $status, $note) {
             $order=Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
             $from = $order->status;
+
+            if ($status === 'Ready' && $from !== 'Ready' && !$order->collectionMessages()
+                ->whereIn('sms_logs.status', CollectionNotifications::SUCCESS)->whereNotNull('sms_logs.sent_at')->exists()) {
+                throw ValidationException::withMessages(['status'=>'A successful collection SMS is required before this order becomes Ready.']);
+            }
 
             if ($from === $status) {
                 return $order;
             }
 
-            // The workflow moves one step at a time. Anything else — a jump
-            // over a stage, or a status that cannot follow this one at all —
-            // is a mis-click or a stale screen, never a real instruction.
+            // Allow configured forward transitions, including early physical readiness.
             if (!$order->canMoveTo($status)) {
                 throw ValidationException::withMessages([
                     'status' => sprintf(
@@ -312,7 +356,6 @@ class OrderService
             $this->syncDelivery($order);
 
             NotificationService::orderStatusChanged($order, $from, $status);
-            if ($status === 'Ready') CustomerNotificationDispatcher::dispatch('order-ready', $order);
             ActivityLogger::log(
                 'Order status changed',
                 sprintf('%s moved from %s to %s', $order->display_number, $from, $status),
@@ -385,111 +428,6 @@ class OrderService
     }
 
     /**
-     * Resolve elapsed stages on normal requests. A long absence catches up all
-     * eligible hops at their original deadlines, never at the page-open time.
-     */
-    public function reconcileElapsedOrders(): int
-    {
-        $asOf = now();
-        $moved = 0;
-        if (Settings::bool('auto_status_enabled')) {
-            Order::whereIn('status', array_keys(Order::AUTO_ADVANCE))->withStageSince()
-                ->chunkById(200, function ($orders) use ($asOf, &$moved) {
-                    foreach ($orders as $candidate) {
-                        if (!$candidate->elapsedTransitions($asOf)) continue;
-                        $moved += DB::transaction(function () use ($candidate, $asOf) {
-                            $order = Order::whereKey($candidate->id)->lockForUpdate()->first();
-                            if (!$order) return 0;
-                            $order->setAttribute('stage_since', $order->statusHistories()->reorder()->latest('id')->value('created_at'));
-                            $transitions = $order->elapsedTransitions($asOf);
-                            foreach ($transitions as $transition) {
-                                $from = $transition['from'];
-                                $to = $transition['to'];
-                                $order->status = $to;
-                                $order->progress = Order::progressFor($to);
-                                // stage_since is a query-only value, never an orders column.
-                                $order->offsetUnset('stage_since');
-                                $order->save();
-                                $note = 'Automatic timestamp transition; reconciled at '.$asOf->toIso8601String();
-                                $this->recordHistory($order, $from, $to, $note, $transition['at']);
-                                NotificationService::orderStatusChanged($order, $from, $to);
-                                ActivityLogger::log('Order status changed', "{$order->display_number} moved from {$from} to {$to}",
-                                    'orders', $order, ['from' => $from, 'to' => $to, 'effective_at' => $transition['at']->toIso8601String()], 'status_changed');
-                            }
-                            if ($transitions) $this->syncDelivery($order);
-                            return count($transitions);
-                        });
-                    }
-                });
-        }
-        if ($moved) StatsService::flush();
-
-        // Recover a committed manual Ready transition if its HTTP callback was
-        // interrupted before claiming the SMS. The existing atomic claim deduplicates.
-        Order::where('status', 'Ready')->whereNull('ready_sms_attempted_at')->whereNull('notified_at')
-            ->whereHas('statusHistories', fn ($q) => $q->where('from_status', 'Ready for Verification')->where('to_status', 'Ready'))
-            ->chunkById(200, function ($ready) {
-                foreach ($ready as $order) CustomerNotificationDispatcher::dispatch('order-ready', $order);
-            });
-        return $moved;
-    }
-
-    /**
-     * Raise a notification for every open order whose delivery date has passed.
-     *
-     * This used to overwrite the order's status with "Overdue", which lost the
-     * only thing the workshop cares about: whether the garment is still being
-     * stitched, waiting for verification, or sitting on the shelf. Being late
-     * is a property of the delivery date, not a stage of the work, so the
-     * status is now left alone and `Order::$is_overdue` derives lateness on the
-     * fly. Nothing needs to be written for the badge to be correct.
-     *
-     * What remains here is the alert: the shop should still be told once.
-     */
-    public function flagOverdueOrders(bool $force = false): int
-    {
-        if (!$force && !$this->shouldSweep('orders.sweep.overdue')) {
-            return 0;
-        }
-
-        $orders = Order::query()
-            ->whereNotNull('delivery_date')
-            ->where('delivery_date', '<', now()->startOfDay())
-            ->whereIn('status', Order::OPEN_STATUSES)
-            ->with('customer')
-            ->lazyById(200);
-
-        $raised = 0;
-
-        foreach ($orders as $order) {
-            if (NotificationService::orderOverdue($order)) {
-                $raised++;
-            }
-        }
-
-        return $raised;
-    }
-
-    /* ------------------------------------------------------------------ */
-    /* Internals                                                           */
-    /* ------------------------------------------------------------------ */
-
-    /**
-     * Rate-limits the background sweeps so a burst of page views doesn't turn
-     * into a burst of identical scans. Returns true at most once per window.
-     */
-    private function shouldSweep(string $key, int $seconds = 300): bool
-    {
-        if (Cache::has($key)) {
-            return false;
-        }
-
-        Cache::put($key, true, $seconds);
-
-        return true;
-    }
-
-    /**
      * Money received for an order, read straight from the ledger so an
      * in-flight edit can never be answered from a stale eager-loaded sum.
      *
@@ -521,7 +459,7 @@ class OrderService
 
     private function applyStatusTimestamps(Order $order, string $status): void
     {
-        if (in_array($status, ['Ready', 'Completed'], true) && !$order->completed_at) {
+        if (in_array($status, ['Ready for Verification','Ready', 'Completed'], true) && !$order->completed_at) {
             $order->completed_at = now();
         }
 
@@ -543,7 +481,7 @@ class OrderService
      */
     private function recordStaffWork(Order $order, string $status): void
     {
-        if (!in_array($status, ['Delivered', 'Completed'], true) || !$order->staff_id) {
+        if (!in_array($status, ['Ready', 'Delivered', 'Completed'], true) || !$order->staff_id) {
             return;
         }
 
@@ -551,7 +489,7 @@ class OrderService
             return;
         }
 
-        $staff = Staff::find($order->staff_id);
+        $staff = Staff::whereKey($order->staff_id)->lockForUpdate()->first();
 
         if (!$staff) {
             return;
@@ -572,9 +510,22 @@ class OrderService
             'quantity'     => $quantity,
             'rate'         => $rate,
             'amount'       => round($quantity * $rate, 2),
-            'completed_on' => now()->toDateString(),
+            'completed_on' => ($order->completed_at ?? $order->delivered_at ?? $order->updated_at ?? now())->toDateString(),
             'notes'        => 'Recorded automatically on ' . $status,
         ]);
+    }
+
+    /** Repair missing completion credits without changing orders or sending messages. */
+    public function reconcileStaffWork(Order $order): bool
+    {
+        return DB::transaction(function () use ($order) {
+            $locked = Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
+            if (StaffWorkLog::where('order_id', $locked->id)->exists()) return false;
+            $this->recordStaffWork($locked, $locked->status);
+            $created = StaffWorkLog::where('order_id', $locked->id)->exists();
+            if ($created) StatsService::flush();
+            return $created;
+        });
     }
 
     private function recordHistory(Order $order, ?string $from, string $to, ?string $note = null, ?\Illuminate\Support\Carbon $effectiveAt = null): void
@@ -627,6 +578,10 @@ class OrderService
             return Customer::findOrFail($data['customer_id']);
         }
 
+        if ($existing = CustomerLifecycle::matchingPhone((string)($data['customer_phone'] ?? ''))) {
+            if ($existing->trashed()) CustomerLifecycle::rejectDuplicate($existing);
+            return $existing;
+        }
         return Customer::firstOrCreate(
             ['phone' => $data['customer_phone'] ?? null],
             [

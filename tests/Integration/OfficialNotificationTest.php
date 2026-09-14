@@ -326,8 +326,8 @@ final class OfficialNotificationTest extends TestCase
             $this->fakeSms();
             app(OrderService::class)->changeStatus($order, 'Ready');
             Http::assertNothingSent();
-            foreach ([1, 1] as $count) {
-                $this->postJson(route('orders.notify', $order), [])->assertOk()->assertJsonPath('notification.sent', true);
+            foreach ([0, 0] as $count) {
+                $this->postJson(route('orders.notify', $order), [])->assertOk()->assertJsonPath('changed', false);
                 $this->assertSame($count, SmsLog::where('order_id', $order->id)->where('template_id', 'order-ready')->count());
             }
         } finally {
@@ -367,7 +367,7 @@ final class OfficialNotificationTest extends TestCase
             $this->fakeHttp(['*' => Http::failedConnection()]);
             $this->postJson(route('orders.store'), ['customer_id' => $customer->id, 'garment' => 'Shirt', 'total' => '100.00', 'advance' => '0.00',
                 'measurements' => ['length'=>40,'chest'=>38,'waist'=>34,'chest_losing'=>2,'waist_losing'=>2,'hip_losing'=>2],
-                'delivery_date' => now()->addDay()->toDateString()])->assertCreated();
+                'delivery_date' => now()->addDay()->toDateString(), 'delivery_time' => '17:00'])->assertCreated();
             $order = Order::where('customer_id', $customer->id)->firstOrFail();
             $this->assertSame('100.00', $order->total);
             $this->assertDatabaseHas('sms_logs', ['order_id' => $order->id, 'template_id' => 'order-created', 'status' => 'failed']);
@@ -385,17 +385,17 @@ final class OfficialNotificationTest extends TestCase
         }
     }
 
-    public function test_scheduled_and_page_reminders_share_phone_and_repeat_behavior(): void
+    public function test_scheduled_delivery_attention_never_sends_customer_reminders(): void
     {
         $order = $this->order();
         DB::commit();
         try {
-            Settings::put(['sms_enabled' => true, 'alert_days_before' => 2]);
+            Settings::put(['sms_enabled' => true]);
             $this->fakeSms();
-            NotificationService::sweepDueOrders();
-            NotificationService::sweepDueOrders();
-            $this->assertSame(1,SmsLog::where('order_id',$order->id)->where('template_id','due-reminder')->where('status','accepted')->count());
-            $this->assertDatabaseHas('sms_logs',['order_id' => $order->id, 'phone' => '+923001234567']);
+            app(\App\Services\DeliveryAttentionService::class)->run();
+            app(\App\Services\DeliveryAttentionService::class)->run();
+            Http::assertNothingSent();
+            $this->assertSame(0,SmsLog::where('order_id',$order->id)->count());
         } finally {
             Settings::put(['sms_enabled' => false]);
             DB::beginTransaction();

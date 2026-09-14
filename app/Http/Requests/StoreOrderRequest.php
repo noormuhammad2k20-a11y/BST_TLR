@@ -34,6 +34,7 @@ class StoreOrderRequest extends FormRequest
             // The browser blocks past dates too, but that is a convenience, not
             // a guarantee — this is the rule that actually holds.
             'delivery_date'      => ['required', 'date', 'after_or_equal:today'],
+            'delivery_time' => ['required_without:time_slot', 'date_format:H:i'],
             'time_slot'          => ['nullable', 'string', 'max:100'],
             'payment_method'     => ['nullable', Rule::in(\App\Models\Payment::METHODS)],
             'notes'              => ['nullable', 'string', 'max:2000'],
@@ -62,6 +63,13 @@ class StoreOrderRequest extends FormRequest
             $rules['advance'] = ['required','numeric','min:0','max:99999999'];
         }
         return array_merge($rules, \App\Services\OrderItemsService::rules());
+    }
+
+    public function attributes(): array
+    {
+        return collect(Measurement::labels())
+            ->mapWithKeys(fn ($label, $field) => ["measurements.$field" => $label])
+            ->all();
     }
 
     public function messages(): array

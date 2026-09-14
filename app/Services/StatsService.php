@@ -107,7 +107,7 @@ class StatsService
                 'overdue_count'    => Order::overdue()->count(),
                 // Orders whose garments are back in the shop and waiting for a
                 // member of staff to physically check them.
-                'awaiting_verification' => Order::where('status', 'Ready for Verification')->count(),
+                'in_progress' => Order::whereIn('status', ['Pending', 'Stitching', 'In Progress', 'Ready for Verification'])->count(),
             ];
         });
     }

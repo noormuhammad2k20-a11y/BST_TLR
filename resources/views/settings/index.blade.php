@@ -56,6 +56,8 @@
   </div>
 </div>
 
+@include('license.status')
+
 <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
   <!-- Settings Sidebar -->
   <div class="bg-white p-2 rounded-xl border border-slate-200 shadow-sm h-fit sticky top-24" id="settings-tabs"></div>
@@ -117,6 +119,7 @@
     { name: 'Thermal Printer',   icon: 'fa-solid fa-print',                group: 'printer',      render: panelThermalPrinter },
     { name: 'Measurements',      icon: 'fa-solid fa-ruler-combined',       group: 'measurements', render: panelMeasurements },
     { name: 'Notifications',     icon: 'fa-solid fa-bell',                 group: 'notifications', render: panelNotifications },
+    { name: 'Delivery & Reminders', icon: 'fa-solid fa-comment-sms', group: 'collection', render: panelCollectionAlerts },
     { name: 'Backup & Data',     icon: 'fa-solid fa-database',             group: null,           render: panelBackup },
     { name: 'Theme & Display',   icon: 'fa-solid fa-palette',              group: 'theme',        render: panelTheme },
     { name: 'SMS Settings',      icon: 'fa-solid fa-comment-sms',           group: 'sms',          render: panelSms },
@@ -228,11 +231,18 @@
      Appearance and formatting choices take effect across the whole
      app the moment they are saved, with no reload.
      ============================================================ */
+  function syncReceiptBranding() {
+    Object.assign(Atelier.shop, {
+      logo: val('logo_path'), stamp: val('stamp_path'),
+      showLogo: isOn('receipt_show_logo'), showStamp: isOn('receipt_show_stamp'),
+    });
+  }
+
   function syncRuntime() {
+    syncReceiptBranding();
     Atelier.refreshDisplay({
       colorMode:     val('color_mode', 'light'),
       primaryColor:  val('primary_color', '#4F46E5'),
-      sidebarTheme:  val('sidebar_theme', 'white'),
       compactTables: isOn('compact_tables'),
       rowsPerPage:   num('rows_per_page', 10),
       dateFormat:    val('date_format', 'DD/MM/YYYY'),
@@ -448,55 +458,9 @@
         <div class="set-card mb-6">
           <h4 class="set-legend">Order Workflow Rules</h4>
           <div class="space-y-3">
-            <div class="set-row">
-              <div>
-                <div class="text-sm font-semibold text-slate-800">Move orders on automatically</div>
-                <div class="text-xs text-slate-500">Advance an order once it has waited out the delay for its stage</div>
-              </div>
-              <div data-setting="auto_status_enabled" class="toggle ${isOn('auto_status_enabled') ? 'on' : ''}" onclick="this.classList.toggle('on')"></div>
-            </div>
-
-            <div>
-              <label class="set-label">Count delays in</label>
-              <select data-setting="auto_status_unit" class="set-field pro-input">
-                <option value="hours" ${val('auto_status_unit') !== 'minutes' ? 'selected' : ''}>Hours</option>
-                <option value="minutes" ${val('auto_status_unit') === 'minutes' ? 'selected' : ''}>Minutes</option>
-              </select>
-              <p class="set-hint">Applies to every delay below. Minutes is useful for a fast shop &mdash; or for watching the workflow run end to end while you test it.</p>
-            </div>
-
-            <div class="grid grid-cols-2 gap-4">
-              <div>
-                <label class="set-label">Received &rarr; Pending</label>
-                <input type="number" min="0" max="10080" data-setting="auto_status_received_delay" value="${esc(val('auto_status_received_delay'))}" class="set-field pro-input">
-              </div>
-              <div>
-                <label class="set-label">Pending &rarr; Stitching</label>
-                <input type="number" min="0" max="10080" data-setting="auto_status_pending_hours" value="${esc(val('auto_status_pending_hours'))}" class="set-field pro-input">
-              </div>
-              <div>
-                <label class="set-label">Stitching &rarr; Ready for Verification</label>
-                <input type="number" min="0" max="10080" data-setting="auto_status_progress_delay" value="${esc(val('auto_status_progress_delay'))}" class="set-field pro-input">
-              </div>
-              <div>
-                <label class="set-label">Verification / Collection</label>
-                <input type="text" value="Staff confirmation required" disabled class="set-field pro-input">
-              </div>
-            </div>
-            <p class="set-hint"><b>0 switches that step off.</b> Timers stop at Ready for Verification. Staff must verify garments before Ready and confirm collection before Delivered.</p>
-
-            <div>
-              <label class="set-label">Warn &ldquo;At Risk&rdquo; this many hours before delivery</label>
-              <input type="number" min="1" max="336" data-setting="at_risk_hours" value="${esc(val('at_risk_hours'))}" class="set-field pro-input">
-              <p class="set-hint">An unfinished order due within this window is flagged on the board before it is late, not after.</p>
-            </div>
-
-            <div class="set-row">
-              <div>
-                <div class="text-sm font-semibold text-slate-800">Confirm delivery manually</div>
-                <div class="text-xs text-slate-500">Staff confirms collection, including fully paid orders</div>
-              </div>
-              <div class="toggle on" aria-disabled="true"></div>
+            <div><label class="set-label">Delivery Alert Before (hours)</label>
+              <input type="number" min="1" max="24" data-setting="delivery_alert_hours" value="${esc(val('delivery_alert_hours'))}" class="set-field pro-input">
+              <p class="set-hint">Orders progress automatically to Ready for Verification by the promised delivery time, including outside shop hours. Shop hours control delivery alerts. Ready and Delivered require staff confirmation.</p>
             </div>
           </div>
         </div>
@@ -504,12 +468,7 @@
         <div class="set-card">
           <h4 class="set-legend">Dropdown Options</h4>
           <div class="space-y-4">
-            <div>
-              <label class="set-label">Delivery Time Slots</label>
-              <input data-setting="delivery_slots" value="${esc(val('delivery_slots'))}" class="set-field pro-input" oninput="renderChips('slot-chips', this.value)">
-              <div class="flex flex-wrap gap-1.5 mt-2" id="slot-chips"></div>
-              <p class="set-hint">Separate each slot with <code class="bg-slate-100 px-1 rounded">|</code>. Used by the order wizard.</p>
-            </div>
+
             <div>
               <label class="set-label">Delivery Extension Reasons</label>
               <input data-setting="extension_reasons" value="${esc(val('extension_reasons'))}" class="set-field pro-input" oninput="renderChips('reason-chips', this.value)">
@@ -521,6 +480,29 @@
 
         ${panelFooter()}
       </div>`;
+  }
+
+  function panelCollectionAlerts() {
+    const toggle = (key,label,hint) => `<div class="set-row"><div><div class="text-sm font-semibold text-slate-800">${label}</div><div class="text-xs text-slate-500">${hint}</div></div><div data-setting="${key}" class="toggle ${isOn(key) ? 'on' : ''}" onclick="this.classList.toggle('on')"></div></div>`;
+    return `<div class="p-6"><h3 class="text-lg font-semibold text-slate-900 mb-1 tracking-tight">Delivery & Customer Reminder Alerts</h3>
+      <p class="text-sm text-slate-500 mb-6">Manage collection notices and follow-ups using the shop timezone. SMS is sent only when an operator chooses Send SMS.</p>
+      <div class="set-card mb-6"><h4 class="set-legend">Due Date Alerts</h4>
+        ${toggle('delivery_alerts_enabled','Enable delivery alerts','Show actionable due-date alerts for open orders.')}
+        <div class="mt-4"><label class="set-label">Alert before due date (days)</label>
+          <input type="number" min="0" max="365" list="delivery-alert-day-options" data-setting="delivery_alert_before_days" value="${esc(val('delivery_alert_before_days'))}" class="set-field pro-input">
+          <datalist id="delivery-alert-day-options"><option value="0"><option value="1"><option value="2"><option value="3"></datalist>
+          <p class="set-hint">0 = due today. Choose 1, 2, 3 or any custom number up to 365 days.</p></div>
+        ${toggle('delivery_overdue_alerts_enabled','Enable overdue alerts','Include orders past their promised collection time.')}
+      </div>
+      <div class="set-card mb-6"><h4 class="set-legend">Customer Collection Reminders</h4>
+        ${toggle('collection_reminder_enabled','Enable reminder system','Allow due reminders for notified orders still awaiting collection.')}
+        ${toggle('collection_reminder_alerts_enabled','Enable customer reminder alerts','Highlight notified orders still awaiting collection.')}
+        <div class="mt-4"><label class="set-label">Reminder interval (days)</label>
+          <input type="number" min="1" max="365" data-setting="collection_reminder_days" value="${esc(val('collection_reminder_days'))}" class="set-field pro-input">
+          <p class="set-hint">Default: 7 days after the last successful collection SMS. Each successful reminder restarts this interval.</p></div>
+        ${toggle('collection_reminder_sms_enabled','Allow reminder SMS','Operators can send reminders when the interval has passed. This does not send automatic SMS.')}
+        ${toggle('delivery_dashboard_alerts_enabled','Show dashboard notifications','Show collection alerts on the dashboard and in the notification bell.')}
+      </div>${panelFooter()}</div>`;
   }
 
   /** Live preview of a pipe-delimited list as it is typed. */
@@ -635,6 +617,8 @@
       if (!res.ok) throw Object.assign(new Error(payload.message || 'Upload failed'), { errors: payload.errors });
 
       DB_SETTINGS[kind + '_path'] = payload.url;
+      SAVED_SETTINGS[kind + '_path'] = payload.url;
+      syncReceiptBranding();
       document.getElementById(kind + '-preview').innerHTML =
         `<img src="${esc(payload.url)}" alt="${kind}" class="w-full h-full object-contain">`;
       document.getElementById(kind + '-remove').classList.remove('hidden');
@@ -651,6 +635,8 @@
     try {
       const res = await Atelier.api.post(SETTINGS_ROUTES.removeUpload, { type: kind });
       DB_SETTINGS[kind + '_path'] = '';
+      SAVED_SETTINGS[kind + '_path'] = '';
+      syncReceiptBranding();
 
       document.getElementById(kind + '-preview').innerHTML =
         `<i class="fa-solid ${kind === 'logo' ? 'fa-image' : 'fa-stamp'} text-slate-400 text-xl"></i>`;
@@ -848,6 +834,7 @@
      ============================================================ */
   function panelThermalPrinter() {
     const switches = [
+      ['delivery_print_receipt', 'Print final receipt on delivery', 'Opens the print dialog after Mark Delivered. Turn off to collect without printing.'],
       ['receipt_show_logo',    'Shop name / logo',   'The header block at the top of the receipt'],
       ['receipt_show_phone',   'Customer phone',     "Prints the customer's number under their name"],
       ['receipt_show_advance', 'Advance paid',       'The amount already collected'],
@@ -900,7 +887,7 @@
           <div class="flex justify-center pt-2">
             <div id="print-receipt" class="bg-white p-4 shadow-md border border-slate-200" style="width: 280px; font-family: 'Courier New', monospace; font-size: 12px; color: #000;"></div>
           </div>
-          <button class="mt-6 bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-800 w-full transition-colors" onclick="window.print()">
+          <button class="mt-6 bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-800 w-full transition-colors" onclick="printReceiptPreview()">
             <i class="fa-solid fa-print text-xs mr-1"></i> Print Test Receipt
           </button>
         </div>
@@ -913,6 +900,22 @@
    * The preview reflects the switches live and uses the shop's real details
    * and a real order, so what is shown here is what the printer produces.
    */
+  window.printReceiptPreview = async function () {
+    const receipt = document.getElementById('print-receipt');
+    if (!receipt) return;
+    try {
+      await Promise.all(Array.from(receipt.querySelectorAll('img'), async img => {
+        img.src = new URL(img.getAttribute('src'), document.baseURI).href;
+        img.loading = 'eager';
+        await img.decode();
+        if (!img.naturalWidth) throw new Error('Receipt image could not load. Please retry printing.');
+      }));
+      window.print();
+    } catch (error) {
+      Atelier.reportError(error, 'Could not print receipt images');
+    }
+  };
+
   function updateReceiptPreview() {
     const container = document.getElementById('print-receipt');
     if (!container) return;
@@ -981,7 +984,7 @@
      ============================================================ */
   function panelMeasurements() {
     const required = DB_SETTINGS.measurement_required || [];
-    const labelOf = f => f.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    const labelOf = f => (@json(\App\Models\Measurement::labels()))[f] || f.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 
     return `
       <div class="p-6">
@@ -1119,8 +1122,7 @@
         <div class="set-card mb-6">
           <h4 class="set-legend">Alert Rules</h4>
           <div class="space-y-3">
-            ${number('alert_days_before', 'Alert when due in (days)', 'How far ahead a delivery starts reminding you', 0, 30)}
-            ${row('repeat_alerts', 'Repeat due-date alerts', 'Alert again while an order stays outstanding', "toggleGroup('repeat-fields', this)")}
+            ${row('repeat_alerts', 'Repeat stock alerts', 'Alert again while stock stays low', "toggleGroup('repeat-fields', this)")}
             <div id="repeat-fields" class="${isOn('repeat_alerts') ? '' : 'opacity-50'}">
               ${number('repeat_alert_hours', 'Repeat every (hours)', 'Minimum gap before the same order alerts again', 1, 72)}
             </div>
@@ -1463,12 +1465,11 @@
   var BRAND_PRESETS = ['#4F46E5', '#2563EB', '#0D9488', '#059669', '#D97706', '#DC2626', '#DB2777', '#7C3AED'];
 
   function panelTheme() {
-    const themes = window.SIDEBAR_THEMES || {};
 
     return `
       <div class="p-6">
         <h3 class="text-lg font-semibold text-slate-900 mb-1 tracking-tight">Theme &amp; Display</h3>
-        <p class="text-sm text-slate-500 mb-6">Appearance choices are saved to your account and follow you across devices.</p>
+        <p class="text-sm text-slate-500 mb-6">Appearance choices are shared across both admin panels and all devices.</p>
 
         <div class="set-card mb-6">
           <h4 class="set-legend">Color Mode</h4>
@@ -1530,38 +1531,7 @@
           </div>
         </div>
 
-        <div class="set-card">
-          <h4 class="set-legend">Sidebar Color</h4>
-          <p class="text-xs text-slate-500 mb-4">Saved with your account, not just this browser.</p>
-          <input type="hidden" data-setting="sidebar_theme" id="sidebar-theme-field" value="${esc(val('sidebar_theme', 'white'))}">
-          <div class="grid grid-cols-4 gap-3">
-            ${Object.entries(themes).map(([key, t]) => {
-              const active = val('sidebar_theme', 'white') === key;
-              return `
-              <button onclick="selectSidebarTheme('${key}')" class="group relative rounded-xl overflow-hidden border-2 ${active ? 'border-indigo-500 ring-2 ring-indigo-200' : 'border-slate-200 hover:border-slate-300'} transition-all hover:shadow-md" data-theme-card="${key}">
-                <div class="p-2.5" style="background:${t.bg}">
-                  <div class="flex items-center gap-1.5 mb-2">
-                    <div class="w-4 h-4 rounded" style="background:${t.logoBg}"></div>
-                    <div class="h-1.5 w-10 rounded-full" style="background:${t.muted}; opacity:0.5"></div>
-                  </div>
-                  <div class="space-y-1">
-                    <div class="h-1.5 rounded-full" style="background:${t.fill}; width:85%"></div>
-                    <div class="h-1.5 rounded-full" style="background:${t.hover}; width:70%; opacity:0.5"></div>
-                    <div class="h-1.5 rounded-full" style="background:${t.hover}; width:60%; opacity:0.5"></div>
-                  </div>
-                  <div class="flex items-center gap-1 mt-2">
-                    <div class="w-3 h-3 rounded-full" style="background:${t.accent}"></div>
-                    <div class="h-1 w-6 rounded-full" style="background:${t.muted}; opacity:0.4"></div>
-                  </div>
-                </div>
-                <div class="bg-white px-2 py-1.5 text-center">
-                  <div class="text-[10px] font-semibold text-slate-700 truncate">${esc(t.n)}</div>
-                </div>
-                ${active ? '<div class="absolute top-1 right-1 w-5 h-5 rounded-full bg-indigo-500 flex items-center justify-center"><i class="fa-solid fa-check text-white" style="font-size:8px"></i></div>' : ''}
-              </button>`;
-            }).join('')}
-          </div>
-        </div>
+        <sidebar-appearance-settings></sidebar-appearance-settings>
 
         ${panelFooter()}
       </div>`;
@@ -1590,12 +1560,6 @@
     });
 
     preview('primary_color', hex);
-  };
-
-  window.selectSidebarTheme = function (key) {
-    document.getElementById('sidebar-theme-field').value = key;
-    preview('sidebar_theme', key);
-    switchSettingsPanel('Theme & Display');
   };
 
   function panelSms() {
@@ -1735,7 +1699,8 @@
       'order-ready':      'Sent when a customer is notified their order is ready',
       'payment-received': 'Sent when a partial payment is recorded',
       'due-reminder':     'Sent when an order enters its reminder window',
-      'due-extended':     'Sent when a delivery date is pushed back',
+      'due-extended':     'Sent when a delivery date is rescheduled',
+      'collection-reminder': 'Sent when a ready order is still awaiting collection',
       'final-receipt':    'Sent when the balance reaches zero',
     }[id] || 'Sent manually';
   }
@@ -1744,12 +1709,14 @@
     let preview = String(text ?? '');
     const values = SMS_PREVIEW_VARS;
     if (!values.shopPhone) {
-      preview = preview.replace(' For assistance, call {shopPhone}.', '').replace(' Contact: {shopPhone}.', '');
+      preview = preview.replace(' For assistance, call {shopPhone}.', '').replace(' Contact: {shopPhone}.', '').replace(' For assistance, contact us at {shopPhone}.', '').replace(' For assistance, contact {shopPhone}.', '');
     }
     if (!values.reason) preview = preview.replace(' Reason: {reason}.', '');
     if (!values.oldDate || values.oldDate === values.newDate) {
       preview = preview.replace('from {oldDate} to {newDate}', 'to {newDate}');
     }
+    preview = preview.replace(/Rs\s+\{(remainingBalance|totalAmount|advancePaid|paidAmount)\}/g, (_, key) =>
+      'Rs ' + String(values[key] ?? '0').replace(/^(?:Rs\.?|PKR)\s*/i, ''));
     preview = preview.replace(/\{([a-zA-Z]+)\}/g, (_, key) => values[key] ?? '').replace(/\{[a-zA-Z]+\}/g, '');
     const decoder = document.createElement('textarea');
     decoder.innerHTML = preview;
@@ -1933,7 +1900,6 @@
     syncRuntime();
 
     // Populate the previews that depend on freshly rendered inputs.
-    renderChips('slot-chips', val('delivery_slots'));
     renderChips('reason-chips', val('extension_reasons'));
 
     // Guard against closing the tab mid-edit.
