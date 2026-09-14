@@ -35,6 +35,11 @@
      column off the edge.
      ========================================================================== */
   @include('receipts.slip-styles')
+  .slip-credit-customer { width: 100%; text-align: center; }
+  .slip-credit-customer > div { display: block; width: 100%; text-align: center; }
+  .slip-credit-customer .name { display: inline; }
+  .slip-credit-customer .sys { font-weight: 700; letter-spacing: normal; }
+
   /* Workshop-only containment; customer receipt styles are unchanged. */
   .slip-workshop, .slip-workshop * { box-sizing: border-box; }
   .slip-workshop .slip-row .k {
@@ -91,6 +96,26 @@
       box-shadow: none !important;
       border-radius: 0 !important;
       padding: 2mm 2mm 6mm;
+    }
+
+    /* Thermal heads dither gray/transparency: use full-density ink only in print. */
+    #thermal-print-area .slip, #thermal-print-area .slip * {
+      color: #000 !important;
+      opacity: 1 !important;
+      filter: none !important;
+      text-shadow: none !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    /* Preserve the approved white lettering on black copy-marker bars. */
+    #thermal-print-area .slip-kind:not(.ghost),
+    #thermal-print-area .slip-kind:not(.ghost) * { color: #fff !important; }
+    #thermal-print-area .slip-mcell { border-bottom-color: #000 !important; }
+    #thermal-print-area .slip-foot,
+    #thermal-print-area .slip-credit,
+    #thermal-print-area .slip-credit .ty { font-weight: 600; }
+    #thermal-print-area .slip img {
+      filter: grayscale(1) brightness(.75) contrast(3) !important;
     }
 
     /* Long customer/order values must wrap rather than widen the print canvas. */
@@ -1233,7 +1258,7 @@
 
           <div class="slip-rule"></div>
           ${(() => { const msg = tidyFooter(o.footer); return msg ? `<div class="slip-foot">${esc(msg)}</div>` : ''; })()}
-          <div class="slip-credit">
+          <div class="slip-credit slip-credit-customer">
             <div>Designed &amp; Developed by <span class="name">Noor M Hingorjo</span></div>
             <div class="sys">TAILORING &amp; CLOTH HOUSE MANAGEMENT SYSTEM</div>
             <div class="tel">0303 4980786</div>
