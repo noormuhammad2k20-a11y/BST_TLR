@@ -117,6 +117,65 @@
     letter-spacing: .18em; margin-top: 2mm;
   }
 
+  /* ==========================================================================
+     THERMAL PRINT DENSITY
+     --------------------------------------------------------------------------
+     Thermal printers render font-weight:400 as thin, faded strokes because the
+     heating element is narrower than an ink nozzle.  Elements already at 700
+     print dark; everything else needs at least 600 to produce legible output.
+
+     These rules live in the shared partial so every path that @includes it —
+     orders, delivery, settings — picks up the fix automatically.
+     ========================================================================== */
+  @media print {
+    /* Base density: lift ordinary slip text from 400 → 600.  On Courier New
+       under Windows / Chrome this resolves to the bold face, which is exactly
+       what the thermal head needs.  Classes that already declare 700 (.slip-shop,
+       .slip-sec, .slip-bold, .slip-total, .slip-due .val, .slip-mcell .n,
+       .slip-kind, .slip-code, .slip-credit .name, .slip-credit .tel) keep their
+       higher weight because their selectors are more specific than `.slip`. */
+    .slip {
+      font-weight: 600;
+    }
+
+    /* Solid black everywhere — eliminate any gray that would dither on a
+       monochrome thermal head. */
+    .slip,
+    .slip *,
+    .slip-credit,
+    .slip-credit .sys,
+    .slip-credit .ty {
+      color: #000 !important;
+      opacity: 1 !important;
+      filter: none !important;
+      text-shadow: none !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+
+    /* The inverted copy-marker bar must keep white text on black background. */
+    .slip-kind:not(.ghost),
+    .slip-kind:not(.ghost) * {
+      color: #fff !important;
+    }
+
+    /* Measurement cell dotted borders: #666 → solid black. */
+    .slip-mcell {
+      border-bottom-color: #000 !important;
+    }
+
+    /* Branding images: grayscale + high contrast for monochrome thermal. */
+    .slip img {
+      filter: grayscale(1) brightness(.75) contrast(3) !important;
+    }
+
+    /* On-screen decorations that waste thermal energy / confuse the head. */
+    .slip-preview {
+      box-shadow: none !important;
+      border-radius: 0 !important;
+    }
+  }
+
   /* On-screen preview only — never printed. */
   .slip-preview {
     box-shadow: 0 1px 3px rgba(15, 23, 42, .12), 0 8px 24px rgba(15, 23, 42, .08);

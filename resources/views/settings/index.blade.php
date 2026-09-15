@@ -40,7 +40,18 @@
     body * { visibility: hidden; }
     #print-receipt, #print-receipt * { visibility: visible; }
     #print-receipt { position: absolute; left: 0; top: 0; width: 100%; }
+    /* Thermal density: match the main receipt path so the test print is
+       representative of what the customer actually receives. */
+    #print-receipt, #print-receipt * {
+      color: #000 !important;
+      opacity: 1 !important;
+      text-shadow: none !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    #print-receipt { font-weight: 600; }
   }
+
 </style>
 @endpush
 

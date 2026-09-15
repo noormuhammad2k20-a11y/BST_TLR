@@ -351,38 +351,59 @@
             </div>
 
             <div class="flex gap-2">
-                <button onclick="window.print()" class="flex-1 bg-indigo-600 text-white py-2.5 rounded-lg font-bold hover:bg-indigo-700 text-sm"><i class="fa-solid fa-print mr-1"></i> Print Receipt</button>
+                <button onclick="printClothThermalDirect()" class="flex-1 bg-indigo-600 text-white py-2.5 rounded-lg font-bold hover:bg-indigo-700 text-sm"><i class="fa-solid fa-print mr-1"></i> Print Receipt</button>
             </div>
         </div>
     </div>
 </div>
 
 <style>
-.thermal-receipt {
-    max-width: 302px;   /* 80mm at 96dpi ≈ 302px */
-    margin: 0 auto;
-    padding: 0 4px;
-    font-family: 'Courier New', Courier, monospace;
-    color: #000;
-    background: #fff;
-    font-size: 12px;
-    line-height: 1.35;
-}
-.tr-center { text-align: center; }
-.tr-hr { border: 0; border-top: 1px dashed #444; margin: 8px 0; }
-.tr-row { display: flex; justify-content: space-between; }
-.tr-shop-name { font-size: 15px; font-weight: 900; letter-spacing: -0.01em; }
-.tr-shop-sub { font-size: 10px; color: #444; margin-top: 2px; }
-.tr-table { font-size: 10px; text-transform: uppercase; font-weight: 700; }
-.tr-total { font-size: 14px; font-weight: 900; }
+/* Dedicated 80mm thermal print mode — same architecture as checkout page. */
+@include('receipts.slip-styles')
 
 @media print {
-    body > *:not(#receiptModal) { display: none !important; }
-    #receiptModal { display: block !important; position: static !important; background: transparent !important; }
-    #receiptModal > div { min-height: auto !important; padding: 0 !important; display: block !important; }
-    #receiptModal .bg-white { box-shadow: none !important; border-radius: 0 !important; padding: 0 !important; max-width: 100% !important; margin: 0 !important; }
-    #receiptModal button { display: none !important; }
-    .thermal-receipt { border: none !important; margin: 0 !important; width: 100% !important; }
+    @page clothThermal80 { size: auto; margin: 0; }
+
+    html.printing-cloth-thermal,
+    html.printing-cloth-thermal body {
+        page: clothThermal80;
+        width: 72mm !important;
+        min-width: 0 !important;
+        max-width: 72mm !important;
+        height: auto !important;
+        min-height: 0 !important;
+        max-height: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        display: block !important;
+        position: static !important;
+        overflow: visible !important;
+        transform: none !important;
+        zoom: 1 !important;
+        background: #fff !important;
+    }
+
+    html.printing-cloth-thermal body > :not(#thermal-print-area) { display: none !important; }
+    html.printing-cloth-thermal body * { visibility: hidden; }
+
+    #thermal-print-area, #thermal-print-area * { visibility: visible; }
+
+    #thermal-print-area {
+        position: static; width: 100%; max-width: 100%; min-width: 0;
+        height: auto; max-height: none; overflow: visible;
+        margin: 0; padding: 0; transform: none; zoom: 1;
+        background: #fff !important;
+        display: block !important;
+    }
+
+    #thermal-print-area .slip {
+        box-sizing: border-box; width: 100%; max-width: 100%; min-width: 0;
+        margin: 0;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+        padding: 2mm 2mm 6mm;
+        font-weight: 600;
+    }
 }
 </style>
 @endsection
@@ -459,6 +480,46 @@
             });
     };
 
+    /* Thermal print helper — toggles class, prints, cleans up. */
+    function printClothThermalDirect() {
+        const sourceSlip = document.querySelector('#receipt-content .slip');
+        if (!sourceSlip) return;
+
+        // Clean up any old print area
+        let oldArea = document.getElementById('thermal-print-area');
+        if (oldArea) oldArea.remove();
+
+        const area = document.createElement('div');
+        area.id = 'thermal-print-area';
+        area.hidden = true;
+
+        const copy = sourceSlip.cloneNode(true);
+        copy.classList.remove('slip-preview'); // don't need drop shadow in print
+        area.appendChild(copy);
+        
+        document.body.appendChild(area);
+
+        const cleanup = () => {
+            document.documentElement.classList.remove('printing-cloth-thermal');
+            const a = document.getElementById('thermal-print-area');
+            if (a) a.remove();
+        };
+        window.addEventListener('afterprint', cleanup, { once: true });
+
+        requestAnimationFrame(() => setTimeout(() => {
+            try {
+                area.hidden = false;
+                document.documentElement.classList.add('printing-cloth-thermal');
+                window.print();
+            } finally {
+                cleanup();
+            }
+        }, 60));
+    }
+
+    /* Called from the Print Receipt button inside the receipt modal. */
+    window.printClothThermalDirect = printClothThermalDirect;
+
     window.printReceipt = function(id, orderData = null) {
         const modal = document.getElementById('receiptModal');
         if (modal && modal.parentElement !== document.body) {
@@ -482,56 +543,60 @@
         const cName = order.customer ? order.customer.name : 'Walk-in Customer';
 
         let itemsHtml = (order.items || []).map(i => `
-            <div class="tr-row" style="margin-bottom:2px;">
-              <div style="flex:1;text-align:left;padding-right:4px;">${escapeStr(i.product ? i.product.name : 'Item')}</div>
-              <div style="width:38px;text-align:center;">${Number(i.quantity)}${i.product?.unit === 'meter' ? 'm' : ''}</div>
-              <div style="width:60px;text-align:right;">${Number(i.total).toLocaleString()}</div>
+            <div class="slip-row">
+                <span class="k">${escapeStr(i.product ? i.product.name : 'Item')} &times; ${Number(i.quantity)}${i.product?.unit === 'meter' ? 'm' : ''}</span>
+                <span class="v">${Number(i.total).toLocaleString()}</span>
             </div>
         `).join('');
 
         let paid = Number(order.paid_amount);
         let due = Math.max(0, Number(order.total_amount) - paid);
 
-        const shopName = shop.name || 'Cloth Store';
+        const shopName = shop.name || 'CLOTH STORE';
 
         const html = `
-            <div class="tr-center">
-                <div class="tr-shop-name">${escapeStr(shopName)}</div>
-                ${shop.tagline ? `<div class="tr-shop-sub">${escapeStr(shop.tagline)}</div>` : ''}
-                ${shop.address ? `<div class="tr-shop-sub">${escapeStr(shop.address)}</div>` : ''}
-                ${shop.phone ? `<div class="tr-shop-sub">Ph: ${escapeStr(shop.phone)}</div>` : ''}
-            </div>
-            <hr class="tr-hr">
-            <div style="font-size:11px;">
-                <div class="tr-row"><span>Invoice</span><strong>${order.invoice_number}</strong></div>
-                <div class="tr-row"><span>Date</span><span>${new Date(order.created_at).toLocaleString()}</span></div>
-                <div class="tr-row"><span>Customer</span><strong>${escapeStr(cName)}</strong></div>
-            </div>
-            <hr class="tr-hr">
-            <div class="tr-table tr-row" style="border-bottom:1px solid #000;padding-bottom:3px;margin-bottom:5px;">
-                <div style="flex:1;text-align:left;">Item</div>
-                <div style="width:38px;text-align:center;">Qty</div>
-                <div style="width:60px;text-align:right;">Total</div>
-            </div>
-            <div>${itemsHtml}</div>
-            <hr class="tr-hr">
-            <div style="font-size:11px;">
-                <div class="tr-row"><span>Subtotal</span><span>Rs ${Number(order.subtotal).toLocaleString()}</span></div>
-                ${Number(order.discount) > 0 ? `<div class="tr-row"><span>Discount</span><span>-Rs ${Number(order.discount).toLocaleString()}</span></div>` : ''}
-                <div class="tr-row tr-total" style="border-top:1px solid #000;margin-top:4px;padding-top:4px;">
-                    <span>TOTAL</span><span>Rs ${Number(order.total_amount).toLocaleString()}</span>
+            <div class="slip slip-preview" style="margin: 0 auto;">
+                <div class="slip-hd">
+                    <div class="slip-shop">${escapeStr(shopName).toUpperCase()}</div>
+                    ${shop.tagline ? `<div class="slip-tag">${escapeStr(shop.tagline)}</div>` : ''}
+                    <div class="slip-meta">
+                        ${shop.address ? `<div>${escapeStr(shop.address)}</div>` : ''}
+                        ${shop.phone ? `<div>Ph: ${escapeStr(shop.phone)}</div>` : ''}
+                    </div>
                 </div>
-            </div>
+                
+                <div class="slip-kind">CUSTOMER COPY</div>
+                
+                <div class="slip-row"><span class="k">Invoice</span><span class="v slip-bold">${order.invoice_number}</span></div>
+                <div class="slip-row"><span class="k">Date</span><span class="v">${new Date(order.created_at).toLocaleString()}</span></div>
+                
+                <div class="slip-rule"></div>
+                
+                <div class="slip-row"><span class="k">Customer</span><span class="v slip-bold">${escapeStr(cName)}</span></div>
+                
+                <div class="slip-rule"></div>
+                
+                <div class="slip-sec">ITEMS</div>
+                ${itemsHtml}
+                
+                <div class="slip-rule"></div>
+                
+                <div class="slip-row"><span class="k">Subtotal</span><span class="v">${Number(order.subtotal).toLocaleString()}</span></div>
+                ${Number(order.discount) > 0 ? `<div class="slip-row"><span class="k">Discount</span><span class="v">- ${Number(order.discount).toLocaleString()}</span></div>` : ''}
+                
+                <div class="slip-rule-s"></div>
+                <div class="slip-total"><span>TOTAL</span><span>Rs ${Number(order.total_amount).toLocaleString()}</span></div>
+                <div class="slip-rule-d"></div>
 
-            <hr class="tr-hr" style="margin-top:12px; margin-bottom:6px;">
-            <div class="tr-center" style="line-height:1.2;">
-                <div style="font-size:9px; text-transform:uppercase; color:#555;">Developed By</div>
-                <div style="font-size:13px; font-weight:bold; margin-top:2px; color:#000;">NOOR M HINGORJO</div>
-                <div style="font-size:11px; color:#000; margin-top:1px;">0303 4980786</div>
-                <div style="font-size:9px; color:#555; margin-top:3px;">POS & MANAGEMENT SYSTEM</div>
-                <div style="font-size:11px; font-weight:bold; margin-top:5px; color:#000;">THANK YOU!</div>
+                <div class="slip-credit" style="width: 100%; text-align: center;">
+                    <div style="display: block; width: 100%;">Designed & Developed by <span class="name">Noor M Hingorjo</span></div>
+                    <div class="sys" style="font-weight: 700; letter-spacing: normal;">POS & MANAGEMENT SYSTEM</div>
+                    <div class="tel">0303 4980786</div>
+                    <div class="ty">Thank You!</div>
+                </div>
+                
+                <div class="slip-code">* ${order.invoice_number} *</div>
             </div>
-            <hr class="tr-hr" style="margin-top:6px; margin-bottom:0;">
         `;
         
         document.getElementById('receipt-content').innerHTML = html;

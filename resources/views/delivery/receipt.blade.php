@@ -19,7 +19,6 @@
       body { background:white; padding:0; }
       .receipt-actions { display:none; }
       .slip { margin:0; box-shadow:none; }
-      .slip-kind { background:white; color:black; border:1px solid black; }
     }
   </style>
 </head>

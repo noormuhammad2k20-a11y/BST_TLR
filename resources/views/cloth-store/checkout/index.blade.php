@@ -1584,66 +1584,67 @@
 }
 .pos-receipt-actions { display: flex; gap: 8px; margin-top: 16px; }
 
-.thermal-receipt {
-    max-width: 302px;   /* 80mm at 96dpi ≈ 302px */
-    margin: 0 auto;
-    padding: 0 4px;
-    font-family: 'Courier New', Courier, monospace;
-    color: #000;
-    background: #fff;
-    font-size: 12px;
-    line-height: 1.35;
-}
-.tr-center { text-align: center; }
-.tr-hr { border: 0; border-top: 1px dashed #444; margin: 8px 0; }
-.tr-row { display: flex; justify-content: space-between; }
-.tr-shop-name { font-size: 15px; font-weight: 900; letter-spacing: -0.01em; }
-.tr-shop-sub { font-size: 10px; color: #444; margin-top: 2px; }
-.tr-table { font-size: 10px; text-transform: uppercase; font-weight: 700; }
-.tr-total { font-size: 14px; font-weight: 900; }
+/* ==========================================================================
+   CLOTH STORE — DEDICATED 80mm THERMAL PRINT MODE
+   --------------------------------------------------------------------------
+   Includes the same professional `.slip` styling as the Tailor Management
+   system, keeping typography, spacing, and thermal optimization consistent.
+   ========================================================================== */
+@include('receipts.slip-styles')
 
-/* Print only the receipt in 80mm thermal format. */
+   CLOTH STORE — DEDICATED 80mm THERMAL PRINT MODE
+   --------------------------------------------------------------------------
+   The global Cloth Store layout declares  @page { size: A4 portrait; ... }
+   for reports and tables.  An unnamed @page here cannot reliably override it.
+
+   Solution (mirrors the proven Tailor Management architecture):
+     1. Named page: @page clothThermal80
+     2. Scoped to  html.printing-cloth-thermal  (toggled by JS before print)
+     3. Everything outside #receiptModal is hidden
+     4. Receipt fills the 72mm printable thermal canvas (80mm paper)
+   ========================================================================== */
 @media print {
-    @page { 
-        size: 80mm auto; 
-        margin: 0; 
-    }
-    html, body {
-        width: 80mm !important;
+    @page clothThermal80 { size: auto; margin: 0; }
+
+    html.printing-cloth-thermal,
+    html.printing-cloth-thermal body {
+        page: clothThermal80;
+        width: 72mm !important;
+        min-width: 0 !important;
+        max-width: 72mm !important;
+        height: auto !important;
+        min-height: 0 !important;
+        max-height: none !important;
         margin: 0 !important;
         padding: 0 !important;
+        display: block !important;
+        position: static !important;
+        overflow: visible !important;
+        transform: none !important;
+        zoom: 1 !important;
         background: #fff !important;
     }
-    body * { visibility: hidden !important; }
-    #receiptModal, #receiptModal * { visibility: visible !important; }
-    #receiptModal {
-        position: absolute !important; 
-        left: 0 !important; 
-        top: 0 !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        width: 80mm !important;
-        background: #fff !important; 
+
+    html.printing-cloth-thermal body > :not(#thermal-print-area) { display: none !important; }
+    html.printing-cloth-thermal body * { visibility: hidden; }
+
+    #thermal-print-area, #thermal-print-area * { visibility: visible; }
+
+    #thermal-print-area {
+        position: static; width: 100%; max-width: 100%; min-width: 0;
+        height: auto; max-height: none; overflow: visible;
+        margin: 0; padding: 0; transform: none; zoom: 1;
+        background: #fff !important;
         display: block !important;
     }
-    .pos-receipt-wrap {
-        position: relative !important; 
+
+    #thermal-print-area .slip {
+        box-sizing: border-box; width: 100%; max-width: 100%; min-width: 0;
+        margin: 0;
         box-shadow: none !important;
-        border-radius: 0 !important; 
-        padding: 0 !important; 
-        margin: 0 !important;
-        width: 100% !important;
-        max-width: 80mm !important;
-    }
-    .pos-receipt-close, .pos-receipt-actions { display: none !important; }
-    .thermal-receipt { 
-        box-sizing: border-box !important;
-        width: 80mm !important;
-        max-width: 80mm !important; 
-        margin: 0 !important; 
-        padding: 4mm !important; 
-        font-size: 11px; 
-        overflow: hidden !important;
+        border-radius: 0 !important;
+        padding: 2mm 2mm 6mm;
+        font-weight: 600;
     }
 }
 
@@ -2477,22 +2478,11 @@
         Atelier.playChime?.();
         toast('Sale completed successfully!', 'success');
 
-        // Automatically open the 80mm receipt print dialog
+        // Automatically open the 80mm receipt print dialog.
+        // Uses the same dedicated thermal print helper as the manual button.
         setTimeout(() => {
-            if (lastOrder) {
-                buildReceiptHtml();
-                const modal = document.getElementById('receiptModal');
-                modal.classList.remove('hidden');
-                
-                requestAnimationFrame(() => {
-                    setTimeout(() => {
-                        window.print();
-                        // Hide the modal once the print dialog is closed
-                        modal.classList.add('hidden');
-                    }, 60);
-                });
-            }
-        }, 400); // slight delay to allow the "Done" screen to paint first
+            if (lastOrder) printClothThermal();
+        }, 400);
     }
 
     window.startNewSale = function () {
@@ -2632,15 +2622,56 @@
     };
 
     /* ============================================================
-       80mm THERMAL RECEIPT
+       80mm THERMAL RECEIPT — dedicated print helper
+       ------------------------------------------------------------
+       Mirrors the Tailor Management approach: toggle a class on
+       <html> so the named @page clothThermal80 activates, then
+       call window.print().  Cleanup runs in `finally` AND in an
+       `afterprint` listener for safety (some browsers resume JS
+       before the dialog fully closes).
        ============================================================ */
-    window.printReceipt = function () {
+    function printClothThermal() {
         if (!lastOrder) return;
+        
+        // Ensure the HTML is built in the modal first so we can clone it
         buildReceiptHtml();
-        document.getElementById('receiptModal').classList.remove('hidden');
-        // Wait for the modal to paint before triggering print.
-        requestAnimationFrame(() => setTimeout(() => window.print(), 60));
-    };
+        const sourceSlip = document.querySelector('#receipt-content .slip');
+        if (!sourceSlip) return;
+
+        // Clean up any old print area
+        let oldArea = document.getElementById('thermal-print-area');
+        if (oldArea) oldArea.remove();
+
+        const area = document.createElement('div');
+        area.id = 'thermal-print-area';
+        area.hidden = true;
+
+        const copy = sourceSlip.cloneNode(true);
+        copy.classList.remove('slip-preview'); // don't need drop shadow in print
+        area.appendChild(copy);
+        
+        document.body.appendChild(area);
+
+        const cleanup = () => {
+            document.documentElement.classList.remove('printing-cloth-thermal');
+            const a = document.getElementById('thermal-print-area');
+            if (a) a.remove();
+        };
+        window.addEventListener('afterprint', cleanup, { once: true });
+
+        requestAnimationFrame(() => setTimeout(() => {
+            try {
+                area.hidden = false;
+                document.documentElement.classList.add('printing-cloth-thermal');
+                window.print();
+            } finally {
+                cleanup();
+            }
+        }, 60));
+    }
+
+    window.printReceipt = printClothThermal;
+
     window.showLastReceipt = function () {
         if (!lastOrder) return;
         buildReceiptHtml();
@@ -2659,51 +2690,55 @@
         const paid = Number(o.paid_amount) + lastChange;
 
         const itemsHtml = (o.items || []).map(i => `
-            <div class="tr-row" style="margin-bottom:2px;">
-              <div style="flex:1;text-align:left;padding-right:4px;">${Atelier.escapeHtml(i.product?.name || 'Item')}</div>
-              <div style="width:38px;text-align:center;">${Number(i.quantity)}${i.product?.unit === 'meter' ? 'm' : ''}</div>
-              <div style="width:60px;text-align:right;">${Number(i.total).toLocaleString()}</div>
+            <div class="slip-row">
+                <span class="k">${Atelier.escapeHtml(i.product?.name || 'Item')} &times; ${Number(i.quantity)}${i.product?.unit === 'meter' ? 'm' : ''}</span>
+                <span class="v">${Number(i.total).toLocaleString()}</span>
             </div>
         `).join('');
 
         document.getElementById('receipt-content').innerHTML = `
-            <div class="tr-center">
-                <div class="tr-shop-name">${Atelier.escapeHtml(shop.name || 'Cloth Store')}</div>
-                ${shop.tagline ? `<div class="tr-shop-sub">${Atelier.escapeHtml(shop.tagline)}</div>` : ''}
-                ${shop.address ? `<div class="tr-shop-sub">${Atelier.escapeHtml(shop.address)}</div>` : ''}
-                ${shop.phone ? `<div class="tr-shop-sub">Ph: ${Atelier.escapeHtml(shop.phone)}</div>` : ''}
-            </div>
-            <hr class="tr-hr">
-            <div style="font-size:11px;">
-                <div class="tr-row"><span>Invoice</span><strong>${o.invoice_number}</strong></div>
-                <div class="tr-row"><span>Date</span><span>${new Date().toLocaleString()}</span></div>
-                <div class="tr-row"><span>Customer</span><strong>${Atelier.escapeHtml(cName)}</strong></div>
-            </div>
-            <hr class="tr-hr">
-            <div class="tr-table tr-row" style="border-bottom:1px solid #000;padding-bottom:3px;margin-bottom:5px;">
-                <div style="flex:1;text-align:left;">Item</div>
-                <div style="width:38px;text-align:center;">Qty</div>
-                <div style="width:60px;text-align:right;">Total</div>
-            </div>
-            <div>${itemsHtml}</div>
-            <hr class="tr-hr">
-            <div style="font-size:11px;">
-                <div class="tr-row"><span>Subtotal</span><span>Rs ${Number(o.subtotal).toLocaleString()}</span></div>
-                ${Number(o.discount) > 0 ? `<div class="tr-row"><span>Discount</span><span>-Rs ${Number(o.discount).toLocaleString()}</span></div>` : ''}
-                <div class="tr-row tr-total" style="border-top:1px solid #000;margin-top:4px;padding-top:4px;">
-                    <span>TOTAL</span><span>Rs ${Number(o.total_amount).toLocaleString()}</span>
+            <div class="slip slip-preview" style="margin: 0 auto;">
+                <div class="slip-hd">
+                    <div class="slip-shop">${Atelier.escapeHtml(shop.name || 'CLOTH STORE').toUpperCase()}</div>
+                    ${shop.tagline ? `<div class="slip-tag">${Atelier.escapeHtml(shop.tagline)}</div>` : ''}
+                    <div class="slip-meta">
+                        ${shop.address ? `<div>${Atelier.escapeHtml(shop.address)}</div>` : ''}
+                        ${shop.phone ? `<div>Ph: ${Atelier.escapeHtml(shop.phone)}</div>` : ''}
+                    </div>
                 </div>
-            </div>
+                
+                <div class="slip-kind">CUSTOMER COPY</div>
+                
+                <div class="slip-row"><span class="k">Invoice</span><span class="v slip-bold">${o.invoice_number}</span></div>
+                <div class="slip-row"><span class="k">Date</span><span class="v">${new Date().toLocaleString()}</span></div>
+                
+                <div class="slip-rule"></div>
+                
+                <div class="slip-row"><span class="k">Customer</span><span class="v slip-bold">${Atelier.escapeHtml(cName)}</span></div>
+                
+                <div class="slip-rule"></div>
+                
+                <div class="slip-sec">ITEMS</div>
+                ${itemsHtml}
+                
+                <div class="slip-rule"></div>
+                
+                <div class="slip-row"><span class="k">Subtotal</span><span class="v">${Number(o.subtotal).toLocaleString()}</span></div>
+                ${Number(o.discount) > 0 ? `<div class="slip-row"><span class="k">Discount</span><span class="v">- ${Number(o.discount).toLocaleString()}</span></div>` : ''}
+                
+                <div class="slip-rule-s"></div>
+                <div class="slip-total"><span>TOTAL</span><span>Rs ${Number(o.total_amount).toLocaleString()}</span></div>
+                <div class="slip-rule-d"></div>
 
-            <hr class="tr-hr" style="margin-top:12px; margin-bottom:6px;">
-            <div class="tr-center" style="line-height:1.2;">
-                <div style="font-size:9px; text-transform:uppercase; color:#555;">Developed By</div>
-                <div style="font-size:13px; font-weight:bold; margin-top:2px; color:#000;">NOOR M HINGORJO</div>
-                <div style="font-size:11px; color:#000; margin-top:1px;">0303 4980786</div>
-                <div style="font-size:9px; color:#555; margin-top:3px;">POS & MANAGEMENT SYSTEM</div>
-                <div style="font-size:11px; font-weight:bold; margin-top:5px; color:#000;">THANK YOU!</div>
+                <div class="slip-credit" style="width: 100%; text-align: center;">
+                    <div style="display: block; width: 100%;">Designed & Developed by <span class="name">Noor M Hingorjo</span></div>
+                    <div class="sys" style="font-weight: 700; letter-spacing: normal;">POS & MANAGEMENT SYSTEM</div>
+                    <div class="tel">0303 4980786</div>
+                    <div class="ty">Thank You!</div>
+                </div>
+                
+                <div class="slip-code">* ${o.invoice_number} *</div>
             </div>
-            <hr class="tr-hr" style="margin-top:6px; margin-bottom:0;">
         `;
     }
 

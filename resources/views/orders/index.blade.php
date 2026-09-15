@@ -96,6 +96,10 @@
       box-shadow: none !important;
       border-radius: 0 !important;
       padding: 2mm 2mm 6mm;
+      /* Thermal density: ordinary text needs at least 600 to print legibly.
+         Elements already at 700 (.slip-shop, .slip-sec etc.) keep their weight
+         because their class selectors are more specific than .slip. */
+      font-weight: 600;
     }
 
     /* Thermal heads dither gray/transparency: use full-density ink only in print. */
@@ -111,12 +115,10 @@
     #thermal-print-area .slip-kind:not(.ghost),
     #thermal-print-area .slip-kind:not(.ghost) * { color: #fff !important; }
     #thermal-print-area .slip-mcell { border-bottom-color: #000 !important; }
-    #thermal-print-area .slip-foot,
-    #thermal-print-area .slip-credit,
-    #thermal-print-area .slip-credit .ty { font-weight: 600; }
     #thermal-print-area .slip img {
       filter: grayscale(1) brightness(.75) contrast(3) !important;
     }
+
 
     /* Long customer/order values must wrap rather than widen the print canvas. */
     #thermal-print-area .slip-row .v {
