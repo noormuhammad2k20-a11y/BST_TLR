@@ -136,7 +136,7 @@
     </div>
     <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">
       <button type="button" class="bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-100" onclick="closeDrawers()">Cancel</button>
-      <button type="submit" class="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-800 shadow-sm">Save & View Profile</button>
+      <button type="submit" class="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-800 shadow-sm">Save Customer</button>
     </div>
   </form>
 </div>
@@ -752,6 +752,8 @@
     ` : ''}
   `;
 
+
+
   /* ⌘K and Escape are already handled globally in the layout, so this page
      no longer binds its own duplicates. */
 
@@ -774,17 +776,13 @@
         closeDrawers();
         toast(res.message, 'success');
 
-        // Short pause so the confirmation is readable before we move on.
-        setTimeout(() => {
-          window.location.href = `{{ route('orders.index') }}?action=create&customer=${res.customer.db_id}&new_customer=1`;
-        }, 650);
+        document.getElementById('add-customer-form').reset();
       }
     });
 
     // Edit customer — updates the row in place.
     Atelier.ajaxForm('#edit-customer-form', {
       onError: customerSaveError,
-      reset: false,
       onSuccess: (res) => {
         const i = customers.findIndex(c => c.db_id === res.customer.db_id);
         if (i > -1) customers[i] = res.customer;

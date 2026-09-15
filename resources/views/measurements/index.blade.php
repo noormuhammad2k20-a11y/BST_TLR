@@ -276,8 +276,11 @@
   function selectCustomer(id) {
     const customer = window.allCustomers.find(c => Number(c.id) === Number(id));
     if (!customer) return;
-    const latest = window.savedMeasurementSets.filter(m => Number(m.customer_id) === Number(customer.id)).sort((a,b) => new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at))[0];
-    openModal('add-measurement', latest || { customer, customer_id: customer.id, name: customer.name });
+    const garment = document.getElementById('meas-garment')?.value || 'Wash & Wear';
+    const latest = window.savedMeasurementSets
+      .filter(m => Number(m.customer_id) === Number(customer.id) && String(m.garment_type || '').trim().toLowerCase() === garment.toLowerCase())
+      .sort((a,b) => new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at))[0];
+    openModal('add-measurement', latest || { customer, customer_id: customer.id, name: customer.name, garment });
   }
 
   function savedMeasurementsForGarment(customerId, garment) {
@@ -286,19 +289,7 @@
       && String(m.garment_type || '').trim().toLowerCase() === garmentKey);
   }
 
-  function selectMeasurementSet(value) {
-    const customerId = Number(document.getElementById('meas-customer').dataset.customerId);
-    const customer = window.allCustomers.find(c => Number(c.id) === customerId);
-    if (value.startsWith('saved:')) {
-      const saved = savedMeasurementsForGarment(customerId, document.getElementById('meas-garment').value)
-        .find(m => Number(m.id) === Number(value.slice(6)));
-      if (saved) openModal('add-measurement', saved);
-    } else if (value === 'new') {
-      const garment = document.getElementById('meas-garment').value;
-      const name = document.getElementById('meas-customer').value;
-      openModal('add-measurement', {customer, customer_id: customer?.id, name, garment});
-    }
-  }
+
 
   function selectGarmentMeasurements(garment) {
     const customerId = Number(document.getElementById('meas-customer').dataset.customerId);
@@ -313,7 +304,8 @@
     if (input.dataset.customerId && input.value !== input.dataset.customerName) {
       // An edited saved set must never be reassigned just by typing a different name.
       const name = input.value;
-      openModal('add-measurement', {name});
+      const garment = document.getElementById('meas-garment')?.value || 'Wash & Wear';
+      openModal('add-measurement', {name, garment});
       const fresh = document.getElementById('meas-customer');
       fresh.focus(); fresh.setSelectionRange(name.length, name.length);
     }
@@ -630,8 +622,7 @@
       const customerId = data?.customer_id || data?.customer?.id;
       const savedSets = savedMeasurementsForGarment(customerId, garmentVal);
       const chooseSaved = data?.chooseSaved && savedSets.length > 0;
-      const garmentOptions = [...new Set([...(garmentVal ? [garmentVal] : []), ...window.garmentTypes])].map(g => `<option value="${Atelier.escapeHtml(g)}" ${g === garmentVal ? 'selected' : ''}>${Atelier.escapeHtml(g)}</option>`).join('');
-      const savedOptions = `<option value="new">Choose garment / record measurements</option>${savedSets.map((m, i) => `<option value="saved:${m.id}" ${isEdit && Number(data.id) === Number(m.id) ? 'selected' : ''}>${Atelier.escapeHtml(m.garment_type)} / ${new Date(m.updated_at || m.created_at).toLocaleDateString('en-GB')} / ${m.unit || cfg.unit}</option>`).join('')}`;
+      const garmentOptions = ['Wash & Wear', 'Cotton', 'Boski'].map(g => `<option value="${Atelier.escapeHtml(g)}" ${g === garmentVal ? 'selected' : ''}>${Atelier.escapeHtml(g)}</option>`).join('');
 
       const isRequired = id => cfg.required.includes(id);
       const star = id => isRequired(id) ? ' <span class="text-red-500">*</span>' : '';
@@ -673,16 +664,11 @@
               <div id="customer-dropdown" class="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg hidden max-h-48 overflow-y-auto"></div>
             </div>
             <div>
-              <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Garment Type *</label>
+              <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Category *</label>
               <select id="meas-garment" onchange="selectGarmentMeasurements(this.value)" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-colors">
                 ${garmentOptions}
               </select>
-            </div>
-            <div>
-              <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Saved Measurements</label>
-              <select id="meas-saved" onchange="selectMeasurementSet(this.value)" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-colors">${savedOptions}</select>
               <input type="hidden" id="meas-tailor" value="${Atelier.escapeHtml(tailorVal || 'Unassigned')}">
-
             </div>
           </div>
           
