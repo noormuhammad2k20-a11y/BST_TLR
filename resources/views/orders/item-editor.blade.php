@@ -26,13 +26,22 @@
   }
   function itemRefresh() { renderPage(); }
   window.itemField = (i,key,value) => { newOrderState.garments[i][key]=value; };
-  window.itemChoose = (i,id) => {
+  window.itemChoose = (i, id, price, name) => {
     const row = newOrderState.garments[i];
     if (row.pieces.some(p => Object.values(p.values).some(v => v !== '' && v !== null)) && !confirm('Changing garment clears incompatible measurements. Continue?')) { itemRefresh(); return; }
     const product = activeServices.find(s => s.id == id);
-    row.product_service_id = Number(id); row.name = product?.name; row.unit_price = product?.price || '0.00';
+    row.product_service_id = Number(id); row.name = name || product?.name; row.unit_price = price !== undefined ? price : (product?.price || '0.00');
     row.pieces.forEach(p => { p.values={}; delete p.measurement_id; delete p.saved_measurement_id; delete p.saved_changes; delete p.measurement_mode; p.profile=product?.profile; });
     itemRefresh();
+  };
+  window.itemChooseRate = (i, rateId) => {
+    let rate = null;
+    for (const cat of tailorCategories) {
+        rate = cat.rates.find(r => r.id == rateId);
+        if (rate) break;
+    }
+    if (!rate || !rate.service) return;
+    window.itemChoose(i, rate.service.id, rate.price, rate.name);
   };
   window.itemQuantity = (i,value) => {
     const row = newOrderState.garments[i], qty = Math.max(1,Math.min(Math.max(20,row.originalQuantity||0),parseInt(value)||1));
@@ -258,13 +267,23 @@
             <div>
               <label class="block text-sm font-bold text-slate-700 mb-3">Garment Type <span class="text-red-500">*</span></label>
               <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                ${activeServices.map(p => {
-                  let isSelected = p.id == r.product_service_id;
-                  return `<button class="w-full px-4 py-3 border text-left flex items-center gap-3 rounded-xl text-sm transition-all ${isSelected ? 'border-indigo-600 bg-indigo-50 text-indigo-700 font-bold shadow-sm ring-2 ring-indigo-600/20' : 'border-slate-200 text-slate-600 hover:border-indigo-300 hover:bg-slate-50 font-medium'}" onclick="itemChoose(${i}, '${p.id}')">
-                    <i class="fa-solid ${p.name.toLowerCase().includes('suit') ? 'fa-vest text-lg' : p.name.toLowerCase().includes('shirt') ? 'fa-shirt text-lg' : 'fa-vest-patches text-lg'} ${isSelected ? 'text-indigo-600' : 'text-slate-400'}"></i> 
-                    <span class="leading-tight">${itemEsc(p.name)}</span>
-                  </button>`;
-                }).join('')}
+                ${tailorCategories.map(cat => `
+                  <div class="col-span-full mt-4 mb-2">
+                    <h5 class="text-sm font-bold text-slate-700 border-b border-slate-100 pb-2">${itemEsc(cat.name)}</h5>
+                  </div>
+                  ${cat.rates.map(rate => {
+                    let p = rate.service;
+                    if (!p) return '';
+                    let isSelected = p.id == r.product_service_id && Number(r.unit_price) == Number(rate.price);
+                    return `<button class="w-full px-4 py-3 border text-left flex flex-col justify-center gap-1 rounded-xl text-sm transition-all ${isSelected ? 'border-indigo-600 bg-indigo-50 text-indigo-700 font-bold shadow-sm ring-2 ring-indigo-600/20' : 'border-slate-200 text-slate-600 hover:border-indigo-300 hover:bg-slate-50 font-medium'}" onclick="itemChooseRate(${i}, ${rate.id})">
+                      <div class="flex items-center gap-3">
+                        <i class="fa-solid ${p.name.toLowerCase().includes('suit') ? 'fa-vest text-lg' : p.name.toLowerCase().includes('shirt') ? 'fa-shirt text-lg' : 'fa-vest-patches text-lg'} ${isSelected ? 'text-indigo-600' : 'text-slate-400'}"></i> 
+                        <span class="leading-tight">${itemEsc(rate.name)}</span>
+                      </div>
+                      <div class="${isSelected ? 'text-indigo-600' : 'text-slate-500'} text-xs font-bold pl-8">${Atelier.money(rate.price)}</div>
+                    </button>`;
+                  }).join('')}
+                `).join('')}
                 ${!rowProduct(r) && r.product_service_id ? `<button class="w-full px-4 py-3 border text-left flex items-center gap-3 rounded-xl text-sm border-indigo-600 bg-indigo-50 text-indigo-700 font-bold shadow-sm" disabled><i class="fa-solid fa-vest-patches text-lg text-indigo-600"></i> <span class="leading-tight">${itemEsc(r.name)} (historical)</span></button>` : ''}
               </div>
             </div>

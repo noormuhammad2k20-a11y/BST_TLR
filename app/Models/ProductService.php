@@ -33,6 +33,11 @@ class ProductService extends Model
         return $this->hasMany(Order::class);
     }
 
+    public function rates(): HasMany
+    {
+        return $this->hasMany(TailorRate::class);
+    }
+
     public function scopeActive(Builder $q): Builder
     {
         return $q->where('status', 'Active');

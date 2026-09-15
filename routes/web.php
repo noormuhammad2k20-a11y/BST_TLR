@@ -111,6 +111,12 @@ Route::middleware(['auth', 'active', 'business'])->group(function () {
         ->only(['index', 'store', 'show', 'update', 'destroy']);
 
     /* ------------------------ Products & Services --------------------- */
+    Route::post('products-services/categories', [ProductServiceController::class, 'storeCategory'])->name('products-services.categories.store');
+    Route::put('products-services/categories/{category}', [ProductServiceController::class, 'updateCategory'])->name('products-services.categories.update');
+    Route::delete('products-services/categories/{category}', [ProductServiceController::class, 'destroyCategory'])->name('products-services.categories.destroy');
+    Route::post('products-services/rates', [ProductServiceController::class, 'storeRate'])->name('products-services.rates.store');
+    Route::put('products-services/rates/{rate}', [ProductServiceController::class, 'updateRate'])->name('products-services.rates.update');
+    Route::delete('products-services/rates/{rate}', [ProductServiceController::class, 'destroyRate'])->name('products-services.rates.destroy');
     Route::resource('products-services', ProductServiceController::class)
         ->only(['index', 'store', 'update', 'destroy']);
 

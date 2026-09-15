@@ -70,6 +70,18 @@ class OrderController extends Controller
 
         $activeServices->each(fn($service) => $service->setAttribute('profile', \App\Services\MeasurementProfiles::forProduct($service)));
 
+        $tailorCategories = \App\Models\TailorCategory::with(['rates' => function($q) {
+            $q->active()->with('service');
+        }])->orderBy('name')->get();
+
+        $tailorCategories->each(function($category) {
+            $category->rates->each(function($rate) {
+                if ($rate->service) {
+                    $rate->service->setAttribute('profile', \App\Services\MeasurementProfiles::forProduct($rate->service));
+                }
+            });
+        });
+
         // Assignable people now come from the Staff module rather than from
         // login accounts, so a tailor who never signs in can still be assigned.
         $tailors = Staff::active()->orderBy('name')->get(['id', 'name', 'per_suit_rate']);
@@ -77,7 +89,7 @@ class OrderController extends Controller
         $extensionReasons = $this->extensionReasons();
 
         return view('orders.index', compact(
-            'orders', 'customers', 'activeServices', 'tailors',
+            'orders', 'customers', 'activeServices', 'tailorCategories', 'tailors',
             'extensionReasons'
         ));
     }

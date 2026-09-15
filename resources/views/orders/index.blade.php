@@ -173,6 +173,7 @@
      and `let`/`const` cannot legally be redeclared at global scope. */
   var customers = @json($customers);
   var activeServices = @json($activeServices);
+  var tailorCategories = @json($tailorCategories);
   var tailors = @json($tailors);
 
 
