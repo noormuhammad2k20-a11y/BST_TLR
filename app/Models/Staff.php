@@ -56,6 +56,21 @@ class Staff extends Model
         return $this->hasMany(StaffPayment::class)->orderByDesc('paid_on')->orderByDesc('id');
     }
 
+    public function advances(): HasMany
+    {
+        return $this->hasMany(StaffAdvance::class)->whereNull('reversed_at')->orderByDesc('given_on');
+    }
+
+    public function advanceHistory(): HasMany
+    {
+        return $this->hasMany(StaffAdvance::class)->orderByDesc('given_on')->orderByDesc('id');
+    }
+
+    public function serviceRates(): HasMany
+    {
+        return $this->hasMany(StaffServiceRate::class);
+    }
+
     public function workLogs(): HasMany
     {
         return $this->hasMany(StaffWorkLog::class)->orderByDesc('completed_on');
@@ -123,6 +138,35 @@ class Staff extends Model
     /** Earnings use the rate stored at completion; payments settle one calendar period. */
     public function dueFor(?string $period = null): array
     {
+        if ($this->salary_type === 'Per Suit') {
+            $earnedCents = (int) round($this->workTotal * 100);
+            $paidCents = (int) round($this->paidTotal * 100);
+            $advancesCents = (int) round($this->advances()->sum('amount') * 100);
+            
+            $netBalanceCents = $earnedCents - $paidCents - $advancesCents;
+            $remaining = max($netBalanceCents, 0) / 100;
+            $outstandingAdvance = max(-$netBalanceCents, 0) / 100;
+            
+            return [
+                'period' => 'Running Balance',
+                'payment_period' => 'Running Balance',
+                'period_start' => null,
+                'period_end' => null,
+                'pieces' => $this->piecesTotal,
+                'rate' => null,
+                'configured_rate' => (float) $this->per_suit_rate,
+                'rates' => [],
+                'earned' => $earnedCents / 100,
+                'stitching' => $earnedCents / 100,
+                'paid' => $paidCents / 100,
+                'advances' => $advancesCents / 100,
+                'remaining' => $remaining,
+                'advance_outstanding' => $outstandingAdvance,
+                'credit' => 0, // Unused for per-suit now
+                'status' => $netBalanceCents <= 0 ? ($outstandingAdvance > 0 ? 'Advance Due' : 'Paid') : 'Pending',
+            ];
+        }
+
         $period ??= \App\Services\StaffPayPeriod::current($this->payment_period ?? 'Monthly');
         [$start, $end, $frequency] = \App\Services\StaffPayPeriod::bounds($period);
         $work = $this->workLogs()->where('completed_on', '>=', $start->toDateString())->where('completed_on', '<', $end->addDay()->toDateString())->get();

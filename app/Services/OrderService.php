@@ -489,27 +489,73 @@ class OrderService
             return;
         }
 
-        $staff = Staff::whereKey($order->staff_id)->lockForUpdate()->first();
+        $staff = Staff::whereKey($order->staff_id)->with('serviceRates')->lockForUpdate()->first();
 
         if (!$staff) {
             return;
         }
 
-        // Per-suit rate means per suit: an order for three garments earns the
-        // tailor three times the rate, not once.
-        $quantity = $order->items_migrated_at
-            ? (float)$order->lineItems->sum(fn($item) => ($item->productService ? $item->productService->type !== 'Service' : ($item->pieces->first()?->profile['key'] ?? 'generic') === 'accessory') ? 0 : $item->quantity)
-            : (float)$order->quantity;
-        if ($quantity <= 0) return;
-        $rate     = (float) $staff->per_suit_rate;
+        $totalAmount = 0;
+        $totalQuantity = 0;
+        $rateBreakdown = [];
+        $defaultRate = (float) $staff->per_suit_rate;
+
+        if ($order->items_migrated_at) {
+            foreach ($order->lineItems as $item) {
+                if ($item->productService && $item->productService->type === 'Service') continue;
+                if (($item->pieces->first()?->profile['key'] ?? 'generic') === 'accessory') continue;
+                
+                $qty = (float) $item->quantity;
+                if ($qty <= 0) continue;
+
+                $resolvedRate = $defaultRate;
+                $rateSource = 'Default Per-Suit Rate';
+                
+                if ($item->tailor_rate_override !== null) {
+                    $resolvedRate = (float) $item->tailor_rate_override;
+                    $rateSource = 'Custom Order Override';
+                } else {
+                    $specialRate = $staff->serviceRates->firstWhere('product_service_id', $item->product_service_id);
+                    if ($specialRate) {
+                        $resolvedRate = (float) $specialRate->rate;
+                        $rateSource = 'Special Service Rate';
+                    }
+                }
+
+                $amount = round($qty * $resolvedRate, 2);
+                $totalAmount += $amount;
+                $totalQuantity += $qty;
+
+                $rateBreakdown[] = [
+                    'garment' => $item->name,
+                    'quantity' => $qty,
+                    'rate' => $resolvedRate,
+                    'amount' => $amount,
+                    'source' => $rateSource,
+                ];
+            }
+        } else {
+            $totalQuantity = (float) $order->quantity;
+            $totalAmount = round($totalQuantity * $defaultRate, 2);
+            $rateBreakdown[] = [
+                'garment' => $order->primary_item_name,
+                'quantity' => $totalQuantity,
+                'rate' => $defaultRate,
+                'amount' => $totalAmount,
+                'source' => 'Default Per-Suit Rate (Legacy Order)',
+            ];
+        }
+
+        if ($totalQuantity <= 0) return;
 
         StaffWorkLog::create([
             'staff_id'     => $staff->id,
             'order_id'     => $order->id,
             'garment'      => $order->primary_item_name,
-            'quantity'     => $quantity,
-            'rate'         => $rate,
-            'amount'       => round($quantity * $rate, 2),
+            'quantity'     => $totalQuantity,
+            'rate'         => $totalQuantity > 0 ? round($totalAmount / $totalQuantity, 2) : $defaultRate,
+            'amount'       => $totalAmount,
+            'rate_breakdown' => $rateBreakdown,
             'completed_on' => ($order->completed_at ?? $order->delivered_at ?? $order->updated_at ?? now())->toDateString(),
             'notes'        => 'Recorded automatically on ' . $status,
         ]);

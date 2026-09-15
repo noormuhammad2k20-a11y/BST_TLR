@@ -172,6 +172,8 @@ Route::middleware(['auth', 'active', 'business'])->group(function () {
     Route::patch('staff/{staff}/active', [StaffController::class, 'toggleActive'])->name('staff.active');
     Route::delete('staff/{staff}', [StaffController::class, 'destroy'])->name('staff.destroy');
     Route::post('staff/{staff}/payments', [StaffController::class, 'storePayment'])->name('staff.payments.store');
+    Route::post('staff/{staff}/advances', [StaffController::class, 'storeAdvance'])->name('staff.advances.store');
+    Route::delete('staff-advances/{advance}', [StaffController::class, 'destroyAdvance'])->name('staff.advances.destroy');
     Route::post('staff/{staff}/work', [StaffController::class, 'storeWork'])->name('staff.work.store');
 
     /* --------------------------- Notifications ------------------------ */

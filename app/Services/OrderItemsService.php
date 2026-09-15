@@ -36,12 +36,13 @@ final class OrderItemsService
         return [
             'edit_version' => ['sometimes','integer','min:0'],
             'garments' => ['sometimes','array','min:1','max:50'],
-            'garments.*' => ['array:id,client_key,product_service_id,quantity,unit_price,fabric,style_notes,pieces'],
+            'garments.*' => ['array:id,client_key,product_service_id,quantity,unit_price,tailor_rate_override,fabric,style_notes,pieces'],
             'garments.*.id' => ['nullable','integer','distinct'],
             'garments.*.client_key' => ['nullable','string','max:100'],
             'garments.*.product_service_id' => ['nullable','integer','exists:product_services,id'],
             'garments.*.quantity' => ['required','integer','min:1','max:10000'],
             'garments.*.unit_price' => ['required','numeric','min:0','max:99999999','decimal:0,2'],
+            'garments.*.tailor_rate_override' => ['nullable','numeric','min:0','max:99999999','decimal:0,2'],
             'garments.*.fabric' => ['nullable','string','max:255'],
             'garments.*.style_notes' => ['nullable','string','max:2000'],
             'garments.*.pieces' => ['required','array','min:1','max:10000'],
@@ -148,7 +149,7 @@ final class OrderItemsService
         $kept = []; $json = []; $firstMeasurement = null;
         foreach ($rows as $i => $row) {
             $item = !empty($row['id']) ? $order->lineItems()->findOrFail($row['id']) : new OrderItem(['order_id' => $order->id]);
-            $item->fill(array_intersect_key($row, array_flip(['product_service_id','name','category','quantity','unit_price','subtotal','fabric','style_notes'])));
+            $item->fill(array_intersect_key($row, array_flip(['product_service_id','name','category','quantity','unit_price','tailor_rate_override','subtotal','fabric','style_notes'])));
             $item->position = $i; $item->save(); $kept[] = $item->id;
             $pieceIds = [];
             foreach ($row['pieces'] as $j => $pc) {

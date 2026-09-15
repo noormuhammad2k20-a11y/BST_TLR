@@ -3,7 +3,7 @@
   var itemPricing = @json(\App\Services\PricingService::breakdown(0));
   var itemKey = () => 'piece-' + crypto.randomUUID();
   var blankPiece = () => ({client_key:itemKey(), unit:'in', values:{}});
-  var blankGarment = () => ({client_key:itemKey(), product_service_id:'', quantity:1, unit_price:'0.00', fabric:'', style_notes:'', pieces:[blankPiece()]});
+  var blankGarment = () => ({client_key:itemKey(), product_service_id:'', quantity:1, unit_price:'0.00', tailor_rate_override:'', fabric:'', style_notes:'', pieces:[blankPiece()]});
   blankOrderState = () => ({customerId:null, customerName:'', customerPhone:'', garments:[blankGarment()], advance:0, date:'', slot:'', priority:'Normal', tailorId:'', notes:'', activeItem:0, activePiece:0});
   newOrderState = blankOrderState();
   var itemEsc = value => Atelier.escapeHtml(String(value ?? ''));
@@ -120,7 +120,7 @@
   };
   window.itemSubmit = async btn => {
     const s=newOrderState, payload={priority:s.priority, delivery_date:s.date, delivery_time:s.slot, staff_id:s.tailorId||null, notes:s.notes};
-    if(!s.locked) payload.garments=s.garments.map(r=>({id:r.id,client_key:r.client_key,product_service_id:r.product_service_id,quantity:Number(r.quantity),unit_price:String(r.unit_price),fabric:r.fabric,style_notes:r.style_notes,pieces:r.pieces.map(p=>({id:p.id,client_key:p.client_key,unit:p.unit,measurement_id:p.measurement_id,saved_changes:p.saved_changes,values:p.values}))}));
+    if(!s.locked) payload.garments=s.garments.map(r=>({id:r.id,client_key:r.client_key,product_service_id:r.product_service_id,quantity:Number(r.quantity),unit_price:String(r.unit_price),tailor_rate_override:r.tailor_rate_override ? String(r.tailor_rate_override) : null,fabric:r.fabric,style_notes:r.style_notes,pieces:r.pieces.map(p=>({id:p.id,client_key:p.client_key,unit:p.unit,measurement_id:p.measurement_id,saved_changes:p.saved_changes,values:p.values}))}));
     if(s.editId) {payload.edit_version=s.edit_version; payload.status=s.status;}
     else {payload.customer_id=s.customerId; payload.advance=s.advance;}
     Atelier.setBusy(btn,true);
@@ -430,16 +430,24 @@
       /* Per-garment unit price editors */
       s.garments.forEach((r, i) => {
         html += `
-        <div class="col-span-2 flex items-center justify-between bg-slate-50 p-3 rounded-lg">
+        <div class="col-span-2 flex items-center justify-between bg-slate-50 p-3 rounded-lg flex-wrap gap-2">
           <div>
             <span class="text-sm font-medium text-slate-700">${itemEsc(rowName(r))} × ${r.quantity}</span>
             <span class="text-xs text-slate-400 ml-2">${Atelier.money(Number(r.unit_price || 0) * r.quantity)}</span>
           </div>
-          <div class="flex items-center gap-2">
-            <label class="text-xs text-slate-500 whitespace-nowrap">Unit Price:</label>
-            <input type="number" step="0.01" min="0"
-                   class="w-28 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 font-medium"
-                   value="${itemEsc(r.unit_price)}" onchange="itemField(${i}, 'unit_price', this.value); itemRefresh()">
+          <div class="flex items-center gap-4 flex-wrap">
+            <div class="flex items-center gap-2">
+              <label class="text-xs text-slate-500 whitespace-nowrap">Tailor Rate Override (Optional):</label>
+              <input type="number" step="0.01" min="0" placeholder="None"
+                     class="w-24 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 font-medium"
+                     value="${itemEsc(r.tailor_rate_override)}" onchange="itemField(${i}, 'tailor_rate_override', this.value); itemRefresh()">
+            </div>
+            <div class="flex items-center gap-2">
+              <label class="text-xs text-slate-500 whitespace-nowrap">Unit Price:</label>
+              <input type="number" step="0.01" min="0"
+                     class="w-28 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 font-medium"
+                     value="${itemEsc(r.unit_price)}" onchange="itemField(${i}, 'unit_price', this.value); itemRefresh()">
+            </div>
           </div>
         </div>`;
       });

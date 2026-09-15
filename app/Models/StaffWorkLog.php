@@ -18,10 +18,11 @@ class StaffWorkLog extends Model
     protected $guarded = ['id'];
 
     protected $casts = [
-        'quantity'     => 'decimal:2',
-        'rate'         => 'decimal:2',
-        'amount'       => 'decimal:2',
-        'completed_on' => 'date',
+        'quantity'       => 'decimal:2',
+        'rate'           => 'decimal:2',
+        'amount'         => 'decimal:2',
+        'completed_on'   => 'date',
+        'rate_breakdown' => 'array',
     ];
 
     public function staff(): BelongsTo

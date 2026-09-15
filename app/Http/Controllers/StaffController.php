@@ -24,20 +24,32 @@ class StaffController extends Controller
         $roles       = Staff::ROLES;
         $salaryTypes = Staff::SALARY_TYPES;
         $methods     = StaffPayment::METHODS;
+        
+        $garments = \App\Models\ProductService::where('type', 'Garment')->where('status', 'Active')->get(['id', 'name']);
 
         // Same payload as JSON, so the page refreshes itself without a reload.
         if ($request->boolean('json') || $request->expectsJson()) {
             return response()->json(compact('staff', 'stats'));
         }
 
-        return view('staff.index', compact('staff', 'stats', 'roles', 'salaryTypes', 'methods'));
+        return view('staff.index', compact('staff', 'stats', 'roles', 'salaryTypes', 'methods', 'garments'));
     }
 
     public function store(Request $request): JsonResponse
     {
         $data = $this->validated($request);
+        $specialRates = $data['special_rates'] ?? [];
+        unset($data['special_rates']);
 
         $member = Staff::create($data);
+        foreach ($specialRates as $rate) {
+            if (isset($rate['product_service_id']) && isset($rate['rate'])) {
+                $member->serviceRates()->create([
+                    'product_service_id' => $rate['product_service_id'],
+                    'rate' => $rate['rate']
+                ]);
+            }
+        }
 
         ActivityLogger::created($member, "{$member->name} added as a tailor", 'staff');
         StatsService::flush();
@@ -52,8 +64,20 @@ class StaffController extends Controller
     public function update(Request $request, Staff $staff): JsonResponse
     {
         $data = $this->validated($request, $staff);
+        $specialRates = $data['special_rates'] ?? [];
+        unset($data['special_rates']);
 
         $staff->update($data);
+
+        $staff->serviceRates()->delete();
+        foreach ($specialRates as $rate) {
+            if (isset($rate['product_service_id']) && isset($rate['rate'])) {
+                $staff->serviceRates()->create([
+                    'product_service_id' => $rate['product_service_id'],
+                    'rate' => $rate['rate']
+                ]);
+            }
+        }
 
         ActivityLogger::updated($staff, "{$staff->name} updated", 'staff');
         StatsService::flush();
@@ -131,7 +155,10 @@ class StaffController extends Controller
 
         $staff->load([
             'paymentHistory.recorder:id,name',
+            'advanceHistory.recorder:id,name',
+            'advanceHistory.reverser:id,name',
             'workLogs.order:id,order_number,garment',
+            'serviceRates',
         ]);
 
         $orders = Order::query()
@@ -157,6 +184,17 @@ class StaffController extends Controller
                 'summary' => $p->earnings_snapshot,
                 'notes'  => $p->notes,
                 'by'     => $p->recorder?->name,
+            ]),
+            'advances' => $staff->advanceHistory->map(fn (\App\Models\StaffAdvance $a) => [
+                'id'     => $a->id,
+                'amount' => (float) $a->amount,
+                'method' => $a->method,
+                'date'   => $a->given_on?->format('d M Y'),
+                'status' => $a->reversed_at ? 'Reversed' : 'Active',
+                'can_reverse' => !$a->reversed_at,
+                'notes'  => $a->notes,
+                'by'     => $a->recorder?->name,
+                'reversed_by' => $a->reverser?->name,
             ]),
             'work' => $staff->workLogs->map(fn (StaffWorkLog $w) => [
                 'id'       => $w->id,
@@ -246,6 +284,63 @@ class StaffController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Payment reversed; the original entry was retained.',
+            'staff'   => $staff ? $this->serialize($this->fresh($staff->id)) : null,
+        ]);
+    }
+
+    public function storeAdvance(Request $request, Staff $staff): JsonResponse
+    {
+        $validated = $request->validate([
+            'amount'  => ['required', 'numeric', 'decimal:0,2', 'min:0.01', 'max:99999999.99'],
+            'method'  => ['required', Rule::in(StaffPayment::METHODS)],
+            'given_on' => ['nullable', 'date'],
+            'notes'   => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $advance = DB::transaction(function () use ($staff, $validated) {
+            $staff = Staff::whereKey($staff->id)->lockForUpdate()->firstOrFail();
+            return $staff->advances()->create([
+                'amount' => $validated['amount'],
+                'method' => $validated['method'],
+                'given_on' => $validated['given_on'] ?? now()->toDateString(),
+                'notes' => $validated['notes'] ?? null,
+                'recorded_by' => Auth::id(),
+            ]);
+        });
+
+        ActivityLogger::log(
+            'Advance given',
+            sprintf('%s advance given to %s', \App\Services\Money::format((float) $advance->amount), $staff->name),
+            'staff',
+            $staff,
+            ['amount' => (float) $advance->amount],
+            'payment'
+        );
+        StatsService::flush();
+
+        return response()->json([
+            'success' => true,
+            'message' => sprintf('Advance of %s recorded for %s.', \App\Services\Money::format((float) $advance->amount), $staff->name),
+            'staff'   => $this->serialize($this->fresh($staff->id)),
+        ]);
+    }
+
+    public function destroyAdvance(\App\Models\StaffAdvance $advance): JsonResponse
+    {
+        $staff = $advance->staff;
+        DB::transaction(function () use ($advance) {
+            Staff::whereKey($advance->staff_id)->lockForUpdate()->firstOrFail();
+            $advance = \App\Models\StaffAdvance::whereKey($advance->id)->lockForUpdate()->firstOrFail();
+            abort_if($advance->reversed_at, 422, 'This advance is already reversed.');
+            $advance->update(['reversed_at' => now(), 'reversed_by' => Auth::id()]);
+        });
+
+        \App\Services\ActivityLogger::log('Advance reversed', "Advance reversed for {$staff?->name}", 'staff', $staff, ['advance_id'=>$advance->id], 'reversed');
+        \App\Services\StatsService::flush();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Advance reversed successfully.',
             'staff'   => $staff ? $this->serialize($this->fresh($staff->id)) : null,
         ]);
     }
@@ -344,6 +439,9 @@ class StaffController extends Controller
             'per_suit_rate'  => ['nullable', 'numeric', 'decimal:0,2', 'min:0', 'max:99999999.99'],
             'is_active'      => ['nullable', 'boolean'],
             'notes'          => ['nullable', 'string', 'max:1000'],
+            'special_rates'  => ['nullable', 'array'],
+            'special_rates.*.product_service_id' => ['required_with:special_rates', 'exists:product_services,id'],
+            'special_rates.*.rate' => ['required_with:special_rates', 'numeric', 'min:0'],
         ]);
     }
 
@@ -355,6 +453,7 @@ class StaffController extends Controller
     private function baseQuery()
     {
         return Staff::query()
+            ->with('serviceRates')
             ->withSum('workLogs as work_logs_sum_amount', 'amount')
             ->withSum('workLogs as work_logs_sum_quantity', 'quantity')
             ->withSum(['workLogs as week_pieces' => fn ($q) => $q->whereBetween('completed_on', [now()->startOfWeek()->toDateString(), now()->endOfWeek()->toDateString()])], 'quantity')
@@ -395,6 +494,10 @@ class StaffController extends Controller
             'per_suit_rate'  => (float) $s->per_suit_rate,
             'is_active'    => (bool) $s->is_active,
             'notes'        => $s->notes ?? '',
+            'special_rates' => $s->serviceRates ? $s->serviceRates->map(fn ($r) => [
+                'product_service_id' => $r->product_service_id,
+                'rate' => (float) $r->rate,
+            ])->toArray() : [],
 
             'pieces'       => (float) ($s->work_logs_sum_quantity ?? 0),
             'week_pieces'  => (float) ($s->week_pieces ?? 0),

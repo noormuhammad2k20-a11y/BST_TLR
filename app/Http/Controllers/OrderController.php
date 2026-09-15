@@ -579,7 +579,7 @@ class OrderController extends Controller
             'items_locked' => $order->items_locked,
             'garments' => $order->lineItems()->with('pieces.measurement')->get()->map(fn($item) => [
                 'id' => $item->id, 'product_service_id' => $item->product_service_id, 'name' => $item->name,
-                'quantity' => $item->quantity, 'unit_price' => $item->unit_price, 'subtotal' => $item->subtotal, 'fabric' => $item->fabric ?? '', 'style_notes' => $item->style_notes ?? '',
+                'quantity' => $item->quantity, 'unit_price' => $item->unit_price, 'tailor_rate_override' => $item->tailor_rate_override !== null ? (float) $item->tailor_rate_override : '', 'subtotal' => $item->subtotal, 'fabric' => $item->fabric ?? '', 'style_notes' => $item->style_notes ?? '',
                 'pieces' => $item->pieces->map(fn($piece) => ['id' => $piece->id, 'unit' => $piece->unit, 'profile' => Measurement::displayProfile($piece->profile ?? []),
                     'values' => $piece->measurement ? array_merge($piece->measurement->only(Measurement::FIELDS), $piece->measurement->details ?? []) : (object)[]])->all(),
             ])->all(),

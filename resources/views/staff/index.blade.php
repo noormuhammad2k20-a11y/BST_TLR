@@ -111,6 +111,7 @@
   var ROLE_OPTIONS   = @json($roles);
   var SALARY_TYPES   = @json($salaryTypes);
   var PAY_METHODS    = @json($methods);
+  var GARMENTS       = @json($garments);
 
   var ROUTES = {
     index: @json(route('staff.index')),
@@ -329,6 +330,16 @@
       notes:          val('notes'),
     };
 
+    const specialRates = [];
+    document.querySelectorAll('.special-rate-row').forEach(row => {
+      const pid = row.querySelector('.special-rate-product').value;
+      const amt = parseFloat(row.querySelector('.special-rate-amount').value);
+      if (pid && !isNaN(amt)) {
+        specialRates.push({ product_service_id: pid, rate: amt });
+      }
+    });
+    payload.special_rates = specialRates;
+
     if (!payload.name) { toast('Name is required', 'error'); return; }
 
     Atelier.setBusy(btn, true);
@@ -456,6 +467,7 @@
             ${row(`${d.pieces} completed pieces`, money(d.stitching))}
             ${row('Earned this period', money(d.earned))}
             ${row('Paid this month', money(d.paid))}
+            ${d.advances > 0 ? row('Advances (Running Bal)', money(d.advances)) : ''}
             <div class="flex justify-between border-t border-slate-200 pt-2 mt-2">
               <span class="font-bold text-slate-900">Remaining</span>
               <span class="font-bold ${d.remaining > 0 ? 'text-red-500' : 'text-emerald-600'}">${money(d.remaining)}</span>
@@ -526,7 +538,8 @@
     if (profileTab === 'salary') {
       const list = profileData.payments || [];
       body.innerHTML = `
-        <div class="flex justify-end mb-3">
+        <div class="flex justify-end gap-2 mb-3">
+          <button class="bg-indigo-600 text-white px-3 py-1.5 rounded-md text-xs font-medium hover:bg-indigo-700 transition-colors" onclick="openAdvanceForm(${s.db_id})"><i class="fa-solid fa-hand-holding-dollar text-[10px] mr-1"></i> Give Advance</button>
           <button class="bg-emerald-500 text-white px-3 py-1.5 rounded-md text-xs font-medium hover:bg-emerald-600 transition-colors" onclick="openPaymentForm(${s.db_id})"><i class="fa-solid fa-plus text-[10px] mr-1"></i> Record Payment</button>
         </div>
         ${list.length ? `
@@ -548,7 +561,27 @@
               <td class="px-3 py-2 text-right">${p.can_reverse ? `<button class="text-slate-300 hover:text-red-500 transition-colors" title="Reverse" onclick="deletePayment(${p.id}, ${s.db_id})"><i class="fa-solid fa-trash text-xs"></i></button>` : ''}</td>
             </tr>`).join('')}
           </tbody></table>`
-        : '<div class="text-sm text-slate-400 text-center py-8">No salary payments recorded yet.</div>'}`;
+        : '<div class="text-sm text-slate-400 text-center py-8">No salary payments recorded yet.</div>'}
+        ${(profileData.advances && profileData.advances.length) ? `
+        <h4 class="text-[11px] font-bold text-slate-500 uppercase tracking-widest mt-6 mb-2">Advances</h4>
+        <table class="w-full text-sm">
+          <thead class="text-slate-500 text-[10px] uppercase tracking-widest"><tr>
+            <th class="px-3 py-2 text-left font-bold">Date</th>
+            <th class="px-3 py-2 text-left font-bold">Method</th><th class="px-3 py-2 text-left font-bold">Status</th>
+            <th class="px-3 py-2 text-left font-bold">Notes</th><th class="px-3 py-2 text-right font-bold">Amount</th>
+            <th class="px-3 py-2 text-right font-bold"></th>
+          </tr></thead>
+          <tbody class="divide-y divide-slate-100">
+            ${profileData.advances.map(a => `<tr>
+              <td class="px-3 py-2 text-slate-500">${a.date}</td>
+              <td class="px-3 py-2 text-slate-600">${esc(a.method)}</td>
+              <td class="px-3 py-2"><span class="badge ${a.status === 'Active' ? 'badge-partial' : 'badge-inactive'}">${esc(a.status)}</span></td>
+              <td class="px-3 py-2 text-slate-500">${esc(a.notes || '—')}</td>
+              <td class="px-3 py-2 text-right font-semibold text-slate-900">${money(a.amount)}</td>
+              <td class="px-3 py-2 text-right">${a.can_reverse ? `<button class="text-slate-300 hover:text-red-500 transition-colors" title="Reverse" onclick="deleteAdvance(${a.id}, ${s.db_id})"><i class="fa-solid fa-trash text-xs"></i></button>` : ''}</td>
+            </tr>`).join('')}
+          </tbody></table>
+        ` : ''}`;
     }
   }
 
@@ -622,6 +655,58 @@
     } catch (err) {
       Atelier.reportError(err, 'Could not remove the payment');
     }
+  }
+
+  window.openAdvanceForm = function(id) {
+    const s = findStaff(id);
+    if (!s) return;
+    openModal('staff-advance', s);
+  }
+
+  window.saveAdvance = async function(id, btn) {
+    const payload = {
+      amount:  parseFloat(document.getElementById('adv-amount').value),
+      method:  document.getElementById('adv-method').value,
+      given_on: document.getElementById('adv-date').value || null,
+      notes:   document.getElementById('adv-notes').value.trim() || null,
+    };
+
+    if (!payload.amount || payload.amount <= 0) { toast('Enter the amount given', 'error'); return; }
+
+    Atelier.setBusy(btn, true);
+    try {
+      const res = await Atelier.api.post(`/staff/${id}/advances`, payload);
+      upsertStaff(res.staff);
+      closeModal();
+      toast(res.message, 'success');
+      await refreshStaff();
+      if (profileData && profileData.staff.db_id === id) openProfile(id);
+    } catch (err) {
+      Atelier.reportError(err, 'Could not record the advance');
+    } finally {
+      Atelier.setBusy(btn, false);
+    }
+  }
+
+  window.deleteAdvance = async function(advanceId, staffId) {
+    try {
+      const res = await Atelier.api.delete(`/staff-advances/${advanceId}`);
+      upsertStaff(res.staff);
+      toast(res.message, 'success');
+      await refreshStaff();
+      openProfile(staffId);
+    } catch (err) {
+      Atelier.reportError(err, 'Could not remove the advance');
+    }
+  }
+
+  window.addSpecialRateRow = function() {
+    const container = document.getElementById('special-rates-container');
+    if (!container) return;
+    const div = document.createElement('div');
+    div.className = 'flex gap-2 mb-2 special-rate-row';
+    div.innerHTML = `<select class="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm special-rate-product"><option value="">Select Garment</option>${GARMENTS.map(g => `<option value="${g.id}">${Atelier.escapeHtml(g.name)}</option>`).join('')}</select><input type="number" step="0.01" min="0" placeholder="Rate" class="w-32 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm special-rate-amount"><button type="button" class="w-10 h-10 flex-shrink-0 text-slate-400 hover:text-red-500" onclick="this.parentElement.remove()"><i class="fa-solid fa-trash"></i></button>`;
+    container.appendChild(div);
   }
 
   window.openWorkForm = function(id) {
@@ -723,6 +808,24 @@
             <div class="sm:col-span-2">
               ${field('Notes', `<textarea id="sf-notes" rows="2" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-colors">${Atelier.escapeHtml(v.notes || '')}</textarea>`)}
             </div>
+            <div class="sm:col-span-2 border border-slate-200 rounded-lg p-4 bg-slate-50 mt-2">
+              <div class="flex justify-between items-center mb-3">
+                <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">Special Stitching Rates (Optional)</label>
+                <button type="button" class="text-xs text-indigo-600 font-medium hover:underline" onclick="addSpecialRateRow()">+ Add Rate</button>
+              </div>
+              <div id="special-rates-container">
+                ${(v.special_rates || []).map(r => `
+                  <div class="flex gap-2 mb-2 special-rate-row">
+                    <select class="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm special-rate-product">
+                      <option value="">Select Garment</option>
+                      ${GARMENTS.map(g => `<option value="${g.id}" ${g.id == r.product_service_id ? 'selected' : ''}>${Atelier.escapeHtml(g.name)}</option>`).join('')}
+                    </select>
+                    <input type="number" step="0.01" min="0" placeholder="Rate" value="${r.rate}" class="w-32 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm special-rate-amount">
+                    <button type="button" class="w-10 h-10 flex-shrink-0 text-slate-400 hover:text-red-500" onclick="this.parentElement.remove()"><i class="fa-solid fa-trash"></i></button>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
           </div>
           <p class="text-xs text-slate-500 mt-4" id="salary-hint"></p>
         </div>
@@ -731,6 +834,28 @@
           <button class="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors shadow-sm" onclick="saveStaff(${editing ? v.db_id : 'null'}, this)"><i class="fa-solid fa-check text-xs mr-1"></i> ${editing ? 'Save Changes' : 'Add Tailor'}</button>
         </div>`;
     },
+
+    'staff-advance': (s) => `
+      <div class="p-5 border-b border-slate-200 flex justify-between items-center">
+        <div>
+          <div class="text-lg font-bold text-slate-900 tracking-tight">Give Advance</div>
+          <div id="advance-summary" class="text-xs text-slate-500 mt-1">${Atelier.escapeHtml(s.name)}</div>
+        </div>
+        <button class="w-8 h-8 rounded-lg text-slate-400 hover:bg-slate-100 flex items-center justify-center" onclick="closeModal()"><i class="fa-solid fa-xmark text-sm"></i></button>
+      </div>
+      <div class="p-6">
+        <div class="grid grid-cols-2 gap-4">
+          ${field('Amount *', input('adv-amount', { type: 'number', min: 0, step: '0.01' }))}
+          ${field('Method', `<select id="adv-method" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-colors">${PAY_METHODS.map(m => `<option>${m}</option>`).join('')}</select>`)}
+          ${field('Given On', input('adv-date', { type: 'date', value: @json(now()->toDateString()) }))}
+          <div class="col-span-2">${field('Notes', input('adv-notes', { placeholder: 'Optional' }))}</div>
+        </div>
+        <p class="text-xs text-slate-500 mt-4">Advances are tracked separately and deducted from the running balance.</p>
+      </div>
+      <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">
+        <button class="bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-100 transition-colors" onclick="closeModal()">Cancel</button>
+        <button class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors shadow-sm" onclick="saveAdvance(${s.db_id}, this)"><i class="fa-solid fa-check text-xs mr-1"></i> Give Advance</button>
+      </div>`,
 
     'staff-payment': (s) => `
       <div class="p-5 border-b border-slate-200 flex justify-between items-center">

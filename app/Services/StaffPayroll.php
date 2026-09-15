@@ -12,10 +12,13 @@ final class StaffPayroll
             $staff = Staff::whereKey($staff->id)->lockForUpdate()->firstOrFail();
             abort_if(StaffPayment::where('operation_key',$validated['operation_key'])->exists(),409,'This payment was already submitted.');
             $due = $staff->dueFor($period);
-            foreach ($staff->payments()->where('period', '!=', $period)->pluck('period')->unique() as $other) {
-                [$a, $b] = \App\Services\StaffPayPeriod::bounds($other);
-                if ($a->toDateString() <= $due['period_end'] && $b->toDateString() >= $due['period_start']) {
-                    throw \Illuminate\Validation\ValidationException::withMessages(['period' => "This overlaps payments for {$other}. Use that original period for these dates, or reverse its payments before changing the cycle."]);
+            if ($period !== 'Running Balance') {
+                foreach ($staff->payments()->where('period', '!=', $period)->pluck('period')->unique() as $other) {
+                    if ($other === 'Running Balance') continue;
+                    [$a, $b] = \App\Services\StaffPayPeriod::bounds($other);
+                    if ($a->toDateString() <= $due['period_end'] && $b->toDateString() >= $due['period_start']) {
+                        throw \Illuminate\Validation\ValidationException::withMessages(['period' => "This overlaps payments for {$other}. Use that original period for these dates, or reverse its payments before changing the cycle."]);
+                    }
                 }
             }
             if ((int) round((float) $validated['amount'] * 100) > (int) round($due['remaining'] * 100)) {
