@@ -62,9 +62,11 @@
   window.itemAdd = () => { if(newOrderState.garments.length<50) { newOrderState.garments.push(blankGarment()); newOrderState.activeItem = newOrderState.garments.length - 1; } itemRefresh(); };
   window.itemTab = (i) => { newOrderState.activeItem=i; itemRefresh(); };
   window.itemMeasure = (field,value) => { 
-    newOrderState.garments[newOrderState.activeItem].pieces.forEach(p => {
-      p.values[field]=value;
-      if (p.measurement_id) { p.saved_changes ||= {}; p.saved_changes.values ||= {}; p.saved_changes.values[field]=value; }
+    newOrderState.garments.forEach(row => {
+      row.pieces.forEach(p => {
+        p.values[field]=value;
+        if (p.measurement_id) { p.saved_changes ||= {}; p.saved_changes.values ||= {}; p.saved_changes.values[field]=value; }
+      });
     });
   };
   window.itemUnit = value => { 
@@ -80,10 +82,8 @@
     return 'generic';
   }
   function compatibleSavedMeasurements(row) {
-    const name = value => String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
     return (customers.find(c => c.db_id == newOrderState.customerId)?.measurements || [])
-      .filter(m => m.customer_id == newOrderState.customerId && inferSavedProfile(m) === rowProfile(row).key
-        && (m.product_service_id ? m.product_service_id == row.product_service_id : name(m.garment_type) === name(rowName(row))))
+      .filter(m => m.customer_id == newOrderState.customerId && inferSavedProfile(m) === rowProfile(row).key)
       .sort((a,b) => (Date.parse(b.updated_at) || 0) - (Date.parse(a.updated_at) || 0) || Number(b.id) - Number(a.id));
   }
   window.itemSaved = id => {
@@ -91,11 +91,11 @@
     const saved = compatibleSavedMeasurements(row);
     const sheet = id ? saved.find(m=>m.id==id) : saved.find(m=>m.id==row.pieces[0].measurement_id) || saved[0];
     if(!sheet && !id) {
-       row.pieces.forEach(p => { p.values={}; delete p.measurement_id; delete p.saved_measurement_id; delete p.saved_changes; p.measurement_mode='new'; });
+       newOrderState.garments.forEach(r => r.pieces.forEach(p => { p.values={}; delete p.measurement_id; delete p.saved_measurement_id; delete p.saved_changes; p.measurement_mode='new'; }));
        itemRefresh(); return;
     }
     if(sheet) {
-      row.pieces.forEach(p => {
+      newOrderState.garments.forEach(r => r.pieces.forEach(p => {
          // New updates the selected set and retains any edits already made.
          if (!id && p.measurement_id == sheet.id) { p.measurement_mode='new'; return; }
          p.measurement_id = sheet.id;
@@ -104,8 +104,9 @@
          delete p.saved_changes;
          p.unit = sheet.unit || 'in';
          const values = {...sheet, ...(sheet.details || {})};
-         p.values = Object.fromEntries(rowProfile(row).fields.map(k => [k, values[k] ?? '']));
-      });
+         p.values = Object.fromEntries(rowProfile(r).fields.map(k => [k, values[k] ?? '']));
+         p.values.notes = values.notes ?? '';
+      }));
       itemRefresh();
     }
   };
@@ -267,24 +268,32 @@
             <div>
               <label class="block text-sm font-bold text-slate-700 mb-3">Garment Type <span class="text-red-500">*</span></label>
               <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                ${tailorCategories.map(cat => `
-                  <div class="col-span-full mt-4 mb-2">
-                    <h5 class="text-sm font-bold text-slate-700 border-b border-slate-100 pb-2">${itemEsc(cat.name)}</h5>
-                  </div>
-                  ${cat.rates.map(rate => {
+                ${tailorCategories.map(cat => {
+                  let html = '';
+                  let isDummy = cat.rates.length === 1 && cat.rates[0].service && (cat.name.toLowerCase() === cat.rates[0].service.name.toLowerCase() || cat.name === 'Default' || cat.name === 'General');
+                  
+                  if (!isDummy && cat.rates.length > 0) {
+                    html += `
+                      <div class="col-span-full mt-2 mb-1">
+                        <h5 class="text-sm font-bold text-slate-700 border-b border-slate-100 pb-2">${itemEsc(cat.name)}</h5>
+                      </div>
+                    `;
+                  }
+                  
+                  html += cat.rates.map(rate => {
                     let p = rate.service;
                     if (!p) return '';
                     let isSelected = p.id == r.product_service_id && Number(r.unit_price) == Number(rate.price);
-                    return `<button class="w-full px-4 py-3 border text-left flex flex-col justify-center gap-1 rounded-xl text-sm transition-all ${isSelected ? 'border-indigo-600 bg-indigo-50 text-indigo-700 font-bold shadow-sm ring-2 ring-indigo-600/20' : 'border-slate-200 text-slate-600 hover:border-indigo-300 hover:bg-slate-50 font-medium'}" onclick="itemChooseRate(${i}, ${rate.id})">
-                      <div class="flex items-center gap-3">
-                        <i class="fa-solid ${p.name.toLowerCase().includes('suit') ? 'fa-vest text-lg' : p.name.toLowerCase().includes('shirt') ? 'fa-shirt text-lg' : 'fa-vest-patches text-lg'} ${isSelected ? 'text-indigo-600' : 'text-slate-400'}"></i> 
-                        <span class="leading-tight">${itemEsc(rate.name)}</span>
-                      </div>
-                      <div class="${isSelected ? 'text-indigo-600' : 'text-slate-500'} text-xs font-bold pl-8">${Atelier.money(rate.price)}</div>
+                    return `<button class="w-full px-3 py-4 border flex flex-col items-center justify-center gap-1.5 rounded-xl text-center transition-all ${isSelected ? 'border-indigo-600 bg-indigo-50 text-indigo-700 shadow-sm ring-2 ring-indigo-600/20' : 'border-slate-200 bg-white text-slate-600 hover:border-indigo-300 hover:bg-slate-50 hover:shadow-sm'}" onclick="itemChooseRate(${i}, ${rate.id})">
+                        <i class="fa-solid ${p.name.toLowerCase().includes('suit') ? 'fa-vest' : p.name.toLowerCase().includes('shirt') ? 'fa-shirt' : 'fa-vest-patches'} text-2xl mb-1 ${isSelected ? 'text-indigo-600' : 'text-slate-400'} transition-colors"></i> 
+                        <span class="font-bold text-sm leading-tight text-slate-800">${itemEsc(p.name)}</span>
+                        <span class="${isSelected ? 'text-indigo-600' : 'text-slate-500'} text-xs font-semibold">${Atelier.money(rate.price)}</span>
                     </button>`;
-                  }).join('')}
-                `).join('')}
-                ${!rowProduct(r) && r.product_service_id ? `<button class="w-full px-4 py-3 border text-left flex items-center gap-3 rounded-xl text-sm border-indigo-600 bg-indigo-50 text-indigo-700 font-bold shadow-sm" disabled><i class="fa-solid fa-vest-patches text-lg text-indigo-600"></i> <span class="leading-tight">${itemEsc(r.name)} (historical)</span></button>` : ''}
+                  }).join('');
+                  
+                  return html;
+                }).join('')}
+                ${!rowProduct(r) && r.product_service_id ? `<button class="w-full px-3 py-4 border flex flex-col items-center justify-center gap-1.5 rounded-xl text-center border-indigo-600 bg-indigo-50 text-indigo-700 shadow-sm" disabled><i class="fa-solid fa-vest-patches text-2xl mb-1 text-indigo-600"></i> <span class="font-bold text-sm leading-tight">${itemEsc(r.name)}</span><span class="text-[10px] font-normal opacity-75">(historical)</span></button>` : ''}
               </div>
             </div>
             
@@ -347,7 +356,7 @@
 
     /* ---------- Step 3 — Measurements ------------------------------- */
     } else if (wizardStep === 3) {
-      const row = s.garments[s.activeItem] || s.garments[0];
+      const row = s.garments[0];
       const piece = row.pieces[0]; // Measurements apply to all pieces in the garment
       const profile = rowProfile(row);
       const saved = compatibleSavedMeasurements(row);
@@ -357,19 +366,7 @@
 
       html += `<h3 class="text-xl font-bold text-slate-900 tracking-tight mb-6">Body Measurements</h3>`;
 
-      /* Garment tabs */
-      if (s.garments.length > 1) {
-        html += `
-        <div class="flex items-center gap-2 mb-6 overflow-x-auto pb-2">
-          ${s.garments.map((r, i) => {
-            const on = i === s.activeItem;
-            const done = rowComplete(r, r.pieces[0]);
-            return `<button onclick="itemTab(${i})" class="shrink-0 px-4 py-2.5 rounded-xl text-sm font-bold border transition-all ${on ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm shadow-indigo-600/20' : done ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:border-emerald-400' : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-400'}">
-              ${done && !on ? '<i class="fa-solid fa-check mr-2"></i>' : ''}${itemEsc(rowName(r))}
-            </button>`;
-          }).join('')}
-        </div>`;
-      }
+
 
       if (!profile.fields.length) {
         html += `<div class="text-center py-10 bg-slate-50 rounded-2xl border border-slate-200 text-sm text-slate-500"><i class="fa-solid fa-check-circle text-emerald-500 text-3xl mb-3 block"></i><span class="font-bold text-base text-slate-700 block mb-1">No measurements required</span>Generic item selected.</div>`;
@@ -404,7 +401,7 @@
 
         /* Measurement fields grid */
         html += `
-        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-5">
+        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-5 mb-5">
           ${profile.fields.map(f => {
             const isReq = profile.required.includes(f);
             const label = profile.labels[f] || f;
@@ -419,6 +416,14 @@
                      value="${itemEsc(val)}" oninput="itemMeasure('${f}', this.value); this.classList.remove('border-amber-300', 'bg-amber-50'); this.classList.add('border-slate-200', 'focus:border-indigo-500')">
             </div>`;
           }).join('')}
+        </div>
+        
+        <div class="mt-6 mb-2">
+          <label class="block text-sm text-slate-900 font-bold mb-2">Special Instructions / Notes</label>
+          <textarea class="w-full px-3 py-2 text-base font-medium bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:border-indigo-500 focus:ring-indigo-500 transition-all text-slate-900"
+                    rows="3"
+                    placeholder="Customer ki special stitching requirements, fitting instructions, design details, loose/tight preference, collar/cuff instructions, etc."
+                    oninput="itemMeasure('notes', this.value);">${itemEsc(piece.values.notes ?? '')}</textarea>
         </div>`;
       }
 

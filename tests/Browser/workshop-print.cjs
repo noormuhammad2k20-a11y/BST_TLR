@@ -31,9 +31,10 @@ assert.equal(cssTree.lexer.matchAtruleDescriptor('page','size','80mm auto').matc
 assert.equal((style.match(/@page/g)||[]).length,1,'only a named thermal page; no global override');
 assert.ok(layout.includes('@page { size: A4 portrait; margin: 12mm 10mm; }'));
 if(baseline) assert.equal(style.split('/* === PRINT')[0],baseline.match(/<style>([\s\S]*?)<\/style>/)[1].split('/* === PRINT')[0],'screen styles unchanged');
+const keys   = ['length','shoulder_width','sleeve_length','chest','chest_losing','waist','waist_losing','hip','hip_losing','collar','ghera','patti','button','cuff','koni','elbow','armhole','takai','salwar_length','pancho'];
 const labels = ['Length','Shoulder','Sleeves','Chest','Losing','West','Loasing','Hip','Losing','Collar','Galla','F/Patti','Button','Cuff','Koni','Elbow','Armor','Takki','Salwar Length','Pancho'];
 const names = ['Alteration and Fitting','Alteration and Fitting','Kurta Pajama Stitching','Premium Suit Stitching','Trouser Stitching','Trouser Stitching'];
-const pieces = names.map((garment,i)=>({garment,piece:[1,2,1,1,1,2][i],unit:'in',rows:labels.map((label,j)=>({label,value:String((i+1)*100+j+1)}))}));
+const pieces = names.map((garment,i)=>({garment,piece:[1,2,1,1,1,2][i],unit:'in',rows:labels.map((label,j)=>({key:keys[j],label,value:String((i+1)*100+j+1)}))}));
 const order = {store:'BEST TAILOR',order:'QA-PRINT-6',date:'14/09/2026',customer:'Test Customer',tailor:'Test Tailor',priority:'High',garment:'2 × Alteration and Fitting, 1 × Kurta Pajama Stitching, 1 × Premium Suit Stitching, 2 × Trouser Stitching',qty:6,due:'20/09/2026',total:10000,advance:1000,balance:9000,items:[{name:'Alteration and Fitting',qty:2,price:1000},{name:'Kurta Pajama Stitching',qty:1,price:2000},{name:'Premium Suit Stitching',qty:1,price:5000},{name:'Trouser Stitching',qty:2,price:2000}]};
 async function render(source, name, which, data=pieces, page=null, receipt=order) {
     const css = source.match(/<style>([\s\S]*?)<\/style>/)[1].replace("@include('receipts.slip-styles')",shared);
@@ -61,6 +62,39 @@ async function render(source, name, which, data=pieces, page=null, receipt=order
             assert.equal(block.querySelectorAll('.slip-mcell').length,data[i].rows.length);
             assert.ok(block.querySelector('.slip-kind').textContent.includes(data[i].garment));
         });
+        /* Workshop measurement pairing: when keys are present, verify that
+           losing measurements appear directly after their parent and that
+           ambiguous labels have been corrected. */
+        if (data[0].rows[0] && data[0].rows[0].key) {
+            blocks.forEach((block) => {
+                const cells = Array.from(block.querySelectorAll('.slip-mcell .l'));
+                const cellTexts = cells.map(el => el.textContent.trim());
+                // Chest Losing must immediately follow Chest
+                const chestIdx = cellTexts.indexOf('Chest');
+                const chestLosingIdx = cellTexts.indexOf('Chest Losing');
+                if (chestIdx >= 0 && chestLosingIdx >= 0) {
+                    assert.equal(chestLosingIdx, chestIdx + 1, 'Chest Losing follows Chest');
+                }
+                // Waist Losing must immediately follow Waist
+                const waistIdx = cellTexts.indexOf('Waist');
+                const waistLosingIdx = cellTexts.indexOf('Waist Losing');
+                if (waistIdx >= 0 && waistLosingIdx >= 0) {
+                    assert.equal(waistLosingIdx, waistIdx + 1, 'Waist Losing follows Waist');
+                }
+                // Hip Losing must immediately follow Hip
+                const hipIdx = cellTexts.indexOf('Hip');
+                const hipLosingIdx = cellTexts.indexOf('Hip Losing');
+                if (hipIdx >= 0 && hipLosingIdx >= 0) {
+                    assert.equal(hipLosingIdx, hipIdx + 1, 'Hip Losing follows Hip');
+                }
+                // No ambiguous bare labels
+                cellTexts.forEach(t => {
+                    assert.notEqual(t, 'Losing', 'no bare Losing label');
+                    assert.notEqual(t, 'Loasing', 'no bare Loasing label');
+                    assert.notEqual(t, 'West', 'no bare West label');
+                });
+            });
+        }
     }
     w.print=()=>{
         if(source===current) {
@@ -89,7 +123,7 @@ await render(current,'both-copies-297','both',pieces,'80mm 297mm');
 await render(current,'both-copies-long','both',pieces,'80mm 1000mm');
 await render(current,'short-copy','customer',pieces,'80mm 297mm');
 await render(current,'customer-after','customer');
-const tall=[{...pieces[0],rows:Array.from({length:180},(_,i)=>({label:'Measure '+(i+1),value:String(1001+i)}))},pieces[2]];
+const tall=[{...pieces[0],rows:Array.from({length:180},(_,i)=>({key:'custom_'+i,label:'Measure '+(i+1),value:String(1001+i)}))},pieces[2]];
 await render(current,'oversized-piece','tailor',tall);
 if(baseline) {
     assert.equal((await render(baseline,'customer-before','customer')).replace(/>\s+</g,'><'),customer.replace(/>\s+</g,'><'),'customer copy markup unchanged when branding is absent');

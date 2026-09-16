@@ -89,22 +89,18 @@ final class OrderItemsService
                     if (!$source) $this->fail("garments.$i.pieces.$j.measurement_id", 'Select a measurement belonging to this customer.');
                     $sourceProfile = $source->piece?->profile['key'] ?? MeasurementProfiles::infer($source->garment_type ?? '');
                     if ($sourceProfile !== $profile['key']) $this->fail("garments.$i.pieces.$j.measurement_id", 'The saved measurement profile is incompatible.');
-                    $sourceProduct = $source->piece?->item?->product_service_id;
-                    $normalizeName = fn ($name) => preg_replace('/\s+/u', ' ', mb_strtolower(trim($name ?? '')));
-                    if ($sourceProduct ? $sourceProduct != $product->id : $normalizeName($source->garment_type) !== $normalizeName($product->name)) {
-                        $this->fail("garments.$i.pieces.$j.measurement_id", 'Select a saved measurement for this garment.');
-                    }
-                    $piece['values'] = array_merge($source->only(Measurement::FIELDS), $source->details ?? []);
+                    
+                    $piece['values'] = array_merge($source->only(array_merge(Measurement::FIELDS, ['notes'])), $source->details ?? []);
                     $piece['unit'] = $source->unit;
                     $changes = array_map(fn ($value) => $value === '' ? null : $value, $piece['saved_changes']['values'] ?? []);
                     if (isset($piece['saved_changes']['values'])) $piece['saved_changes']['values'] = $changes;
-                    if (array_diff(array_keys($changes), $profile['fields'])) $this->fail("garments.$i.pieces.$j.saved_changes", 'Only measurements for this garment may be updated.');
+                    if (array_diff(array_keys($changes), array_merge($profile['fields'], ['notes']))) $this->fail("garments.$i.pieces.$j.saved_changes", 'Only measurements for this garment may be updated.');
                     $piece['values'] = array_replace($piece['values'], $changes);
                     $piece['unit'] = $piece['saved_changes']['unit'] ?? $source->unit;
                 } elseif (!empty($piece['saved_changes'])) {
                     $this->fail("garments.$i.pieces.$j.measurement_id", 'Select the saved measurement to update.');
                 }
-                $values = array_intersect_key($piece['values'], array_flip($profile['fields']));
+                $values = array_intersect_key($piece['values'], array_flip(array_merge($profile['fields'], ['notes'])));
                 $unchangedLegacy = $previous && $old->product_service_id === $product->id
                     && $previous->unit === $piece['unit'] && $this->sameValues($values, $previous->measurement, $profile['fields']);
                 $rules = [];
@@ -135,11 +131,13 @@ final class OrderItemsService
     private function sameValues(array $values, ?Measurement $measurement, array $fields): bool
     {
         if (!$measurement) return !count(array_filter($values, fn($v) => $v !== null && $v !== ''));
-        $stored = array_intersect_key(array_merge($measurement->only(Measurement::FIELDS), $measurement->details ?? []), array_flip($fields));
+        $fieldsWithNotes = array_merge($fields, ['notes']);
+        $stored = array_intersect_key(array_merge($measurement->only(array_merge(Measurement::FIELDS, ['notes'])), $measurement->details ?? []), array_flip($fieldsWithNotes));
         foreach (array_unique(array_merge(array_keys($stored), array_keys($values))) as $key) {
             $a = $stored[$key] ?? null; $b = $values[$key] ?? null;
             if (($a === null || $a === '') && ($b === null || $b === '')) continue;
-            if (!is_numeric($a) || !is_numeric($b) || (float)$a !== (float)$b) return false;
+            if (is_numeric($a) && is_numeric($b) && (float)$a === (float)$b) continue;
+            if ($a !== $b) return false;
         }
         return true;
     }
@@ -158,7 +156,10 @@ final class OrderItemsService
                     $source = Measurement::where('customer_id', $order->customer_id)->lockForUpdate()->findOrFail($pc['measurement_id']);
                     $changes = $pc['saved_changes']['values'] ?? [];
                     $columns = array_intersect_key($changes, array_flip(Measurement::FIELDS));
-                    $details = array_diff_key($changes, array_flip(Measurement::FIELDS));
+                    if (array_key_exists('notes', $changes)) {
+                        $source->notes = $changes['notes'];
+                    }
+                    $details = array_diff_key($changes, array_flip(array_merge(Measurement::FIELDS, ['notes'])));
                     $source->fill($columns);
                     if ($details) $source->details = array_replace($source->details ?? [], $details);
                     if (isset($pc['saved_changes']['unit'])) $source->unit = $pc['saved_changes']['unit'];
@@ -182,7 +183,8 @@ final class OrderItemsService
                     $attributes = array_merge($attributes, array_intersect_key($values, array_flip(Measurement::FIELDS)), [
                         'customer_id' => $order->customer_id, 'order_id' => $order->id, 'piece_no' => $j + 1,
                         'garment_type' => $item->name, 'unit' => $pc['unit'], 'is_template' => false,
-                        'details' => array_diff_key($values, array_flip(Measurement::FIELDS)),
+                        'notes' => $values['notes'] ?? null,
+                        'details' => array_diff_key($values, array_flip(array_merge(Measurement::FIELDS, ['notes']))),
                     ]);
                     $measurement = $piece->measurement()->updateOrCreate([], $attributes);
                     $firstMeasurement ??= $measurement->id;

@@ -4,6 +4,71 @@
 
 @push('styles')
 <style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+  /* CUSTOMER COPY RECEIPT DESIGN */
+  .rc {
+    width: 302px;
+    background: #fff;
+    color: #141414;
+    padding: 19px 15px 21px;
+    font: 400 10px/1.5 'IBM Plex Mono', monospace;
+    border: 1px solid #BFBAB0; /* screen only */
+  }
+  .rc-head { text-align: center; }
+  .rc-name { font: 700 23px/1.1 'Space Grotesk', sans-serif; letter-spacing: .03em; color: #000; }
+  .rc-tag { display: flex; align-items: center; gap: 8px; margin: 9px 0 0; }
+  .rc-tag::before, .rc-tag::after { content: ''; flex: 1; height: 1px; background: #000; }
+  .rc-tag span { font: 600 7.5px 'Space Grotesk', sans-serif; letter-spacing: .32em; margin-right: -.32em; text-transform: uppercase; white-space: nowrap; }
+  .rc-addr { font: 400 8.5px/1.55 'IBM Plex Mono', monospace; color: #444; margin-top: 8px; }
+  .rc-ph { font: 600 8.5px 'IBM Plex Mono', monospace; margin-top: 2px; }
+  .rc-rule { height: 1.5px; background: #000; border: 0; margin: 12px 0 14px; }
+  .rc-doc { display: flex; justify-content: center; margin: 3px 0 13px; }
+  .rc-doc b { font: 700 8.5px 'Space Grotesk', sans-serif; letter-spacing: .3em; margin-right: -.3em; text-transform: uppercase; color: #000; }
+  .rc-meta { display: flex; flex-direction: column; gap: 6px; margin: 0 0 3px; }
+  .rc-m { display: flex; align-items: baseline; gap: 6px; }
+  .rc-m .k { font: 600 8px 'Space Grotesk', sans-serif; letter-spacing: .12em; color: #5c5c5c; white-space: nowrap; text-transform: uppercase; }
+  .rc-m .dots { flex: 1; min-width: 12px; border-bottom: 1px dotted #9a9a9a; transform: translateY(-3px); }
+  .rc-m .v { font: 500 10.5px 'IBM Plex Mono', monospace; color: #000; word-break: break-word; overflow-wrap: anywhere;}
+  .rc-m .v.b { font-weight: 700; }
+  .rc-sec { display: flex; align-items: center; gap: 8px; margin: 16px 0 8px; }
+  .rc-sec::before, .rc-sec::after { content: ''; flex: 1; height: 1px; background: #000; }
+  .rc-sec span { font: 700 8px 'Space Grotesk', sans-serif; letter-spacing: .3em; margin-right: -.3em; text-transform: uppercase; }
+  .rc-item { padding: 7px 0; }
+  .rc-item + .rc-item { border-top: 1px dashed #d5d5d5; }
+  .rc-i1 { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .rc-i1 .nm { font: 600 11px 'Space Grotesk', sans-serif; color: #000; word-break: break-word; overflow-wrap: anywhere;}
+  .rc-i1 .qt { font: 500 9px 'IBM Plex Mono', monospace; color: #555; white-space: nowrap; }
+  .rc-i2 { display: flex; align-items: baseline; gap: 6px; margin-top: 2px; }
+  .rc-i2 .rt { font: 400 8.5px 'IBM Plex Mono', monospace; color: #5a5a5a; white-space: nowrap; }
+  .rc-i2 .dots { flex: 1; min-width: 10px; border-bottom: 1px dotted #a5a5a5; transform: translateY(-3px); }
+  .rc-i2 .tt { font: 700 11px 'IBM Plex Mono', monospace; white-space: nowrap;}
+  .rc-tot { margin-top: 3px; }
+  .rc-tr { display: flex; align-items: baseline; gap: 6px; padding: 3.5px 0; }
+  .rc-tr .k { font: 600 8px 'Space Grotesk', sans-serif; letter-spacing: .14em; color: #555; white-space: nowrap; text-transform: uppercase; }
+  .rc-tr .dots { flex: 1; min-width: 10px; border-bottom: 1px dotted #a5a5a5; transform: translateY(-3px); }
+  .rc-tr .v { font: 600 10.5px 'IBM Plex Mono', monospace; white-space: nowrap;}
+  .rc-tr.due .k { color: #000; }
+  .rc-tr.due .v { font-weight: 700; font-size: 11.5px; }
+  .rc-tr.sub .k { color: #666; }
+  .rc-tr.sub .v { font-weight: 500; font-size: 9.5px; }
+  .rc-tb { border: 1.5px solid #000; border-radius: 3px; margin: 10px 0 8px; padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; }
+  .rc-tb span { font: 700 9px 'Space Grotesk', sans-serif; letter-spacing: .24em; text-transform: uppercase; }
+  .rc-tb b { font: 700 15px 'IBM Plex Mono', monospace; white-space: nowrap;}
+  .rc-stat { margin-top: 13px; text-align: center; font: 700 7.5px 'Space Grotesk', sans-serif; letter-spacing: .18em; border: 1px solid #000; border-radius: 3px; padding: 6px 4px; text-transform: uppercase; }
+  .rc-note { text-align: center; font: 400 8.5px/1.65 'IBM Plex Mono', monospace; color: #333; margin-top: 13px; }
+  .rc-credit { margin-top: 15px; border: 1px solid #000; border-radius: 3px; padding: 10px 10px 12px; text-align: center; }
+  .rc-credit .c1 { font: 400 7px 'IBM Plex Mono', monospace; color: #8a8a8a; letter-spacing: .28em; margin-right: -.28em; text-transform: uppercase; }
+  .rc-credit .c2 { font: 700 7.5px/1.6 'Space Grotesk', sans-serif; letter-spacing: .04em; margin-top: 4px; color: #000; text-transform: uppercase; }
+  .rc-credit .cline { display: block; width: 24px; height: 1.5px; background: #000; margin: 7px auto; }
+  .rc-credit .c3 { font: 700 8.5px 'Space Grotesk', sans-serif; letter-spacing: .08em; color: #000; text-transform: uppercase; }
+  .rc-credit .c3 span { font: 400 7.5px 'IBM Plex Mono', monospace; color: #8a8a8a; letter-spacing: .08em; margin-right: 6px; }
+  .rc-credit .c4 { font: 600 9px 'IBM Plex Mono', monospace; color: #000; letter-spacing: .03em; margin-top: 5px; }
+  .rc-credit .c4 span { font: 400 7.5px 'IBM Plex Mono', monospace; color: #8a8a8a; letter-spacing: .08em; margin-right: 6px; text-transform: uppercase; }
+  .rc-thx { display: flex; align-items: center; gap: 8px; margin-top: 13px; }
+  .rc-thx::before, .rc-thx::after { content: ''; flex: 1; height: 1px; background: #000; }
+  .rc-thx span { font: 700 8.5px 'Space Grotesk', sans-serif; letter-spacing: .4em; margin-right: -.4em; text-transform: uppercase; color: #000; }
+
   /* Kanban Drag & Drop */
   .kanban-card {
     cursor: grab;
@@ -63,6 +128,50 @@
   .slip-workshop .slip-mcell .n {
     flex: 0 1 auto; min-width: 0; max-width: 50%; overflow-wrap: anywhere;
   }
+
+  /* ---- Workshop readability ------------------------------------------------
+     Tailors reading the job card have eyesight constraints. These overrides
+     make the workshop slip slightly clearer without enlarging the customer
+     copy or changing the 72mm layout.  All rules are scoped to .slip-workshop.
+     ---------------------------------------------------------------------- */
+  .slip-workshop {
+    font-size: 14px;           /* increased for overall readability */
+    line-height: 1.5;
+    color: #000;               /* strict solid black */
+  }
+  .slip-workshop .slip-row .v {
+    font-weight: 800;
+  }
+  .slip-workshop .slip-sec {
+    font-size: 16px;           /* significantly larger section headers (e.g. INSTRUCTIONS) */
+    font-weight: 900;
+    margin-bottom: 4px;
+  }
+  .slip-workshop .slip-kind {
+    font-size: 15px;           /* larger garment/piece heading */
+    font-weight: 800;
+  }
+  .slip-workshop .slip-note {
+    font-size: 14px;           /* larger instruction text */
+    font-weight: 600;
+    line-height: 1.4;
+  }
+  .slip-workshop .slip-mcell {
+    font-size: 14px;           /* increased from 12px */
+    border-bottom: 1px solid #000;
+    padding: 1.2mm 0;          /* more breathing room */
+  }
+  .slip-workshop .slip-mcell .l {
+    font-weight: 600;
+  }
+  .slip-workshop .slip-mcell .n {
+    font-weight: 900;
+    font-size: 16px;           /* values/digits clearly stand out */
+  }
+  .slip-workshop .slip-due .val {
+    font-size: 16px;
+  }
+
   /* === PRINT =============================================================== */
   @media print {
     /* Reset inherited A4 sizing, and honor the driver's selected thermal form.
@@ -88,6 +197,15 @@
       margin: 0; padding: 0; transform: none; zoom: 1;
       background: #fff !important;
       display: block !important;
+    }
+
+    #thermal-print-area .rc {
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+      box-sizing: border-box;
+      background: #fff;
+      border: none;
     }
 
     #thermal-print-area .slip {
@@ -150,6 +268,15 @@
     #thermal-print-area .slip-workshop .slip-mcell,
     #thermal-print-area .slip-workshop .slip-sign {
       break-inside: avoid; page-break-inside: avoid;
+    }
+
+    /* Workshop readability: thermal heads need extra density for the
+       slightly larger workshop text to print at full contrast. */
+    #thermal-print-area .slip-workshop {
+      font-weight: 700;
+    }
+    #thermal-print-area .slip-workshop .slip-mcell .n {
+      font-weight: 900;
     }
   }
 
@@ -835,22 +962,89 @@
               <span class="n">${Atelier.escapeHtml(x.value)}</span>
             </div>`).join('')}</div>`;
 
+      /* ---- Workshop-only measurement reordering and relabeling ----------
+         Groups parent measurements with their "losing" partner on the same
+         visual row-pair, and replaces ambiguous labels like "Losing" or
+         "Loasing" with clear ones like "Chest Losing".  Only the displayed
+         label changes; the stored key and value are never mutated.
+         ------------------------------------------------------------------ */
+      var WORKSHOP_ORDER = [
+        'length', 'shoulder_width', 'sleeve_length', 'collar',
+        'chest', 'chest_losing',
+        'waist', 'waist_losing',
+        'hip', 'hip_losing',
+        'ghera', 'patti', 'button', 'cuff', 'koni',
+        'elbow', 'armhole', 'takai',
+        'salwar_length', 'pancho'
+      ];
+
+      var WORKSHOP_LABELS = {
+        'chest_losing':   'Chest Losing',
+        'waist':          'Waist',
+        'waist_losing':   'Waist Losing',
+        'hip_losing':     'Hip Losing',
+        'shoulder_width': 'Shoulder',
+        'sleeve_length':  'Sleeves',
+        'armhole':        'Armor',
+        'takai':          'Takki',
+        'ghera':          'Galla',
+        'patti':          'F/Patti',
+      };
+
+      function workshopRows(rows) {
+        return rows
+          .map(function(r) {
+            var key = r.key || '';
+            var label = WORKSHOP_LABELS[key] || r.label;
+            return { key: key, label: label, value: r.value };
+          })
+          .sort(function(a, b) {
+            var ai = WORKSHOP_ORDER.indexOf(a.key);
+            var bi = WORKSHOP_ORDER.indexOf(b.key);
+            if (ai < 0) ai = 9999;
+            if (bi < 0) bi = 9999;
+            return ai - bi;
+          });
+      }
+
       // An order for several garments carries a sheet per garment. Each one
       // prints under its own heading so the cutter never has to work out which
       // numbers belong to which suit; a single-garment job prints as before.
       const pieces = (m.pieces || []).filter(pc => pc.rows && pc.rows.length);
       const rows = m.rows || [];
 
+      const normNote = s => (s || '').trim().toLowerCase();
+      const globalNotes = [];
+      if (r.style_notes) globalNotes.push(r.style_notes);
+      if (m.notes)       globalNotes.push(m.notes);
+      if (r.notes)       globalNotes.push(r.notes);
+      
+      const globalNorms = new Set(globalNotes.map(normNote).filter(Boolean));
+
       if (pieces.length > 0) {
-        body.innerHTML = pieces.map(pc => `
+        const totalPieces = pieces.length;
+        const garmentCounts = {};
+        pieces.forEach(p => { 
+          const g = p.garment || "Garment";
+          garmentCounts[g] = (garmentCounts[g] || 0) + 1; 
+        });
+        const garmentSummary = Object.entries(garmentCounts)
+          .map(([name, count]) => `${count} &times; ${Atelier.escapeHtml(name)}`)
+          .join(', ');
+
+        const firstPiece = pieces[0];
+        const pcNoteNorm = normNote(firstPiece.notes);
+        const showPcNote = pcNoteNorm && !globalNorms.has(pcNoteNorm);
+        if (showPcNote) globalNorms.add(pcNoteNorm);
+
+        body.innerHTML = `
           <div class="slip-piece">
-          <div class="slip-kind ghost" style="margin:1.5mm 0 1mm">${Atelier.escapeHtml(pc.garment || "Garment")} · PIECE ${pc.piece} (${Atelier.escapeHtml(pc.unit || "")})</div>
-          ${grid(pc.rows)}
-          ${pc.notes ? `<div class="slip-note">&bull; ${Atelier.escapeHtml(pc.notes)}</div>` : ''}
+          ${grid(workshopRows(firstPiece.rows))}
+          ${showPcNote ? `<div class="slip-note">&bull; ${Atelier.escapeHtml(firstPiece.notes)}</div>` : ''}
           </div>
-        `).join('');
+        `;
       } else if (rows.length) {
-        body.innerHTML = `<div class="slip-piece">${grid(rows)}</div>`;
+        body.innerHTML = `<div class="slip-piece">${grid(workshopRows(rows))}</div>`;
       } else {
         body.innerHTML = '<div style="text-align:center;font-size:10px">No measurements recorded for this customer</div>';
       }
@@ -865,14 +1059,29 @@
     const notes = document.getElementById('job-notes');
     if (notes) {
       const parts = [];
-      if (r.style_notes) parts.push(r.style_notes);
-      if (m.notes)       parts.push(m.notes);
-      if (r.notes)       parts.push(r.notes);
+      const finalNorms = new Set();
+      
+      const globalNotes = [];
+      if (r.style_notes) globalNotes.push(r.style_notes);
+      if (m.notes)       globalNotes.push(m.notes);
+      if (r.notes)       globalNotes.push(r.notes);
+      
+      const normNote = s => (s || '').trim().toLowerCase();
+
+      globalNotes.forEach(t => {
+        const n = normNote(t);
+        if (n && !finalNorms.has(n)) {
+          finalNorms.add(n);
+          parts.push(t);
+        }
+      });
 
       if (parts.length) {
         notes.innerHTML = '<div class="slip-rule"></div>'
           + '<div class="slip-sec">INSTRUCTIONS</div>'
           + parts.map(t => `<div class="slip-note">&bull; ${Atelier.escapeHtml(t)}</div>`).join('');
+      } else {
+        notes.innerHTML = '';
       }
     }
 
@@ -1214,60 +1423,101 @@
                   || (o.priority || '').toLowerCase() === 'high';
 
       /* ------------------------------- customer ------------------------- */
+      const customerItems = o.items?.length ? o.items : [{ name: o.garment, qty: o.qty || 1, price: o.total, desc: o.fabric, unit_price: o.unitPrice }];
+      
+      const rs = n => 'Rs.' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      
+      let itemsHtml = customerItems.map(item => `
+        <div class="rc-item">
+          <div class="rc-i1">
+            <span class="nm">${esc(item.name || '')}</span>
+            <span class="qt">× ${esc(item.qty || 1)}</span>
+          </div>
+          <div class="rc-i2">
+            <span class="rt">${rs(item.unit_price || item.price || 0)} each</span>
+            <i class="dots"></i>
+            <span class="tt">${rs(item.price || 0)}</span>
+          </div>
+        </div>
+      `).join('');
+      
+      let extraLinesHtml = (o.lines || []).filter(l => l.label.toLowerCase() !== 'total').map(line => `
+        <div class="rc-tr sub">
+          <span class="k">${esc(line.label)}</span>
+          <i class="dots"></i>
+          <span class="v">${rs(line.amount)}</span>
+        </div>
+      `).join('');
+
       const customerSlip = `
-        <div class="slip slip-preview" id="slip-customer">
-          <div class="slip-hd">
-            ${o.show_logo !== false && o.logo ? `<img src="${esc(new URL(o.logo, document.baseURI).href)}" class="slip-logo" alt="">` : ''}
-            ${o.show_logo !== false ? `<div class="slip-shop">${esc((o.store || 'Atelier').toUpperCase())}</div>` : ''}
-            ${o.tagline ? `<div class="slip-tag">${esc(o.tagline)}</div>` : ''}
-            <div class="slip-meta">
-              ${o.address ? `<div>${esc(o.address)}</div>` : ''}
-              ${o.phone ? `<div>Ph: ${esc(o.phone)}</div>` : ''}
+        <div class="rc slip-preview" id="slip-customer">
+          <header class="rc-head">
+            <div class="rc-name">${esc(o.store || 'BEST TAILOR')}</div>
+            <div class="rc-tag"><span>${esc(o.tagline || 'Tailoring & Cloth House')}</span></div>
+            <div class="rc-addr">${esc(o.address || '')}</div>
+            ${o.phone ? `<div class="rc-ph">PH · ${esc(o.phone)}</div>` : ''}
+          </header>
+          <div class="rc-rule"></div>
+          <div class="rc-doc"><b>Booking Receipt · Customer Copy</b></div>
+          <div class="rc-meta">
+            <div class="rc-m">
+              <span class="k">Order</span><i class="dots"></i><span class="v b">${esc(o.order || '')}</span>
+            </div>
+            ${o.invoice ? `
+            <div class="rc-m">
+              <span class="k">Invoice</span><i class="dots"></i><span class="v">${esc(o.invoice)}</span>
+            </div>` : ''}
+            <div class="rc-m">
+              <span class="k">Date</span><i class="dots"></i><span class="v">${esc(o.date || '')}</span>
+            </div>
+            <div class="rc-m">
+              <span class="k">Customer</span><i class="dots"></i><span class="v b">${esc(o.customer || '')}</span>
+            </div>
+            ${o.customer_ph ? `
+            <div class="rc-m">
+              <span class="k">Phone</span><i class="dots"></i><span class="v">${esc(o.customer_ph)}</span>
+            </div>` : ''}
+          </div>
+          <div class="rc-sec"><span>Items</span></div>
+          <div class="rc-items">
+            ${itemsHtml}
+          </div>
+          <div class="rc-sec"><span>Payment</span></div>
+          <div class="rc-tot">
+            ${extraLinesHtml}
+            <div class="rc-tr">
+              <span class="k">Subtotal</span><i class="dots"></i><span class="v">${rs(o.total)}</span>
+            </div>
+            <div class="rc-tb">
+              <span>Total</span><b>${rs(o.total)}</b>
+            </div>
+            <div class="rc-tr">
+              <span class="k">Advance Paid</span><i class="dots"></i><span class="v">${rs(o.advance)}</span>
+            </div>
+            <div class="rc-tr due">
+              <span class="k">Balance</span><i class="dots"></i><span class="v">${rs(o.balance)}</span>
             </div>
           </div>
-
-          <div class="slip-kind">CUSTOMER COPY</div>
-
-          <div class="slip-row"><span class="k">Order</span><span class="v slip-bold">${esc(o.order || '')}</span></div>
-          ${o.invoice ? `<div class="slip-row"><span class="k">Invoice</span><span class="v">${esc(o.invoice)}</span></div>` : ''}
-          <div class="slip-row"><span class="k">Date</span><span class="v">${esc(o.date || '')}</span></div>
-
-          <div class="slip-rule"></div>
-
-          <div class="slip-row"><span class="k">Customer</span><span class="v slip-bold">${esc(o.customer || '')}</span></div>
-          ${o.customer_ph ? `<div class="slip-row"><span class="k">Phone</span><span class="v">${esc(o.customer_ph)}</span></div>` : ''}
-
-          <div class="slip-rule"></div>
-
-          <div class="slip-sec">ITEMS</div>
-          ${(o.items?.length?o.items:[{name:o.garment,qty:o.qty||1,price:o.total,desc:o.fabric}]).map(item=>`<div class="slip-row"><span class="k">${esc(item.name)} × ${item.qty}</span><span class="v">${money(item.price)}</span></div>${item.desc?`<div class="slip-sub">Fabric: ${esc(item.desc)}</div>`:''}`).join('')}
-
-          <div class="slip-rule"></div>
-
-          ${(o.lines||[{label:'Total',amount:o.total}]).map(line=>`<div class="slip-row"><span class="k">${esc(line.label)}</span><span class="v">${money(line.amount)}</span></div>`).join('')}
-          <div class="slip-row"><span class="k">Advance Paid</span><span class="v">${money(o.advance)}</span></div>
-
-          <div class="slip-rule-s"></div>
-          <div class="slip-total"><span>BALANCE</span><span>${money(o.balance)}</span></div>
-          <div class="slip-rule-d"></div>
-
-          <div class="slip-due">
-            <div class="lbl">DELIVERY</div>
-            <div class="val">${esc(o.due || 'To be confirmed')}</div>
-          </div>
-
+          <div class="rc-stat">Delivery · ${esc(o.due || 'To be confirmed')}</div>
+          
           ${o.stamp ? `<div style="text-align:center; margin:8px 0"><img src="${esc(new URL(o.stamp, document.baseURI).href)}" style="max-height:48px; max-width:100%; opacity:.85" alt=""></div>` : ''}
-          ${o.terms ? `<div class="slip-foot" style="margin-top:2mm">${esc(o.terms)}</div>` : ''}
+          ${o.terms ? `<div class="rc-note" style="margin-top:2mm; text-align:center">${esc(o.terms)}</div>` : ''}
+          ${(() => { const msg = tidyFooter(o.footer); return msg ? `<div class="rc-note" style="text-align:center; white-space:pre-line">${esc(msg)}</div>` : ''; })()}
 
-          <div class="slip-rule"></div>
-          ${(() => { const msg = tidyFooter(o.footer); return msg ? `<div class="slip-foot">${esc(msg)}</div>` : ''; })()}
-          <div class="slip-credit slip-credit-customer">
-            <div>Designed &amp; Developed by <span class="name">Noor M Hingorjo</span></div>
-            <div class="sys">TAILORING &amp; CLOTH HOUSE MANAGEMENT SYSTEM</div>
-            <div class="tel">0303 4980786</div>
-            <div class="ty">Thank You!</div>
-          </div>
-          <div class="slip-code">* ${esc(o.order || '')} *</div>
+          <p class="rc-note">
+            Thank you for choosing us.<br>
+            Please bring this receipt when collecting your order.
+          </p>
+          
+          <footer class="rc-credit">
+            <div class="c1">Powered by</div>
+            <div class="c2">TAILORING & CLOTH HOUSE MANAGEMENT SYSTEM</div>
+            <i class="cline"></i>
+            <div class="c3"><span>Designed &amp; Developed by</span>NOOR M HINGORJO</div>
+            <div class="c4"><span>Software Support</span>0303 4980786</div>
+          </footer>
+          
+          <div class="rc-thx"><span>Thank You</span></div>
         </div>`;
 
       /* -------------------------------- tailor -------------------------- */
@@ -1291,9 +1541,12 @@
 
           <div class="slip-rule"></div>
 
-          <div class="slip-row"><span class="k">Garment</span><span class="v slip-bold">${esc(o.garment || '')}</span></div>
-          <div class="slip-row"><span class="k">Pieces</span><span class="v slip-bold">${o.qty || 1}</span></div>
-          ${o.fabric ? `<div class="slip-row"><span class="k">Fabric</span><span class="v">${esc(o.fabric)}</span></div>` : ''}
+          <div class="workshop-garments" style="margin-bottom: 2mm;">
+            <div class="slip-sec">GARMENTS</div>
+            ${(o.garment || '').split(',').map(g => `<div class="slip-bold" style="font-size: 14px;">${esc(g.trim())}</div>`).join('')}
+            <div style="margin-top: 4px; font-weight: 800; font-size: 14px;">TOTAL PIECES: ${o.qty || 1}</div>
+            ${o.fabric ? `<div style="margin-top: 4px; font-size: 13px;">Fabric: ${esc(o.fabric)}</div>` : ''}
+          </div>
 
           <div class="slip-due">
             <div class="lbl">DELIVER BY</div>
@@ -1308,12 +1561,6 @@
 
           <div id="job-notes"></div>
 
-          <div class="slip-rule"></div>
-          <div class="slip-sign">
-            <div><div class="line"></div>CUT</div>
-            <div><div class="line"></div>STITCH</div>
-            <div><div class="line"></div>CHECK</div>
-          </div>
 
           <div class="slip-rule"></div>
           <div class="slip-foot">Not a bill &mdash; workshop use only</div>

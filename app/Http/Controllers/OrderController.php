@@ -439,6 +439,7 @@ class OrderController extends Controller
             $clean = rtrim(rtrim(number_format((float) $value, 2, '.', ''), '0'), '.');
 
             $rows[] = [
+                'key'   => $field,
                 'label' => Measurement::label($field, $profile['labels'][$field] ?? null),
                 'value' => $clean === '' ? '0' : $clean,
             ];
