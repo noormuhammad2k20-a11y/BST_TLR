@@ -6,14 +6,14 @@ use Illuminate\Support\Facades\{DB, Auth};
 
 final class StaffPayroll
 {
-    public function pay(Staff $staff, array $validated, string $period): StaffPayment
+    public function pay(Staff $staff, array $validated, ?string $period): StaffPayment
     {
         return DB::transaction(function () use ($staff, $validated, $period) {
             $staff = Staff::whereKey($staff->id)->lockForUpdate()->firstOrFail();
             abort_if(StaffPayment::where('operation_key',$validated['operation_key'])->exists(),409,'This payment was already submitted.');
             $due = $staff->dueFor($period);
-            if ($period !== 'Running Balance') {
-                foreach ($staff->payments()->where('period', '!=', $period)->pluck('period')->unique() as $other) {
+            if ($period !== 'Running Balance' && $period !== null) {
+                foreach ($staff->payments()->whereNotNull('period')->where('period', '!=', $period)->pluck('period')->unique() as $other) {
                     if ($other === 'Running Balance') continue;
                     [$a, $b] = \App\Services\StaffPayPeriod::bounds($other);
                     if ($a->toDateString() <= $due['period_end'] && $b->toDateString() >= $due['period_start']) {

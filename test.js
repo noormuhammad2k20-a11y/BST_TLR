@@ -1,121 +1,15 @@
-@extends('layouts.app')
-@section('spaPage', 'staff')
-@section('title', 'Tailors')
 
-@push('styles')
-<style>
-  .badge::before { display: none; }
-  .badge-active   { background: #ECFDF5; color: #10B981; }
-  .badge-inactive { background: #F1F5F9; color: #64748B; }
-  .badge-paid     { background: #ECFDF5; color: #10B981; }
-  .badge-partial  { background: #FFFBEB; color: #F59E0B; }
-  .badge-pending  { background: #FEF2F2; color: #EF4444; }
-
-  .modal.modal-xl { max-width: 960px; }
-
-  /* Profile drawer tabs — same pill language as the filter rows elsewhere. */
-  .sf-tab { padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 500; color: #64748b; cursor: pointer; }
-  .sf-tab.on { background: #0f172a; color: #fff; }
-</style>
-@endpush
-
-@section('content')
-<div class="page flex justify-between items-center mb-6">
-  <div>
-    <h1 class="text-xl font-bold text-slate-900 tracking-tight">Tailors</h1>
-    <p class="text-sm text-slate-500 mt-0.5" id="subheader">Loading stitching history…</p>
-  </div>
-  <div class="flex gap-2">
-    <button class="bg-slate-900 text-white px-3.5 py-2 rounded-lg text-xs font-medium hover:bg-slate-800 flex items-center gap-2 transition-colors shadow-sm" onclick="openStaffForm()"><i class="fa-solid fa-plus text-[10px]"></i> Add Tailor</button>
-  </div>
-</div>
-
-<!-- Stats Row -->
-<div class="page grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
-  <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5">
-    <div class="flex items-center justify-between mb-3">
-      <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Tailors</span>
-      <div class="w-7 h-7 rounded-md bg-slate-100 text-slate-600 flex items-center justify-center"><i class="fa-solid fa-users text-[11px]"></i></div>
-    </div>
-    <h3 class="text-2xl font-bold text-slate-900 tracking-tight" id="stat-total">0</h3>
-    <p class="text-[11px] text-slate-400 font-medium mt-1"><span id="stat-active">0</span> active · <span id="stat-inactive">0</span> inactive</p>
-  </div>
-  <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5">
-    <div class="flex items-center justify-between mb-3">
-      <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">This Week</span>
-      <div class="w-7 h-7 rounded-md bg-indigo-50 text-indigo-600 flex items-center justify-center"><i class="fa-solid fa-wallet text-[11px]"></i></div>
-    </div>
-    <h3 class="text-2xl font-bold text-slate-900 tracking-tight" id="stat-week">0</h3>
-    <p class="text-[11px] text-slate-400 font-medium mt-1">clothes stitched</p>
-  </div>
-  <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5">
-    <div class="flex items-center justify-between mb-3">
-      <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">This Month</span>
-      <div class="w-7 h-7 rounded-md bg-red-50 text-red-600 flex items-center justify-center"><i class="fa-solid fa-clock text-[11px]"></i></div>
-    </div>
-    <h3 class="text-2xl font-bold text-slate-900 tracking-tight" id="stat-month">0</h3>
-    <p class="text-[11px] text-slate-400 font-medium mt-1">clothes stitched</p>
-  </div>
-  <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5">
-    <div class="flex items-center justify-between mb-3">
-      <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">All Time</span>
-      <div class="w-7 h-7 rounded-md bg-emerald-50 text-emerald-600 flex items-center justify-center"><i class="fa-solid fa-scissors text-[11px]"></i></div>
-    </div>
-    <h3 class="text-2xl font-bold text-slate-900 tracking-tight" id="stat-pieces">0</h3>
-    <p class="text-[11px] text-slate-400 font-medium mt-1">clothes stitched</p>
-  </div>
-</div>
-
-<!-- Table Section -->
-<div class="page bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden mb-6">
-  <div class="p-5 border-b border-slate-200 flex items-center justify-between gap-3 bg-slate-50 flex-wrap">
-    <div class="flex gap-1 flex-wrap" id="staffPills">
-      <span class="px-3 py-1.5 rounded-md bg-slate-900 text-white text-xs font-medium cursor-pointer" onclick="filterStaff('All', this)">All</span>
-      <span class="px-3 py-1.5 rounded-md text-slate-500 text-xs font-medium cursor-pointer hover:bg-slate-200 transition-colors" onclick="filterStaff('Active', this)">Active</span>
-      <span class="px-3 py-1.5 rounded-md text-slate-500 text-xs font-medium cursor-pointer hover:bg-slate-200 transition-colors" onclick="filterStaff('Inactive', this)">Inactive</span>
-      <span class="px-3 py-1.5 rounded-md text-slate-500 text-xs font-medium cursor-pointer hover:bg-slate-200 transition-colors" onclick="filterStaff('Unpaid', this)">Salary Due</span>
-    </div>
-    <div class="relative">
-      <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-      <input type="search" id="staff-search" placeholder="Search name, phone or role…" oninput="searchStaff(this.value)"
-             class="w-64 pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 transition-colors">
-    </div>
-  </div>
-
-  <div class="overflow-x-auto min-h-[300px]">
-    <table class="w-full text-sm">
-      <thead class="bg-slate-50 text-slate-500 text-[10px] uppercase tracking-widest">
-        <tr>
-          <th class="px-5 py-3 text-left font-bold">Name</th>
-          <th class="px-5 py-3 text-left font-bold">Role</th>
-          <th class="px-5 py-3 text-left font-bold">Phone</th>
-          <th class="px-5 py-3 text-left font-bold">This Week</th>
-          <th class="px-5 py-3 text-left font-bold">This Month</th>
-          <th class="px-5 py-3 text-left font-bold">Overall</th>
-          <th class="px-5 py-3 text-left font-bold">Status</th>
-          <th class="px-5 py-3 text-right font-bold">Actions</th>
-        </tr>
-      </thead>
-      <tbody id="staffTableBody" class="divide-y divide-slate-100"></tbody>
-    </table>
-  </div>
-  <div id="staff-pagination" class="px-6 py-3 border-t border-slate-200 flex flex-col sm:flex-row justify-between items-center text-sm gap-3"></div>
-</div>
-@endsection
-
-@push('scripts')
-<script>
   /* ============= DATA STORE ============= */
-  var staffList   = @json($staff);
-  var STAFF_STATS = @json($stats);
-  var ROLE_OPTIONS   = @json($roles);
-  var SALARY_TYPES   = @json($salaryTypes);
-  var PAY_METHODS    = @json($methods);
-  var GARMENTS       = @json($garments);
+  var staffList   = "";
+  var STAFF_STATS = "";
+  var ROLE_OPTIONS   = "";
+  var SALARY_TYPES   = "";
+  var PAY_METHODS    = "";
+  var GARMENTS       = "";
 
   var ROUTES = {
-    index: @json(route('staff.index')),
-    store: @json(route('staff.store')),
+    index: ""),
+    store: ""),
   };
 
   /* ============= STATE ============= */
@@ -462,32 +356,32 @@
           <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
             <h4 class="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-1">Salary · ${d.period}</h4>
             ${row('Paid as', esc(s.salary_type))}
-            ${s.salary_type === 'Per Suit' ? `
-              ${row('Per-suit rate', money(s.per_suit_rate))}
-              ${row('Completed Pieces', `${d.pieces} pcs`)}
-              ${row('Total Earned', money(d.earned))}
-              ${row('Payments', money(d.paid))}
-              ${d.advances > 0 ? row('Advances', money(d.advances)) : ''}
+            ${s.salary_type === 'Per Suit' ? \`
+              \${row('Per-suit rate', money(s.per_suit_rate))}
+              \${row('Completed Pieces', \`\${d.pieces} pcs\`)}
+              \${row('Total Earned', money(d.earned))}
+              \${row('Payments', money(d.paid))}
+              \${d.advances > 0 ? row('Advances', money(d.advances)) : ''}
               <div class="flex justify-between border-t border-slate-200 pt-2 mt-2">
-                ${d.advance_outstanding > 0 ? `
+                \${d.advance_outstanding > 0 ? \`
                   <span class="font-bold text-slate-900">Advance Outstanding</span>
-                  <span class="font-bold text-red-500">${money(d.advance_outstanding)}</span>
-                ` : `
+                  <span class="font-bold text-red-500">\${money(d.advance_outstanding)}</span>
+                \` : \`
                   <span class="font-bold text-slate-900">Current Payable</span>
-                  <span class="font-bold ${d.remaining > 0 ? 'text-red-500' : 'text-emerald-600'}">${money(d.remaining)}</span>
-                `}
+                  <span class="font-bold \${d.remaining > 0 ? 'text-red-500' : 'text-emerald-600'}">\${money(d.remaining)}</span>
+                \`}
               </div>
-            ` : `
-              ${s.salary_type !== 'Per Suit' ? row('Monthly salary', money(s.monthly_salary)) : ''}
-              ${s.salary_type !== 'Monthly' ? row('Per-suit rate', money(s.per_suit_rate)) : ''}
-              ${row(`${d.pieces} completed pieces`, money(d.stitching))}
-              ${row('Earned this period', money(d.earned))}
-              ${row('Paid this month', money(d.paid))}
+            \` : \`
+              \${s.salary_type !== 'Per Suit' ? row('Monthly salary', money(s.monthly_salary)) : ''}
+              \${s.salary_type !== 'Monthly' ? row('Per-suit rate', money(s.per_suit_rate)) : ''}
+              \${row(\`\${d.pieces} completed pieces\`, money(d.stitching))}
+              \${row('Earned this period', money(d.earned))}
+              \${row('Paid this month', money(d.paid))}
               <div class="flex justify-between border-t border-slate-200 pt-2 mt-2">
                 <span class="font-bold text-slate-900">Remaining</span>
-                <span class="font-bold ${d.remaining > 0 ? 'text-red-500' : 'text-emerald-600'}">${money(d.remaining)}</span>
+                <span class="font-bold \${d.remaining > 0 ? 'text-red-500' : 'text-emerald-600'}">\${money(d.remaining)}</span>
               </div>
-            `}
+            \`}
           </div>
           <div class="md:col-span-2 grid grid-cols-2 sm:grid-cols-4 gap-3">
             ${[['This week', s.week_pieces + ' pcs'], ['This month', s.month_pieces + ' pcs'], ['All time', s.pieces + ' pcs'], ['Completed orders', s.completed]]
@@ -542,7 +436,7 @@
               <td class="px-3 py-2 text-slate-600">${esc(w.order || '—')}</td>
               <td class="px-3 py-2 text-slate-600">${esc(w.garment || '—')}</td>
               <td class="px-3 py-2 text-right text-slate-900">${w.quantity}</td>
-              <td class="px-3 py-2 text-right text-slate-500" title="${w.rate_breakdown ? esc(w.rate_breakdown.map(r => `${r.quantity} × ${r.garment} @ ${money(r.rate)}`).join('\n')) : ''}">${w.rate_breakdown && w.rate_breakdown.length > 1 ? 'Mixed' : money(w.rate)}</td>
+              <td class="px-3 py-2 text-right text-slate-500" title="${w.rate_breakdown ? esc(w.rate_breakdown.map(r => \`\${r.quantity} × \${r.garment} @ \${money(r.rate)}\`).join('\\n')) : ''}">${w.rate_breakdown && w.rate_breakdown.length > 1 ? 'Mixed' : money(w.rate)}</td>
               <td class="px-3 py-2 text-right font-semibold text-slate-900">${money(w.amount)}</td>
               <td class="px-3 py-2 text-right"><button class="text-slate-300 hover:text-red-500 transition-colors" title="Remove" onclick="deleteWork(${w.id}, ${s.db_id})"><i class="fa-solid fa-trash text-xs"></i></button></td>
             </tr>`).join('')}
@@ -555,7 +449,7 @@
       const list = profileData.payments || [];
       body.innerHTML = `
         <div class="flex justify-end gap-2 mb-3">
-          ${s.salary_type === 'Per Suit' ? `<button class="bg-indigo-600 text-white px-3 py-1.5 rounded-md text-xs font-medium hover:bg-indigo-700 transition-colors" onclick="openAdvanceForm(${s.db_id})"><i class="fa-solid fa-hand-holding-dollar text-[10px] mr-1"></i> Give Advance</button>` : ''}
+          ${s.salary_type === 'Per Suit' ? \`<button class="bg-indigo-600 text-white px-3 py-1.5 rounded-md text-xs font-medium hover:bg-indigo-700 transition-colors" onclick="openAdvanceForm(\${s.db_id})"><i class="fa-solid fa-hand-holding-dollar text-[10px] mr-1"></i> Give Advance</button>\` : ''}
           <button class="bg-emerald-500 text-white px-3 py-1.5 rounded-md text-xs font-medium hover:bg-emerald-600 transition-colors" onclick="openPaymentForm(${s.db_id})"><i class="fa-solid fa-plus text-[10px] mr-1"></i> Record Payment</button>
         </div>
         ${list.length ? `
@@ -864,7 +758,7 @@
         <div class="grid grid-cols-2 gap-4">
           ${field('Amount *', input('adv-amount', { type: 'number', min: 0, step: '0.01' }))}
           ${field('Method', `<select id="adv-method" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-colors">${PAY_METHODS.map(m => `<option>${m}</option>`).join('')}</select>`)}
-          ${field('Given On', input('adv-date', { type: 'date', value: @json(now()->toDateString()) }))}
+          ${field('Given On', input('adv-date', { type: 'date', value: ""->toDateString()) }))}
           <div class="col-span-2">${field('Notes', input('adv-notes', { placeholder: 'Optional' }))}</div>
         </div>
         <p class="text-xs text-slate-500 mt-4">Advances are tracked separately and deducted from the running balance.</p>
@@ -887,7 +781,7 @@
           ${field('Amount *', input('pay-amount', { type: 'number', min: 0, step: '0.01', value: s.due.remaining || '', oninput: 'previewPayment()' }))}
           ${field('Method', `<select id="pay-method" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-colors">${PAY_METHODS.map(m => `<option>${m}</option>`).join('')}</select>`)}
           ${s.salary_type !== 'Per Suit' ? field('Payment Period', input('pay-period', { type: s.payment_period === 'Weekly' ? 'week' : s.payment_period === 'Daily' ? 'date' : 'month', value: s.due.period, oninput: `refreshPaymentDue(${s.db_id})` })) : ''}
-          ${field('Paid On', input('pay-date', { type: 'date', value: @json(now()->toDateString()) }))}
+          ${field('Paid On', input('pay-date', { type: 'date', value: ""->toDateString()) }))}
           <div class="col-span-2">${field('Notes', input('pay-notes', { placeholder: 'Optional' }))}</div>
         </div>
         <p class="text-xs text-slate-500 mt-4">Tailor wages are kept entirely separate from customer payments and never appear in sales or revenue.</p>
@@ -910,7 +804,7 @@
           <div class="col-span-2">${field('Garment', input('wk-garment', { placeholder: 'e.g. Shalwar Kameez' }))}</div>
           ${field('Pieces *', input('wk-qty', { type: 'number', min: 0, step: '0.5', value: 1, oninput: 'previewWorkTotal()' }))}
           ${field('Rate per piece', input('wk-rate', { type: 'number', min: 0, step: '0.01', value: s.per_suit_rate, oninput: 'previewWorkTotal()' }))}
-          ${field('Completed On', input('wk-date', { type: 'date', value: @json(now()->toDateString()) }))}
+          ${field('Completed On', input('wk-date', { type: 'date', value: ""->toDateString()) }))}
           ${field('Notes', input('wk-notes', { placeholder: 'Optional' }))}
         </div>
         <div class="mt-4 bg-slate-50 border border-slate-100 rounded-lg p-3 flex justify-between items-center">
@@ -973,5 +867,3 @@
     renderStaff();
     Atelier.poll(refreshStaff, 10000);
   });
-</script>
-@endpush

@@ -502,23 +502,23 @@ class OrderService
 
         if ($order->items_migrated_at) {
             foreach ($order->lineItems as $item) {
-                if ($item->productService && $item->productService->type === 'Service') continue;
+                if ($item->productService && $item->productService->type !== 'Service') continue;
                 if (($item->pieces->first()?->profile['key'] ?? 'generic') === 'accessory') continue;
                 
                 $qty = (float) $item->quantity;
                 if ($qty <= 0) continue;
 
                 $resolvedRate = $defaultRate;
-                $rateSource = 'Default Per-Suit Rate';
+                $rateSource = 'default';
                 
                 if ($item->tailor_rate_override !== null) {
                     $resolvedRate = (float) $item->tailor_rate_override;
-                    $rateSource = 'Custom Order Override';
+                    $rateSource = 'custom';
                 } else {
                     $specialRate = $staff->serviceRates->firstWhere('product_service_id', $item->product_service_id);
                     if ($specialRate) {
                         $resolvedRate = (float) $specialRate->rate;
-                        $rateSource = 'Special Service Rate';
+                        $rateSource = 'special';
                     }
                 }
 
@@ -527,6 +527,7 @@ class OrderService
                 $totalQuantity += $qty;
 
                 $rateBreakdown[] = [
+                    'product_service_id' => $item->product_service_id,
                     'garment' => $item->name,
                     'quantity' => $qty,
                     'rate' => $resolvedRate,
@@ -538,11 +539,12 @@ class OrderService
             $totalQuantity = (float) $order->quantity;
             $totalAmount = round($totalQuantity * $defaultRate, 2);
             $rateBreakdown[] = [
+                'product_service_id' => null,
                 'garment' => $order->primary_item_name,
                 'quantity' => $totalQuantity,
                 'rate' => $defaultRate,
                 'amount' => $totalAmount,
-                'source' => 'Default Per-Suit Rate (Legacy Order)',
+                'source' => 'default',
             ];
         }
 

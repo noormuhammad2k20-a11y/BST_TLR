@@ -25,7 +25,7 @@ class StaffController extends Controller
         $salaryTypes = Staff::SALARY_TYPES;
         $methods     = StaffPayment::METHODS;
         
-        $garments = \App\Models\ProductService::where('type', 'Garment')->where('status', 'Active')->get(['id', 'name']);
+        $garments = \App\Models\ProductService::where('type', 'Service')->where('status', 'Active')->get(['id', 'name']);
 
         // Same payload as JSON, so the page refreshes itself without a reload.
         if ($request->boolean('json') || $request->expectsJson()) {
@@ -41,15 +41,18 @@ class StaffController extends Controller
         $specialRates = $data['special_rates'] ?? [];
         unset($data['special_rates']);
 
-        $member = Staff::create($data);
-        foreach ($specialRates as $rate) {
-            if (isset($rate['product_service_id']) && isset($rate['rate'])) {
-                $member->serviceRates()->create([
-                    'product_service_id' => $rate['product_service_id'],
-                    'rate' => $rate['rate']
-                ]);
+        $member = DB::transaction(function () use ($data, $specialRates) {
+            $member = Staff::create($data);
+            foreach ($specialRates as $rate) {
+                if (isset($rate['product_service_id']) && isset($rate['rate'])) {
+                    $member->serviceRates()->create([
+                        'product_service_id' => $rate['product_service_id'],
+                        'rate' => $rate['rate']
+                    ]);
+                }
             }
-        }
+            return $member;
+        });
 
         ActivityLogger::created($member, "{$member->name} added as a tailor", 'staff');
         StatsService::flush();
@@ -67,17 +70,18 @@ class StaffController extends Controller
         $specialRates = $data['special_rates'] ?? [];
         unset($data['special_rates']);
 
-        $staff->update($data);
-
-        $staff->serviceRates()->delete();
-        foreach ($specialRates as $rate) {
-            if (isset($rate['product_service_id']) && isset($rate['rate'])) {
-                $staff->serviceRates()->create([
-                    'product_service_id' => $rate['product_service_id'],
-                    'rate' => $rate['rate']
-                ]);
+        DB::transaction(function () use ($staff, $data, $specialRates) {
+            $staff->update($data);
+            $staff->serviceRates()->delete();
+            foreach ($specialRates as $rate) {
+                if (isset($rate['product_service_id']) && isset($rate['rate'])) {
+                    $staff->serviceRates()->create([
+                        'product_service_id' => $rate['product_service_id'],
+                        'rate' => $rate['rate']
+                    ]);
+                }
             }
-        }
+        });
 
         ActivityLogger::updated($staff, "{$staff->name} updated", 'staff');
         StatsService::flush();
@@ -134,6 +138,13 @@ class StaffController extends Controller
                     $payments,
                     $work
                 ),
+            ], 422);
+        }
+
+        if ($staff->advanceHistory()->exists()) {
+            return response()->json([
+                'success' => false,
+                'message' => sprintf('%s has advance history on record. Mark them inactive instead so the history stays intact.', $staff->name),
             ], 422);
         }
 
@@ -205,6 +216,7 @@ class StaffController extends Controller
                 'amount'   => (float) $w->amount,
                 'date'     => $w->completed_on?->format('d M Y'),
                 'notes'    => $w->notes,
+                'rate_breakdown' => $w->rate_breakdown,
             ]),
             'orders' => $orders->map(fn (Order $o) => [
                 'id'       => $o->display_number,
@@ -232,14 +244,18 @@ class StaffController extends Controller
             'operation_key' => ['required', 'string', 'max:100'],
         ]);
 
-        $period = $validated['period'] ?? \App\Services\StaffPayPeriod::current($staff->payment_period ?? 'Monthly');
-        \App\Services\StaffPayPeriod::bounds($period);
+        $isPerSuit = $staff->salary_type === 'Per Suit';
+        $period = $validated['period'] ?? ($isPerSuit ? null : \App\Services\StaffPayPeriod::current($staff->payment_period ?? 'Monthly'));
+        
+        if (!$isPerSuit || $period !== null) {
+            \App\Services\StaffPayPeriod::bounds($period);
+        }
 
         $payment = app(\App\Services\StaffPayroll::class)->pay($staff, $validated, $period);
 
         ActivityLogger::log(
             'Salary paid',
-            sprintf('%s paid to %s for %s', \App\Services\Money::format((float) $payment->amount), $staff->name, $period),
+            sprintf('%s paid to %s for %s', \App\Services\Money::format((float) $payment->amount), $staff->name, $period ?: 'Running Balance'),
             'staff',
             $staff,
             ['amount' => (float) $payment->amount, 'period' => $period],
@@ -290,6 +306,8 @@ class StaffController extends Controller
 
     public function storeAdvance(Request $request, Staff $staff): JsonResponse
     {
+        abort_if($staff->salary_type !== 'Per Suit', 422, 'Advances are only available for Per-Suit staff.');
+
         $validated = $request->validate([
             'amount'  => ['required', 'numeric', 'decimal:0,2', 'min:0.01', 'max:99999999.99'],
             'method'  => ['required', Rule::in(StaffPayment::METHODS)],
@@ -440,7 +458,7 @@ class StaffController extends Controller
             'is_active'      => ['nullable', 'boolean'],
             'notes'          => ['nullable', 'string', 'max:1000'],
             'special_rates'  => ['nullable', 'array'],
-            'special_rates.*.product_service_id' => ['required_with:special_rates', 'exists:product_services,id'],
+            'special_rates.*.product_service_id' => ['required_with:special_rates', 'distinct', Rule::exists('product_services', 'id')->where('type', 'Service')->where('status', 'Active')],
             'special_rates.*.rate' => ['required_with:special_rates', 'numeric', 'min:0'],
         ]);
     }
