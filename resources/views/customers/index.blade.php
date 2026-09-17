@@ -626,7 +626,7 @@
     </div>`;
   window.modals['customer-360'] = () => `
     ${selectedCustomerFor360 ? `
-      <div class="p-5 border-b border-slate-200 flex justify-between items-center">
+      <div class="p-5 border-b border-slate-200 flex justify-between items-center shrink-0">
         <div class="flex items-center gap-3">
           <div class="avatar lg slate">${selectedCustomerFor360.name.split(' ').map(n => n[0]).join('').slice(0, 2)}</div>
           <div>
@@ -640,7 +640,7 @@
           <button class="w-9 h-9 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 flex items-center justify-center transition-colors" onclick="closeModal()"><i class="fa-solid fa-xmark text-sm"></i></button>
         </div>
       </div>
-      <div class="grid grid-cols-1 lg:grid-cols-4 gap-0">
+      <div class="grid grid-cols-1 lg:grid-cols-4 gap-0 flex-1 min-h-0 overflow-y-auto">
         <div class="lg:col-span-1 p-6 bg-slate-50 border-r border-slate-200">
           <div class="space-y-4">
             <div>
@@ -745,7 +745,7 @@
           </div>
         </div>
       </div>
-      <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">
+      <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-2 shrink-0">
         <button class="bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-100 transition-colors" onclick="closeModal()">Close</button>
         <button class="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-800 flex items-center gap-2 transition-colors shadow-sm" onclick="closeModal(); window.location.href='/orders?action=create&customer=${selectedCustomerFor360.db_id}'"><i class="fa-solid fa-plus text-xs"></i> New Order for ${Atelier.escapeHtml(selectedCustomerFor360.name.split(' ')[0])}</button>
       </div>

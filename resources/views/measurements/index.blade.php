@@ -445,11 +445,12 @@
     // Built from the configured field list, so adding or removing a field in
     // Settings never leaves this payload out of step.
     cfg.fields.forEach(field => {
-      payload[field] = document.getElementById(`meas-${field}`)?.value || null;
+      const raw = document.getElementById(`meas-${field}`)?.value;
+      payload[field] = (raw === undefined || raw.trim() === '') ? null : raw.trim();
     });
 
     // Built from the configured field list, so adding or removing a field in
-    const missing = cfg.required.filter(f => !payload[f]);
+    const missing = cfg.required.filter(f => payload[f] === null || payload[f] === undefined || String(payload[f]).trim() === '');
     if (missing.length) {
       toast(`${cfg.labels[missing[0]]} is required`, 'error');
       document.getElementById(`meas-${missing[0]}`)?.focus();
@@ -605,7 +606,7 @@
 
       const isRequired = id => cfg.required.includes(id);
       const star = id => isRequired(id) ? ' <span class="text-red-500">*</span>' : '';
-      const attrs = id => `step="${cfg.step}" min="0" max="999" ${isRequired(id) ? 'required' : ''}`;
+      const attrs = id => `inputmode="text" autocomplete="off" ${isRequired(id) ? 'required' : ''}`;
 
       const metrics = [
         { label: 'Length', id: 'length' },
@@ -667,8 +668,8 @@
                   <div>
                     <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">${m.label}${star(m.id)}${star(m.id + '_losing')}</label>
                     <div class="flex gap-2">
-                      <input type="number" id="meas-${m.id}" ${attrs(m.id)} class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-colors" placeholder="Body" value="${cell(m.id)}">
-                      <input type="number" id="meas-${m.id}_losing" ${attrs(m.id + '_losing')} class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-colors" placeholder="${window.MEASUREMENT_CONFIG.labels[m.id + '_losing']}" value="${cell(m.id + '_losing')}">
+                      <input type="text" id="meas-${m.id}" ${attrs(m.id)} class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-colors" placeholder="Body" value="${cell(m.id)}">
+                      <input type="text" id="meas-${m.id}_losing" ${attrs(m.id + '_losing')} class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-colors" placeholder="${window.MEASUREMENT_CONFIG.labels[m.id + '_losing']}" value="${cell(m.id + '_losing')}">
                     </div>
                   </div>
                 `;
@@ -676,7 +677,7 @@
               return `
                 <div>
                   <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">${m.label}${star(m.id)}</label>
-                  <input type="number" id="meas-${m.id}" ${attrs(m.id)} class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-colors" placeholder="${Number(0).toFixed(cfg.decimals)}" value="${cell(m.id)}">
+                  <input type="text" id="meas-${m.id}" ${attrs(m.id)} class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-colors" placeholder="${Number(0).toFixed(cfg.decimals)}" value="${cell(m.id)}">
                 </div>
               `;
             }).join('')}

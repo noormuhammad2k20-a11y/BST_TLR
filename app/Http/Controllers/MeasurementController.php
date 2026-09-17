@@ -160,7 +160,7 @@ class MeasurementController extends Controller
         foreach (Measurement::FIELDS as $field) {
             $rules[$field] = array_merge(
                 [in_array($field, $required, true) ? 'required' : 'nullable'],
-                ['numeric', 'min:0', 'max:999', 'decimal:0,' . $decimals]
+                [new \App\Rules\MeasurementValue($decimals)]
             );
         }
 
@@ -171,10 +171,6 @@ class MeasurementController extends Controller
 
         foreach ($required as $field) {
             $messages["{$field}.required"] = Measurement::label($field) . ' is required.';
-        }
-
-        foreach (Measurement::FIELDS as $field) {
-            $messages["{$field}.decimal"] = Measurement::label($field) . ' allows at most ' . $decimals . ' decimal place(s).';
         }
 
         $validated = $request->validate($rules, $messages, Measurement::labels());

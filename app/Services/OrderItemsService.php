@@ -104,7 +104,7 @@ final class OrderItemsService
                 $unchangedLegacy = $previous && $old->product_service_id === $product->id
                     && $previous->unit === $piece['unit'] && $this->sameValues($values, $previous->measurement, $profile['fields']);
                 $rules = [];
-                foreach ($profile['fields'] as $field) $rules[$field] = [!$unchangedLegacy && in_array($field, $profile['required']) ? 'required' : 'nullable','numeric','min:0','max:999','decimal:0,'.Settings::measurementDecimals()];
+                foreach ($profile['fields'] as $field) $rules[$field] = [!$unchangedLegacy && in_array($field, $profile['required']) ? 'required' : 'nullable', new \App\Rules\MeasurementValue(\App\Services\Settings::measurementDecimals())];
                 $validator = Validator::make($values, $rules, [], Measurement::displayProfile($profile)['labels'] ?? Measurement::labels());
                 if ($validator->fails()) foreach ($validator->errors()->messages() as $field => $errors) $this->fail("garments.$i.pieces.$j.values.$field", $errors[0]);
                 if (!$unchangedLegacy && $profile['at_least_one'] && !count(array_filter($values, fn($v) => $v !== null && $v !== ''))) $this->fail("garments.$i.pieces.$j.values", 'Enter at least one alteration measurement.');

@@ -379,7 +379,14 @@
       const selectedSaved = piece.measurement_mode === 'new' ? null : sourceSaved;
       const availableSaved = sourceSaved || saved[0];
 
-      html += `<h3 class="text-xl font-bold text-slate-900 tracking-tight mb-6">Body Measurements</h3>`;
+      html += `<div class="flex items-center justify-between gap-3 mb-6 flex-wrap">
+        <h3 class="text-xl font-bold text-slate-900 tracking-tight">Body Measurements</h3>
+        ${s.customerName ? `
+        <div class="text-sm font-semibold text-slate-700">
+            <span class="text-slate-400 font-medium">Customer:</span>
+            ${itemEsc(s.customerName)}
+        </div>` : ''}
+      </div>`;
 
 
 
@@ -426,7 +433,7 @@
             return `
             <div class="col-span-1">
               <label class="block text-sm ${labelClass} mb-2">${itemEsc(label)}${isReq ? ' <span class="text-red-500">*</span>' : ''}</label>
-              <input type="number" step="any" min="0" max="999"
+              <input type="text" inputmode="text" autocomplete="off"
                      class="w-full h-11 px-3 text-base font-medium bg-white border ${borderClass} rounded-xl focus:outline-none focus:ring-2 transition-all text-slate-900"
                      value="${itemEsc(val)}" oninput="itemMeasure('${f}', this.value); this.classList.remove('border-amber-300', 'bg-amber-50'); this.classList.add('border-slate-200', 'focus:border-indigo-500')">
             </div>`;

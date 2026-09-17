@@ -37,23 +37,23 @@ class StoreOrderRequest extends FormRequest
             'delivery_time' => ['required_without:time_slot', 'date_format:H:i'],
             'time_slot'          => ['nullable', 'string', 'max:100'],
             'payment_method'     => ['nullable', Rule::in(\App\Models\Payment::METHODS)],
+
             'notes'              => ['nullable', 'string', 'max:2000'],
             'quantity'           => ['nullable', 'integer', 'min:1', 'max:20'],
             'pieces' => ['nullable','array','max:20'],
             'pieces.*' => ['array'],
             'measurements'       => ['nullable', 'array'],
         ];
-
         // Mandatory measurements are configured in Settings, so the rule set is
         // rebuilt per request instead of relying on a hardcoded list.
         $required = Settings::requiredMeasurementFields();
         $decimals = Settings::measurementDecimals();
 
         foreach (Measurement::FIELDS as $field) {
-            $rules["pieces.*.{$field}"] = ['nullable','numeric','min:0','max:999','decimal:0,'.$decimals];
+            $rules["pieces.*.{$field}"] = ['nullable', new \App\Rules\MeasurementValue($decimals)];
             $rules["measurements.{$field}"] = array_merge(
                 [in_array($field, $required, true) ? 'required_with:measurements' : 'nullable'],
-                ['numeric', 'min:0', 'max:999', 'decimal:0,' . $decimals]
+                [new \App\Rules\MeasurementValue($decimals)]
             );
         }
 

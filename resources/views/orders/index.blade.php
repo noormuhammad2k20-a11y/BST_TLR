@@ -27,8 +27,8 @@
   .rc-doc b { font: 700 8.5px 'Space Grotesk', sans-serif; letter-spacing: .3em; margin-right: -.3em; text-transform: uppercase; color: #000; }
   .rc-meta { display: flex; flex-direction: column; gap: 6px; margin: 0 0 3px; }
   .rc-m { display: flex; align-items: baseline; gap: 6px; }
-  .rc-m .k { font: 600 8px 'Space Grotesk', sans-serif; letter-spacing: .12em; color: #5c5c5c; white-space: nowrap; text-transform: uppercase; }
-  .rc-m .dots { flex: 1; min-width: 12px; border-bottom: 1px dotted #9a9a9a; transform: translateY(-3px); }
+  .rc-m .k { font: 700 8px 'Space Grotesk', sans-serif; letter-spacing: .12em; color: #000; white-space: nowrap; text-transform: uppercase; }
+  .rc-m .dots { flex: 1; min-width: 12px; border-bottom: 1px dotted #444; transform: translateY(-3px); }
   .rc-m .v { font: 500 10.5px 'IBM Plex Mono', monospace; color: #000; word-break: break-word; overflow-wrap: anywhere;}
   .rc-m .v.b { font-weight: 700; }
   .rc-sec { display: flex; align-items: center; gap: 8px; margin: 16px 0 8px; }
@@ -38,19 +38,19 @@
   .rc-item + .rc-item { border-top: 1px dashed #d5d5d5; }
   .rc-i1 { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
   .rc-i1 .nm { font: 600 11px 'Space Grotesk', sans-serif; color: #000; word-break: break-word; overflow-wrap: anywhere;}
-  .rc-i1 .qt { font: 500 9px 'IBM Plex Mono', monospace; color: #555; white-space: nowrap; }
+  .rc-i1 .qt { font: 700 9px 'IBM Plex Mono', monospace; color: #000; white-space: nowrap; }
   .rc-i2 { display: flex; align-items: baseline; gap: 6px; margin-top: 2px; }
-  .rc-i2 .rt { font: 400 8.5px 'IBM Plex Mono', monospace; color: #5a5a5a; white-space: nowrap; }
-  .rc-i2 .dots { flex: 1; min-width: 10px; border-bottom: 1px dotted #a5a5a5; transform: translateY(-3px); }
+  .rc-i2 .rt { font: 700 8.5px 'IBM Plex Mono', monospace; color: #000; white-space: nowrap; }
+  .rc-i2 .dots { flex: 1; min-width: 10px; border-bottom: 1px dotted #444; transform: translateY(-3px); }
   .rc-i2 .tt { font: 700 11px 'IBM Plex Mono', monospace; white-space: nowrap;}
   .rc-tot { margin-top: 3px; }
   .rc-tr { display: flex; align-items: baseline; gap: 6px; padding: 3.5px 0; }
-  .rc-tr .k { font: 600 8px 'Space Grotesk', sans-serif; letter-spacing: .14em; color: #555; white-space: nowrap; text-transform: uppercase; }
-  .rc-tr .dots { flex: 1; min-width: 10px; border-bottom: 1px dotted #a5a5a5; transform: translateY(-3px); }
+  .rc-tr .k { font: 700 8px 'Space Grotesk', sans-serif; letter-spacing: .14em; color: #000; white-space: nowrap; text-transform: uppercase; }
+  .rc-tr .dots { flex: 1; min-width: 10px; border-bottom: 1px dotted #444; transform: translateY(-3px); }
   .rc-tr .v { font: 600 10.5px 'IBM Plex Mono', monospace; white-space: nowrap;}
   .rc-tr.due .k { color: #000; }
   .rc-tr.due .v { font-weight: 700; font-size: 11.5px; }
-  .rc-tr.sub .k { color: #666; }
+  .rc-tr.sub .k { color: #000; font-weight: 700; }
   .rc-tr.sub .v { font-weight: 500; font-size: 9.5px; }
   .rc-tb { border: 1.5px solid #000; border-radius: 3px; margin: 10px 0 8px; padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; }
   .rc-tb span { font: 700 9px 'Space Grotesk', sans-serif; letter-spacing: .24em; text-transform: uppercase; }
@@ -70,19 +70,19 @@
   .rc-thx span { font: 700 8.5px 'Space Grotesk', sans-serif; letter-spacing: .4em; margin-right: -.4em; text-transform: uppercase; color: #000; }
 
   /* WORKSHOP COPY SPECIFIC CLASSES */
-  .rc-workshop { width: 302px; background: #fff; color: #141414; padding: 19px 15px 21px; font: 400 10px/1.5 'IBM Plex Mono', monospace; border: 1px solid #BFBAB0; }
+  .rc-workshop { width: 302px; background: #fff; color: #000; padding: 19px 15px 21px; font: 400 10px/1.5 'IBM Plex Mono', monospace; border: 1px solid #BFBAB0; }
   .rc-workshop .rc-urgent { border: 1.5px solid #000; padding: 6px; text-align: center; font: 700 12px 'Space Grotesk', sans-serif; letter-spacing: .2em; text-transform: uppercase; border-radius: 3px; margin-bottom: 12px; }
   .rc-g { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 4px 0; }
-  .rc-g .nm { font: 600 11.5px 'Space Grotesk', sans-serif; color: #000; }
-  .rc-g .dots { flex: 1; min-width: 10px; border-bottom: 1px dotted #a5a5a5; transform: translateY(-3px); }
+  .rc-g .nm { font: 700 11.5px 'Space Grotesk', sans-serif; color: #000; }
+  .rc-g .dots { flex: 1; min-width: 10px; border-bottom: 1px dotted #444; transform: translateY(-3px); }
   .rc-g .qt { font: 700 11.5px 'IBM Plex Mono', monospace; }
   .rc-gs { margin-top: 10px; border: 1.5px solid #000; padding: 6px 12px; display: flex; justify-content: space-between; align-items: center; border-radius: 3px; }
   .rc-gs span { font: 700 9px 'Space Grotesk', sans-serif; letter-spacing: .24em; text-transform: uppercase; }
   .rc-gs b { font: 700 15px 'IBM Plex Mono', monospace; white-space: nowrap; }
-  .rc-ms { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 6px; margin-top: 12px; }
-  .rc-ms .m-row { display: flex; align-items: baseline; }
-  .rc-ms .m-lbl { width: 95px; flex-shrink: 0; font: 700 13px 'Space Grotesk', sans-serif; color: #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .rc-ms .m-val { font: 700 16px 'IBM Plex Mono', monospace; color: #000; }
+  .rc-workshop .rc-ms { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 10px; row-gap: 10px; margin-top: 12px; }
+  .rc-workshop .rc-ms .m-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; column-gap: 5px; min-width: 0; }
+  .rc-workshop .rc-ms .m-lbl { font: 700 13px/1.15 'Space Grotesk', sans-serif; color: #000; width: auto; min-width: 0; white-space: normal; overflow: visible; text-overflow: clip; }
+  .rc-workshop .rc-ms .m-val { font: 700 16px 'IBM Plex Mono', monospace; color: #000; justify-self: end; text-align: right; white-space: nowrap; min-width: 2.5ch; }
   .rc-inst { margin-top: 15px; border: 1.5px solid #000; border-radius: 3px; padding: 14px; }
   .rc-inst .lbl { font: 700 12px 'Space Grotesk', sans-serif; letter-spacing: .2em; text-transform: uppercase; margin-bottom: 10px; text-align: center; display: block; color: #000; }
   .rc-inst .val { font: 500 15px/1.6 'IBM Plex Mono', monospace; text-align: center; white-space: pre-wrap; color: #000; }
