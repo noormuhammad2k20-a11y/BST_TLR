@@ -25,7 +25,7 @@ final class MeasurementEditor
             }
 
             if ($order && ($order->items_locked || $order->trashed() || $piece?->trashed() || $item?->trashed()
-                || $data['garment_type'] !== $measurement->garment_type)) {
+                || (isset($data['garment_type']) && $data['garment_type'] !== $measurement->garment_type))) {
                 // Keep the same saved-set ID in the customer library; retain the previous values on the order.
                 $snapshot = $measurement->replicate();
                 $measurement->forceFill(['order_item_piece_id' => null, 'order_id' => null])->save();

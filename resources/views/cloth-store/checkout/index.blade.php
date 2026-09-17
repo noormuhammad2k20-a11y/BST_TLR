@@ -2731,63 +2731,84 @@
             const productName = item?.product?.name || item?.name || 'Item';
 
             return `
-                <div class="slip-row">
-                    <span class="k">${escapeHtml(productName)} × ${escapeHtml(qtyText)}</span>
-                    <span class="v">Rs ${lineTotal.toLocaleString()}</span>
+                <div class="rc-item">
+                    <div class="rc-i1">
+                        <span class="nm">${escapeHtml(productName)}</span>
+                        <span class="qt">${escapeHtml(qtyText)}</span>
+                    </div>
+                    <div class="rc-i2">
+                        <span class="rt">Rs.${unitPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} each</span>
+                        <i class="dots"></i>
+                        <span class="tt">Rs.${lineTotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                    </div>
                 </div>
-                <div class="slip-sub">Unit Price: Rs ${unitPrice.toLocaleString()}</div>
             `;
         }).join('');
 
         const html = `
-            <div class="slip slip-preview cloth-receipt">
-                <div class="slip-hd">
-                    <div class="slip-shop">${escapeHtml(shop.name || 'Cloth Store')}</div>
-                    ${shop.tagline ? `<div class="slip-tag">${escapeHtml(shop.tagline)}</div>` : ''}
-                    <div class="slip-meta">
-                        ${shop.address ? `<div>${escapeHtml(shop.address)}</div>` : ''}
-                        ${shop.phone ? `<div>${escapeHtml(shop.phone)}</div>` : ''}
+            <div class="slip slip-preview cloth-sales-neo">
+                <header class="rc-head">
+                    <div class="rc-name">${escapeHtml(shop.name || 'BEST TAILOR')}</div>
+                    <div class="rc-tag"><span>${escapeHtml(shop.tagline || 'TAILORING & CLOTH HOUSE')}</span></div>
+                    <div class="rc-addr">${escapeHtml(shop.address || '')}</div>
+                    ${shop.phone ? `<div class="rc-ph">PH · ${escapeHtml(shop.phone)}</div>` : ''}
+                </header>
+                
+                <div class="rc-rule"></div>
+                
+                <div class="rc-doc"><b>SALES RECEIPT · CLOTH STORE</b></div>
+                <div class="rc-meta">
+                    <div class="rc-m">
+                        <span class="k">Invoice</span><i class="dots"></i><span class="v">${escapeHtml(order?.invoice_number || '')}</span>
+                    </div>
+                    <div class="rc-m">
+                        <span class="k">Date</span><i class="dots"></i><span class="v">${escapeHtml(formatReceiptDate(order?.created_at))}</span>
+                    </div>
+                    <div class="rc-m">
+                        <span class="k">Customer</span><i class="dots"></i><span class="v b">${escapeHtml(customerName)}</span>
                     </div>
                 </div>
-
-                <div class="cr-receipt-title">SALES RECEIPT</div>
-
-                <div class="slip-row"><span class="k">Invoice</span><span class="v slip-bold">${escapeHtml(order?.invoice_number || '')}</span></div>
-                <div class="slip-row"><span class="k">Date</span><span class="v">${escapeHtml(formatReceiptDate(order?.created_at))}</span></div>
-                <div class="slip-row"><span class="k">Customer</span><span class="v slip-bold">${escapeHtml(customerName)}</span></div>
-
-                <div class="slip-rule"></div>
-
-                <div class="cr-item-head"><span>DESCRIPTION / QUANTITY</span><span>AMOUNT</span></div>
-                ${itemsHtml || `<div class="slip-row"><span class="k">No items</span><span class="v"></span></div>`}
-
-                <div class="slip-rule"></div>
-
-                <div class="slip-row"><span class="k">Subtotal</span><span class="v">Rs ${Number(order?.subtotal || 0).toLocaleString()}</span></div>
-                ${Number(order?.discount || 0) > 0 ? `
-                    <div class="slip-row"><span class="k">Discount</span><span class="v">-Rs ${Number(order.discount).toLocaleString()}</span></div>
-                ` : ''}
-
-                <div class="slip-rule-s"></div>
-                <div class="slip-total"><span>TOTAL</span><span>Rs ${Number(order?.total_amount || 0).toLocaleString()}</span></div>
-                <div class="slip-rule-d"></div>
-
+                
+                <div class="rc-sec"><span>Items</span></div>
+                
+                <div class="rc-items">
+                    ${itemsHtml || `<div class="rc-item"><div class="rc-i1"><span class="nm">No items</span><span class="qt"></span></div></div>`}
+                </div>
+                
+                <div class="rc-sec"><span>Payment</span></div>
+                
+                <div class="rc-tot">
+                    <div class="rc-tr sub">
+                        <span class="k">Subtotal</span><i class="dots"></i><span class="v">Rs.${Number(order?.subtotal || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                    </div>
+                    ${Number(order?.discount || 0) > 0 ? `
+                    <div class="rc-tr sub">
+                        <span class="k">Discount</span><i class="dots"></i><span class="v">-Rs.${Number(order.discount).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                    </div>` : ''}
+                </div>
+                
+                <div class="rc-tb">
+                    <span>Total</span><b>Rs.${Number(order?.total_amount || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</b>
+                </div>
+                
                 ${order?.payment_method ? `
-                    <div class="slip-row"><span class="k">Payment Method</span><span class="v">${escapeHtml(order.payment_method)}</span></div>
-                ` : ''}
-
-                <div class="slip-foot" style="margin-top:2mm">
+                <div class="rc-tr sub" style="margin-top:2px;">
+                    <span class="k">Payment Method</span><i class="dots"></i><span class="v" style="font-weight:700;">${escapeHtml(order.payment_method)}</span>
+                </div>` : ''}
+                
+                <div class="rc-note">
                     Thank you for shopping with us.<br>
-                    Please keep this receipt for your records.
+                    We look forward to serving you again.
                 </div>
-
-                <div class="slip-rule" style="margin-top:4mm"></div>
-                <div class="slip-credit slip-credit-customer">
-                    <div>Designed &amp; Developed by <span class="name">Noor M Hingorjo</span></div>
-                    <div class="sys">POS &amp; MANAGEMENT SYSTEM</div>
-                    <div class="tel">0303 4980786</div>
-                    <div class="ty">Thank You!</div>
+                
+                <div class="rc-credit">
+                    <div class="c2" style="margin-top: 0;">POS & MANAGEMENT SYSTEM</div>
+                    <i class="cline"></i>
+                    <div class="c3"><span>DESIGNED & DEVELOPED BY</span>NOOR M. HINGORJO</div>
+                    <div class="c4"><span>SOFTWARE SUPPORT:</span>0303 4980786</div>
                 </div>
+                
+                <div class="rc-thx"><span>Thank You</span></div>
             </div>
         `;
 

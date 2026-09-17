@@ -24,10 +24,6 @@ class MeasurementController extends Controller
 
         $customers = Customer::select('id', 'name', 'phone')->orderBy('name')->get();
 
-        $garmentTypes = ProductService::active()->where('type', 'Service')
-            ->where(fn ($q) => $q->whereNull('requires_measurements')->orWhere('requires_measurements', true))
-            ->orderBy('name')->pluck('name')->unique()->values();
-
         $tailors = User::tailors()->orderBy('name')->pluck('name');
 
         $stats = $this->stats($measurementsData);
@@ -44,7 +40,7 @@ class MeasurementController extends Controller
         ];
 
         return view('measurements.index', compact(
-            'measurementsData', 'stats', 'customers', 'garmentTypes', 'tailors', 'measurementConfig'
+            'measurementsData', 'stats', 'customers', 'tailors', 'measurementConfig'
         ));
     }
 
@@ -61,9 +57,9 @@ class MeasurementController extends Controller
         $measurement->load('customer');
 
         if ($measurement->wasRecentlyCreated) {
-            ActivityLogger::created($measurement, sprintf('%s measurements recorded for %s', $measurement->garment_type, $customer->name), 'customers');
+            ActivityLogger::created($measurement, sprintf('Measurements recorded for %s', $customer->name), 'customers');
         } else {
-            ActivityLogger::updated($measurement, sprintf('%s measurements updated for %s', $measurement->garment_type, $customer->name), 'customers');
+            ActivityLogger::updated($measurement, sprintf('Measurements updated for %s', $customer->name), 'customers');
         }
 
         $this->flush();
@@ -100,7 +96,7 @@ class MeasurementController extends Controller
 
         ActivityLogger::updated(
             $measurement,
-            sprintf('%s measurements updated for %s', $measurement->garment_type, $customer->name),
+            sprintf('Measurements updated for %s', $customer->name),
             'customers'
         );
 
@@ -123,14 +119,14 @@ class MeasurementController extends Controller
             ], 422);
         }
 
-        $label = $measurement->garment_type;
+        $label = 'Customer';
         $name  = $measurement->customer?->name ?? 'a customer';
 
         $measurement->delete();
 
         ActivityLogger::log(
             'Deleted Measurement',
-            sprintf('%s measurement for %s removed', $label, $name),
+            sprintf('Measurements for %s removed', $name),
             'customers',
             null,
             [],
@@ -156,7 +152,6 @@ class MeasurementController extends Controller
         $rules = [
             'customer_id'   => ['nullable', 'integer', 'exists:customers,id'],
             'customer_name' => ['required_without:customer_id', 'nullable', 'string', 'max:255'],
-            'garment_type'  => ['required', 'string', 'max:255'],
             'tailor'        => ['required', 'string', 'max:255'],
             'unit'          => ['nullable', Rule::in(['cm', 'in'])],
             'notes'         => ['nullable', 'string', 'max:2000'],
@@ -171,7 +166,6 @@ class MeasurementController extends Controller
 
         // Messages name the field the shop sees, whichever set it chose.
         $messages = [
-            'garment_type.required' => 'Please choose a garment type.',
             'tailor.required'       => 'Please assign a tailor.',
         ];
 
@@ -215,7 +209,7 @@ class MeasurementController extends Controller
     private function payload(array $validated, int $customerId): array
     {
         $data = collect($validated)
-            ->only(array_merge(Measurement::FIELDS, ['garment_type', 'tailor', 'unit', 'notes']))
+            ->only(array_merge(Measurement::FIELDS, ['tailor', 'unit', 'notes']))
             ->all();
 
         $data['customer_id'] = $customerId;
@@ -238,7 +232,7 @@ class MeasurementController extends Controller
 
             return [
                 'total'            => $total,
-                'active_templates' => $measurements->pluck('garment_type')->filter()->unique()->count(),
+                'active_templates' => $total,
                 'recent'           => $measurements->where('updated_at', '>=', now()->subDays(30))->count(),
                 'accuracy'         => $completeness . '%',
             ];

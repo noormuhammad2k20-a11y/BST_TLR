@@ -628,7 +628,7 @@
 
                 <div class="slip-foot" style="margin-top:2mm">
                     Thank you for shopping with us.<br>
-                    Please keep this receipt for your records.
+                    We look forward to serving you again.
                 </div>
 
                 <div class="slip-rule" style="margin-top:4mm"></div>

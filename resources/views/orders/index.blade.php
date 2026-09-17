@@ -20,7 +20,7 @@
   .rc-tag { display: flex; align-items: center; gap: 8px; margin: 9px 0 0; }
   .rc-tag::before, .rc-tag::after { content: ''; flex: 1; height: 1px; background: #000; }
   .rc-tag span { font: 600 7.5px 'Space Grotesk', sans-serif; letter-spacing: .32em; margin-right: -.32em; text-transform: uppercase; white-space: nowrap; }
-  .rc-addr { font: 400 8.5px/1.55 'IBM Plex Mono', monospace; color: #444; margin-top: 8px; }
+  .rc-addr { font: 500 9.5px/1.55 'IBM Plex Mono', monospace; color: #000; margin-top: 8px; }
   .rc-ph { font: 600 8.5px 'IBM Plex Mono', monospace; margin-top: 2px; }
   .rc-rule { height: 1.5px; background: #000; border: 0; margin: 12px 0 14px; }
   .rc-doc { display: flex; justify-content: center; margin: 3px 0 13px; }
@@ -58,16 +58,35 @@
   .rc-stat { margin-top: 13px; text-align: center; font: 700 7.5px 'Space Grotesk', sans-serif; letter-spacing: .18em; border: 1px solid #000; border-radius: 3px; padding: 6px 4px; text-transform: uppercase; }
   .rc-note { text-align: center; font: 400 8.5px/1.65 'IBM Plex Mono', monospace; color: #333; margin-top: 13px; }
   .rc-credit { margin-top: 15px; border: 1px solid #000; border-radius: 3px; padding: 10px 10px 12px; text-align: center; }
-  .rc-credit .c1 { font: 400 7px 'IBM Plex Mono', monospace; color: #8a8a8a; letter-spacing: .28em; margin-right: -.28em; text-transform: uppercase; }
+  .rc-credit .c1 { font: 600 7px 'IBM Plex Mono', monospace; color: #000; letter-spacing: .28em; margin-right: -.28em; text-transform: uppercase; }
   .rc-credit .c2 { font: 700 7.5px/1.6 'Space Grotesk', sans-serif; letter-spacing: .04em; margin-top: 4px; color: #000; text-transform: uppercase; }
   .rc-credit .cline { display: block; width: 24px; height: 1.5px; background: #000; margin: 7px auto; }
   .rc-credit .c3 { font: 700 8.5px 'Space Grotesk', sans-serif; letter-spacing: .08em; color: #000; text-transform: uppercase; }
-  .rc-credit .c3 span { font: 400 7.5px 'IBM Plex Mono', monospace; color: #8a8a8a; letter-spacing: .08em; margin-right: 6px; }
+  .rc-credit .c3 span { font: 600 7.5px 'IBM Plex Mono', monospace; color: #000; letter-spacing: .08em; margin-right: 6px; }
   .rc-credit .c4 { font: 600 9px 'IBM Plex Mono', monospace; color: #000; letter-spacing: .03em; margin-top: 5px; }
-  .rc-credit .c4 span { font: 400 7.5px 'IBM Plex Mono', monospace; color: #8a8a8a; letter-spacing: .08em; margin-right: 6px; text-transform: uppercase; }
+  .rc-credit .c4 span { font: 600 7.5px 'IBM Plex Mono', monospace; color: #000; letter-spacing: .08em; margin-right: 6px; text-transform: uppercase; }
   .rc-thx { display: flex; align-items: center; gap: 8px; margin-top: 13px; }
   .rc-thx::before, .rc-thx::after { content: ''; flex: 1; height: 1px; background: #000; }
   .rc-thx span { font: 700 8.5px 'Space Grotesk', sans-serif; letter-spacing: .4em; margin-right: -.4em; text-transform: uppercase; color: #000; }
+
+  /* WORKSHOP COPY SPECIFIC CLASSES */
+  .rc-workshop { width: 302px; background: #fff; color: #141414; padding: 19px 15px 21px; font: 400 10px/1.5 'IBM Plex Mono', monospace; border: 1px solid #BFBAB0; }
+  .rc-workshop .rc-urgent { border: 1.5px solid #000; padding: 6px; text-align: center; font: 700 12px 'Space Grotesk', sans-serif; letter-spacing: .2em; text-transform: uppercase; border-radius: 3px; margin-bottom: 12px; }
+  .rc-g { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 4px 0; }
+  .rc-g .nm { font: 600 11.5px 'Space Grotesk', sans-serif; color: #000; }
+  .rc-g .dots { flex: 1; min-width: 10px; border-bottom: 1px dotted #a5a5a5; transform: translateY(-3px); }
+  .rc-g .qt { font: 700 11.5px 'IBM Plex Mono', monospace; }
+  .rc-gs { margin-top: 10px; border: 1.5px solid #000; padding: 6px 12px; display: flex; justify-content: space-between; align-items: center; border-radius: 3px; }
+  .rc-gs span { font: 700 9px 'Space Grotesk', sans-serif; letter-spacing: .24em; text-transform: uppercase; }
+  .rc-gs b { font: 700 15px 'IBM Plex Mono', monospace; white-space: nowrap; }
+  .rc-ms { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 6px; margin-top: 12px; }
+  .rc-ms .m-row { display: flex; align-items: baseline; }
+  .rc-ms .m-lbl { width: 95px; flex-shrink: 0; font: 700 13px 'Space Grotesk', sans-serif; color: #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rc-ms .m-val { font: 700 16px 'IBM Plex Mono', monospace; color: #000; }
+  .rc-inst { margin-top: 15px; border: 1.5px solid #000; border-radius: 3px; padding: 14px; }
+  .rc-inst .lbl { font: 700 12px 'Space Grotesk', sans-serif; letter-spacing: .2em; text-transform: uppercase; margin-bottom: 10px; text-align: center; display: block; color: #000; }
+  .rc-inst .val { font: 500 15px/1.6 'IBM Plex Mono', monospace; text-align: center; white-space: pre-wrap; color: #000; }
+  .rc-not-bill { margin-top: 15px; border: 1.5px dashed #000; padding: 10px; text-align: center; font: 700 9px 'Space Grotesk', sans-serif; letter-spacing: .15em; text-transform: uppercase; border-radius: 3px; }
 
   /* Kanban Drag & Drop */
   .kanban-card {
@@ -199,7 +218,8 @@
       display: block !important;
     }
 
-    #thermal-print-area .rc {
+    #thermal-print-area .rc,
+    #thermal-print-area .rc-workshop {
       width: 100%;
       max-width: 100%;
       min-width: 0;
@@ -956,10 +976,10 @@
 
     const body = document.getElementById('job-measure-body');
     if (body) {
-      const grid = rows => `<div class="slip-mgrid">${rows.map(x => `
-            <div class="slip-mcell">
-              <span class="l">${Atelier.escapeHtml(x.label)}</span>
-              <span class="n">${Atelier.escapeHtml(x.value)}</span>
+      const grid = rows => `<div class="rc-ms">${rows.map(x => `
+            <div class="m-row">
+              <span class="m-lbl">${Atelier.escapeHtml(x.label)}</span>
+              <span class="m-val">${Atelier.escapeHtml(x.value)}</span>
             </div>`).join('')}</div>`;
 
       /* ---- Workshop-only measurement reordering and relabeling ----------
@@ -1040,7 +1060,7 @@
         body.innerHTML = `
           <div class="slip-piece">
           ${grid(workshopRows(firstPiece.rows))}
-          ${showPcNote ? `<div class="slip-note">&bull; ${Atelier.escapeHtml(firstPiece.notes)}</div>` : ''}
+          ${showPcNote ? `<div class="rc-inst" style="margin-top:8px"><span class="lbl">Piece Note</span><div class="val">${Atelier.escapeHtml(firstPiece.notes)}</div></div>` : ''}
           </div>
         `;
       } else if (rows.length) {
@@ -1077,9 +1097,9 @@
       });
 
       if (parts.length) {
-        notes.innerHTML = '<div class="slip-rule"></div>'
-          + '<div class="slip-sec">INSTRUCTIONS</div>'
-          + parts.map(t => `<div class="slip-note">&bull; ${Atelier.escapeHtml(t)}</div>`).join('');
+        notes.innerHTML = '<div class="rc-inst">'
+          + '<span class="lbl">INSTRUCTIONS</span>'
+          + '<div class="val">' + parts.map(t => Atelier.escapeHtml(t)).join('\\n') + '</div></div>';
       } else {
         notes.innerHTML = '';
       }
@@ -1502,69 +1522,92 @@
           
           ${o.stamp ? `<div style="text-align:center; margin:8px 0"><img src="${esc(new URL(o.stamp, document.baseURI).href)}" style="max-height:48px; max-width:100%; opacity:.85" alt=""></div>` : ''}
           ${o.terms ? `<div class="rc-note" style="margin-top:2mm; text-align:center">${esc(o.terms)}</div>` : ''}
-          ${(() => { const msg = tidyFooter(o.footer); return msg ? `<div class="rc-note" style="text-align:center; white-space:pre-line">${esc(msg)}</div>` : ''; })()}
-
-          <p class="rc-note">
-            Thank you for choosing us.<br>
-            Please bring this receipt when collecting your order.
+          <p class="rc-note" style="text-align:center;">
+            Thank you for choosing Best Tailor.<br>
+            Please present this receipt when collecting your order.
           </p>
           
           <footer class="rc-credit">
-            <div class="c1">Powered by</div>
-            <div class="c2">TAILORING & CLOTH HOUSE MANAGEMENT SYSTEM</div>
-            <i class="cline"></i>
-            <div class="c3"><span>Designed &amp; Developed by</span>NOOR M HINGORJO</div>
-            <div class="c4"><span>Software Support</span>0303 4980786</div>
+            <div class="c3" style="line-height:1.6; margin-top:0;">
+              <span style="display:block; margin-right:0; margin-bottom:2px;">DESIGNED &amp; DEVELOPED BY</span>
+              NOOR M. HINGORJO
+            </div>
+            <div class="c4" style="margin-top:6px;">SOFTWARE SUPPORT: 0303 4980786</div>
           </footer>
           
           <div class="rc-thx"><span>Thank You</span></div>
         </div>`;
 
       /* -------------------------------- tailor -------------------------- */
+      let garmentsHtml = '';
+      let totalPieces = 0;
+      if (o.items && o.items.length) {
+        garmentsHtml = o.items.map(item => {
+          totalPieces += parseInt(item.qty || 1);
+          return `<div class="rc-g">
+            <span class="nm">${esc(item.name || '')}</span>
+            <i class="dots"></i>
+            <span class="qt">× ${esc(item.qty || 1)}</span>
+          </div>`;
+        }).join('');
+      } else {
+        const garments = (o.garment || '').split(',');
+        totalPieces = o.qty || 1;
+        garmentsHtml = garments.map(g => `<div class="rc-g">
+            <span class="nm">${esc(g.trim())}</span>
+            <i class="dots"></i>
+            <span class="qt">× ${totalPieces}</span>
+          </div>`).join('');
+      }
+
       const tailorSlip = `
-        <div class="slip slip-preview slip-workshop" id="slip-tailor">
-          <div class="slip-hd">
-            ${o.show_logo !== false ? `<div class="slip-shop" style="font-size:14px">${esc((o.store || 'Atelier').toUpperCase())}</div>` : ''}
+        <div class="rc-workshop slip-preview" id="slip-tailor">
+          <header class="rc-head">
+            <div class="rc-name">${esc((o.store || 'Atelier').toUpperCase())}</div>
+            <div class="rc-tag"><span>${esc(o.tagline || 'Tailoring & Cloth House')}</span></div>
+            <div class="rc-addr">${esc(o.address || '')}</div>
+            ${o.phone ? `<div class="rc-ph">PH · ${esc(o.phone)}</div>` : ''}
+          </header>
+          
+          <div class="rc-rule"></div>
+          
+          ${urgent ? `<div class="rc-urgent">! ${esc((o.priority || 'URGENT').toUpperCase())} !</div>` : ''}
+          
+          <div class="rc-doc"><b>WORKSHOP COPY</b></div>
+          <div class="rc-meta">
+            <div class="rc-m">
+              <span class="k">Order</span><i class="dots"></i><span class="v b">${esc(o.order || '')}</span>
+            </div>
+            <div class="rc-m">
+              <span class="k">Booked</span><i class="dots"></i><span class="v">${esc(o.date || '')}</span>
+            </div>
+            <div class="rc-m">
+              <span class="k">Customer</span><i class="dots"></i><span class="v b">${esc(o.customer || '')}</span>
+            </div>
+            <div class="rc-m">
+              <span class="k">Tailor</span><i class="dots"></i><span class="v b" id="job-tailor">${esc(o.tailor || 'Unassigned')}</span>
+            </div>
           </div>
-
-          <div class="slip-kind">WORKSHOP COPY</div>
-
-          <div class="slip-row"><span class="k">Order</span><span class="v slip-bold">${esc(o.order || '')}</span></div>
-          <div class="slip-row"><span class="k">Booked</span><span class="v">${esc(o.date || '')}</span></div>
-          <!-- Workshop copy carries the customer's name only. The phone number
-               is a customer-contact detail: the tailor never needs it, and a
-               slip that walks around the workshop should not carry it. -->
-          <div class="slip-row"><span class="k">Customer</span><span class="v slip-bold">${esc(o.customer || '')}</span></div>
-          <div class="slip-row"><span class="k">Tailor</span><span class="v slip-bold" id="job-tailor">${esc(o.tailor || 'Unassigned')}</span></div>
-
-          ${urgent ? `<div class="slip-kind ghost" style="margin:2mm 0 0">! ${esc((o.priority || 'URGENT').toUpperCase())} !</div>` : ''}
-
-          <div class="slip-rule"></div>
-
-          <div class="workshop-garments" style="margin-bottom: 2mm;">
-            <div class="slip-sec">GARMENTS</div>
-            ${(o.garment || '').split(',').map(g => `<div class="slip-bold" style="font-size: 14px;">${esc(g.trim())}</div>`).join('')}
-            <div style="margin-top: 4px; font-weight: 800; font-size: 14px;">TOTAL PIECES: ${o.qty || 1}</div>
-            ${o.fabric ? `<div style="margin-top: 4px; font-size: 13px;">Fabric: ${esc(o.fabric)}</div>` : ''}
+          
+          <div class="rc-sec"><span>Garments</span></div>
+          <div class="rc-garments">
+            ${garmentsHtml}
           </div>
-
-          <div class="slip-due">
-            <div class="lbl">DELIVER BY</div>
-            <div class="val">${esc(o.due || 'To be confirmed')}</div>
+          <div class="rc-gs">
+            <span>Total Pieces</span><b>${totalPieces}</b>
           </div>
-
-          <div class="slip-rule"></div>
-          <div class="slip-sec">MEASUREMENTS <span id="job-measure-unit"></span></div>
+          
+          <div class="rc-stat" style="margin-top:12px;">Deliver By · ${esc(o.due || 'To be confirmed')}</div>
+          
+          <div class="rc-sec" style="margin-top:20px;"><span>Measurements <span id="job-measure-unit"></span></span></div>
           <div id="job-measure-body">
             <div style="text-align:center;font-size:10px">Loading measurements&hellip;</div>
           </div>
-
+          
           <div id="job-notes"></div>
-
-
-          <div class="slip-rule"></div>
-          <div class="slip-foot">Not a bill &mdash; workshop use only</div>
-          <div class="slip-code">* ${esc(o.order || '')} *</div>
+          
+          <div class="rc-not-bill">Not a bill &mdash; workshop use only</div>
+          <div class="rc-note" style="margin-top:4px">* ${esc(o.order || '')} *</div>
         </div>`;
 
       return `

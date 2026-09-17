@@ -32,7 +32,6 @@
       <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Customers Measured</span>
       <div class="w-7 h-7 rounded-md bg-sky-50 text-sky-600 flex items-center justify-center"><i class="fa-solid fa-file-lines text-[11px]"></i></div>
     </div>
-    @php $catalogued = $garmentTypes->count(); @endphp
     <h3 class="text-2xl font-bold text-slate-900 tracking-tight">{{ number_format($measurementsData->pluck('customer_id')->unique()->count()) }}</h3>
     <p class="text-[11px] text-slate-400 font-medium mt-1">Customers with saved measurements</p>
   </div>
@@ -67,12 +66,6 @@
       <option value="pending">Partly filled</option>
       <option value="revision">Few fields filled</option>
     </select>
-    <select id="garmentFilter" onchange="filterMeasurements()" class="w-full sm:w-36 h-10 px-4 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-600 focus:outline-none focus:ring-2 focus:ring-slate-900 font-medium transition-all">
-      <option value="">Garment Type</option>
-      @foreach($measurementsData->pluck('garment_type')->filter()->unique()->sort() as $type)
-      <option value="{{ $type }}">{{ $type }}</option>
-      @endforeach
-    </select>
     <select id="tailorFilter" onchange="filterMeasurements()" class="w-full sm:w-36 h-10 px-4 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-600 focus:outline-none focus:ring-2 focus:ring-slate-900 font-medium transition-all">
       <option value="">All Units</option><option value="in">Inches (in)</option><option value="cm">Centimetres (cm)</option>
     </select>
@@ -87,7 +80,6 @@
       <thead class="bg-slate-50 text-slate-500 text-[10px] uppercase tracking-widest">
         <tr>
           <th class="px-5 py-3 text-left font-bold">Customer Name</th>
-          <th class="px-5 py-3 text-left font-bold">Garment Type</th>
           <th class="px-5 py-3 text-left font-bold">Unit</th>
           <th class="px-5 py-3 text-left font-bold">Last Updated</th>
           <th class="px-5 py-3 text-left font-bold">Fields Filled</th>
@@ -102,9 +94,8 @@
           $rowBadge = ['completed' => 'badge-delivered', 'pending' => 'badge-pending', 'revision' => 'badge-overdue'][$rowStatus];
           $rowLabel = ['completed' => 'Mostly filled', 'pending' => 'Partly filled', 'revision' => 'Few fields filled'][$rowStatus];
         @endphp
-        <tr class="hover:bg-slate-50 transition-colors" data-status="{{ $rowStatus }}" data-garment="{{ $m->garment_type }}" data-tailor="{{ $m->unit }}" data-name="{{ strtolower($m->customer->name ?? '') }}" id="row-{{ $m->id }}">
+        <tr class="hover:bg-slate-50 transition-colors" data-status="{{ $rowStatus }}" data-tailor="{{ $m->unit }}" data-name="{{ strtolower($m->customer->name ?? '') }}" id="row-{{ $m->id }}">
           <td class="px-5 py-3 font-semibold text-slate-900">{{ $m->customer->name ?? 'Unknown' }}</td>
-          <td class="px-5 py-3 text-slate-600">{{ $m->garment_type }}</td>
           <td class="px-5 py-3 text-slate-600">{{ $m->unit === 'in' ? 'Inches (in)' : 'Centimetres (cm)' }}</td>
           <td class="px-5 py-3 text-slate-500">{{ $m->updated_at->format('d M Y') }}</td>
           <td class="px-5 py-3">
@@ -144,7 +135,7 @@
       <div class="flex items-center justify-between p-3 border border-slate-100 rounded-lg hover:bg-slate-50 transition-colors">
         <div class="flex items-center gap-3"><div class="avatar sm green">{{ mb_substr($recent->customer?->name ?? '?', 0, 1) }}</div>
         <div><div class="text-sm font-semibold text-slate-900">{{ $recent->customer?->name }}</div>
-        <div class="text-xs text-slate-500 mt-0.5">{{ $recent->garment_type }} / {{ $recent->updated_at->format('d M Y') }}</div></div></div>
+        <div class="text-xs text-slate-500 mt-0.5">Updated {{ $recent->updated_at->format('d M Y') }}</div></div></div>
         <button class="bg-slate-100 text-slate-700 px-2.5 py-1 rounded-md text-xs font-semibold hover:bg-slate-900 hover:text-white transition-colors" onclick='openModal("add-measurement", @json($recent))'>Update Measurements</button>
       </div>
       @empty
@@ -241,10 +232,25 @@
 
 @push('scripts')
 <script>
+  if (typeof window.appendMeasurementQuickAction !== 'function') {
+      window.appendMeasurementQuickAction = function(targetId, text) {
+          const textarea = document.getElementById(targetId);
+          if (!textarea) return;
+          const current = textarea.value.trim();
+          const addition = current ? ', ' + text : text;
+          if (current.length + addition.length > 2000) {
+              if (typeof toast === 'function') toast('Notes limit reached.', 'error');
+              return;
+          }
+          textarea.value = current ? current + addition : text;
+          textarea.dispatchEvent(new Event('input', { bubbles: true }));
+      };
+  }
+
   /* ============= LIVE SEARCH LOGIC ============= */
   window.allCustomers = @json($customers);
+  window.MEASUREMENT_CONFIG = @json($measurementConfig);
   window.savedMeasurementSets = @json($measurementsData);
-  window.garmentTypes = @json($garmentTypes);
   window.tailorNames = @json($tailors);
 
   function filterCustomerSearch(val) {
@@ -276,27 +282,14 @@
   function selectCustomer(id) {
     const customer = window.allCustomers.find(c => Number(c.id) === Number(id));
     if (!customer) return;
-    const garment = document.getElementById('meas-garment')?.value || 'Wash & Wear';
     const latest = window.savedMeasurementSets
-      .filter(m => Number(m.customer_id) === Number(customer.id) && String(m.garment_type || '').trim().toLowerCase() === garment.toLowerCase())
+      .filter(m => Number(m.customer_id) === Number(customer.id))
       .sort((a,b) => new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at))[0];
-    openModal('add-measurement', latest || { customer, customer_id: customer.id, name: customer.name, garment });
+    openModal('add-measurement', latest || { customer, customer_id: customer.id, name: customer.name });
   }
 
-  function savedMeasurementsForGarment(customerId, garment) {
-    const garmentKey = String(garment || '').trim().toLowerCase();
-    return window.savedMeasurementSets.filter(m => Number(m.customer_id) === Number(customerId)
-      && String(m.garment_type || '').trim().toLowerCase() === garmentKey);
-  }
-
-
-
-  function selectGarmentMeasurements(garment) {
-    const customerId = Number(document.getElementById('meas-customer').dataset.customerId);
-    const customer = window.allCustomers.find(c => Number(c.id) === customerId);
-    const existing = savedMeasurementsForGarment(customerId, garment)[0];
-    const name = document.getElementById('meas-customer').value;
-    openModal('add-measurement', existing || {customer, customer_id: customer?.id, name, garment});
+  function savedMeasurementsForCustomer(customerId) {
+    return window.savedMeasurementSets.filter(m => Number(m.customer_id) === Number(customerId));
   }
 
   function measurementCustomerChanged() {
@@ -304,8 +297,7 @@
     if (input.dataset.customerId && input.value !== input.dataset.customerName) {
       // An edited saved set must never be reassigned just by typing a different name.
       const name = input.value;
-      const garment = document.getElementById('meas-garment')?.value || 'Wash & Wear';
-      openModal('add-measurement', {name, garment});
+      openModal('add-measurement', {name});
       const fresh = document.getElementById('meas-customer');
       fresh.focus(); fresh.setSelectionRange(name.length, name.length);
     }
@@ -319,8 +311,8 @@
 
     if (!visible.length) { toast('There is nothing to export', 'info'); return; }
 
-    const header = ['Customer', 'Garment Type', 'Tailor', 'Date', 'Status'];
-    const data = visible.map(r => [...r.querySelectorAll('td')].slice(0, 5).map(td => td.innerText.trim()));
+    const header = ['Customer', 'Unit', 'Date', 'Status'];
+    const data = visible.map(r => [...r.querySelectorAll('td')].slice(0, 4).map(td => td.innerText.trim()));
 
     const csv = [header, ...data]
       .map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
@@ -392,13 +384,11 @@
     tr.className = 'hover:bg-slate-50 transition-colors';
     tr.id = `row-${m.id}`;
     tr.dataset.status = status;
-    tr.dataset.garment = m.garment_type || '';
     tr.dataset.tailor = m.unit || '';
     tr.dataset.name = name.toLowerCase();
 
     tr.innerHTML = `
       <td class="px-5 py-3 font-semibold text-slate-900">${Atelier.escapeHtml(name)}</td>
-      <td class="px-5 py-3 text-slate-600">${Atelier.escapeHtml(m.garment_type || '')}</td>
       <td class="px-5 py-3 text-slate-600">${m.unit === 'in' ? 'Inches (in)' : 'Centimetres (cm)'}</td>
       <td class="px-5 py-3 text-slate-500">${new Date(m.updated_at || m.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
       <td class="px-5 py-3"><span class="badge ${badge}">${label}</span></td>
@@ -447,8 +437,7 @@
 
     const payload = {
       customer_name: document.getElementById('meas-customer').value,
-      garment_type: document.getElementById('meas-garment').value,
-      tailor: document.getElementById('meas-tailor').value,
+      tailor: document.getElementById('meas-tailor') ? document.getElementById('meas-tailor').value : 'Unassigned',
       unit: document.getElementById('meas-unit').value,
       notes: document.getElementById('meas-notes').value,
     };
@@ -459,9 +448,7 @@
       payload[field] = document.getElementById(`meas-${field}`)?.value || null;
     });
 
-    if (!payload.garment_type) { toast('Choose saved measurements to update, or a new garment set', 'error'); return; }
-
-    // Catch missing mandatory fields before the round-trip.
+    // Built from the configured field list, so adding or removing a field in
     const missing = cfg.required.filter(f => !payload[f]);
     if (missing.length) {
       toast(`${cfg.labels[missing[0]]} is required`, 'error');
@@ -487,7 +474,7 @@
     try {
       const res = await (isEdit ? Atelier.api.put(url, payload) : Atelier.api.post(url, payload));
       closeModal();
-      const duplicates = window.savedMeasurementSets.filter(m => Number(m.customer_id) === Number(res.measurement.customer_id) && m.garment_type.trim().toLowerCase() === res.measurement.garment_type.trim().toLowerCase() && Number(m.id) !== Number(res.measurement.id));
+      const duplicates = window.savedMeasurementSets.filter(m => Number(m.customer_id) === Number(res.measurement.customer_id) && Number(m.id) !== Number(res.measurement.id));
       duplicates.forEach(m => document.getElementById(`row-${m.id}`)?.remove());
       window.savedMeasurementSets = window.savedMeasurementSets.filter(m => !duplicates.includes(m));
       const savedIndex = window.savedMeasurementSets.findIndex(m => Number(m.id) === Number(res.measurement.id));
@@ -544,11 +531,7 @@
         </div>
         <div class="p-6 overflow-y-auto max-h-[80vh]">
           <!-- Basic Info Grid -->
-          <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 bg-slate-50 p-4 rounded-xl border border-slate-100">
-            <div>
-              <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Garment</div>
-              <div class="text-sm font-semibold text-slate-900 mt-1">${garment}</div>
-            </div>
+          <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6 bg-slate-50 p-4 rounded-xl border border-slate-100">
             <div>
               <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Unit</div>
               <div class="text-sm font-semibold text-slate-900 mt-1">${unit}</div>
@@ -612,7 +595,6 @@
       const title = isEdit ? 'Update Measurements' : 'Add Measurements';
       const desc = isEdit ? `Update saved measurements for ${data.customer?.name || 'Unknown'}` : 'Save or update customer measurements. No order required.';
       const customerVal = isEdit ? (data.customer?.name || '') : (data?.name || '');
-      const garmentVal = isEdit ? data.garment_type : (data?.garment || window.garmentTypes[0] || '');
       const tailorVal = isEdit ? data.tailor : (window.tailorNames[0] || 'Unassigned');
       // Unit, precision and which fields are mandatory all come from Settings.
       const cfg = window.MEASUREMENT_CONFIG;
@@ -620,9 +602,6 @@
       const notesVal = isEdit ? data.notes : '';
 
       const customerId = data?.customer_id || data?.customer?.id;
-      const savedSets = savedMeasurementsForGarment(customerId, garmentVal);
-      const chooseSaved = data?.chooseSaved && savedSets.length > 0;
-      const garmentOptions = ['Wash & Wear', 'Cotton', 'Boski'].map(g => `<option value="${Atelier.escapeHtml(g)}" ${g === garmentVal ? 'selected' : ''}>${Atelier.escapeHtml(g)}</option>`).join('');
 
       const isRequired = id => cfg.required.includes(id);
       const star = id => isRequired(id) ? ' <span class="text-red-500">*</span>' : '';
@@ -658,16 +637,10 @@
         </div>
         <div class="p-6 overflow-y-auto max-h-[80vh]">
           <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-            <div class="col-span-2 md:col-span-2 relative">
+            <div class="col-span-1 md:col-span-4 relative">
               <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Customer Name *</label>
               <input type="text" id="meas-customer" data-customer-id="${customerId || ''}" data-customer-name="${Atelier.escapeHtml(customerVal)}" oninput="measurementCustomerChanged()" onfocus="filterCustomerSearch(this.value)" onblur="setTimeout(() => { const d = document.getElementById('customer-dropdown'); if(d) d.classList.add('hidden') }, 200)" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-colors" placeholder="Search or enter customer name" value="${Atelier.escapeHtml(customerVal)}" autocomplete="off">
               <div id="customer-dropdown" class="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg hidden max-h-48 overflow-y-auto"></div>
-            </div>
-            <div>
-              <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Category *</label>
-              <select id="meas-garment" onchange="selectGarmentMeasurements(this.value)" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-colors">
-                ${garmentOptions}
-              </select>
               <input type="hidden" id="meas-tailor" value="${Atelier.escapeHtml(tailorVal || 'Unassigned')}">
             </div>
           </div>
@@ -709,9 +682,10 @@
             }).join('')}
           </div>
 
-          <div>
+          <div class="mb-6">
             <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Notes</label>
-            <textarea id="meas-notes" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-colors min-h-[80px]" placeholder="Fit, posture, or notes...">${Atelier.escapeHtml(notesVal || '')}</textarea>
+            <textarea id="meas-notes" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-colors" rows="3" placeholder="Additional details or instructions...">${Atelier.escapeHtml(notesVal)}</textarea>
+            ${ @json(view('components.measurement-note-quick-actions', ['targetId' => 'meas-notes'])->render()) }
           </div>
         </div>
         <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">
@@ -722,12 +696,11 @@
     'print-preview': (data) => {
       if (!data) return `
         <div class="p-5 border-b border-slate-200 flex justify-between items-center"><div class="text-lg font-bold text-slate-900 tracking-tight">Print Measurements</div><button class="w-8 h-8 rounded-lg text-slate-400 hover:bg-slate-100" onclick="closeModal()"><i class="fa-solid fa-xmark text-sm"></i></button></div>
-        <div class="p-6"><label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Select saved measurements</label><select id="measurement-print-choice" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm">${window.savedMeasurementSets.map(m => `<option value="${m.id}">${Atelier.escapeHtml(m.customer?.name || 'Customer')} / ${Atelier.escapeHtml(m.garment_type)} / #${m.id}</option>`).join('')}</select>${window.savedMeasurementSets.length ? '' : '<p class="text-xs text-slate-500 mt-1">Save measurements before printing.</p>'}</div>
+        <div class="p-6"><label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Select saved measurements</label><select id="measurement-print-choice" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm">${window.savedMeasurementSets.map(m => `<option value="${m.id}">${Atelier.escapeHtml(m.customer?.name || 'Customer')} / #${m.id}</option>`).join('')}</select>${window.savedMeasurementSets.length ? '' : '<p class="text-xs text-slate-500 mt-1">Save measurements before printing.</p>'}</div>
         <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-2"><button class="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-800" onclick="openModal('print-preview', window.savedMeasurementSets.find(m => Number(m.id) === Number(document.getElementById('measurement-print-choice').value)))" ${window.savedMeasurementSets.length ? '' : 'disabled'}>Preview Sheet</button></div>`;
       if (data?.id) data = window.savedMeasurementSets.find(m => Number(m.id) === Number(data.id)) || data;
       
       const customer = data.customer?.name || data.name || 'Unknown';
-      const garment = data.garment_type || data.garment || 'Unknown';
       const unit = data.unit || window.MEASUREMENT_CONFIG.unit;
       const date = data.created_at ? new Date(data.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 
@@ -783,7 +756,6 @@
              <div style="text-align:center; font-size:10px; margin-bottom:8px;">Customer Measurement Record</div>
              <div style="border-top:1px dashed #000; margin:8px 0;"></div>
              <div style="font-size:12px; margin-bottom:2px; display:flex; justify-content:space-between;"><span>Customer:</span><span style="font-weight:bold;">${customer}</span></div>
-             <div style="font-size:12px; margin-bottom:2px; display:flex; justify-content:space-between;"><span>Garment:</span><span style="font-weight:bold;">${garment}</span></div>
              <div style="font-size:12px; margin-bottom:8px; display:flex; justify-content:space-between;"><span>Date:</span><span style="font-weight:bold;">${date}</span></div>
              <div style="border-top:1px dashed #000; margin:8px 0;"></div>
              <div style="font-size:12px;">
@@ -821,10 +793,9 @@
     }
   });
 
-  /* ============= FILTER LOGIC (status + garment + tailor + search) ============= */
+  /* ============= FILTER LOGIC (status + tailor + search) ============= */
   function filterMeasurements() {
     const status  = document.getElementById('statusFilter')?.value || 'all';
-    const garment = document.getElementById('garmentFilter')?.value || '';
     const tailor  = document.getElementById('tailorFilter')?.value || '';
     const search  = (document.getElementById('measurementSearch')?.value || '').trim().toLowerCase();
 
@@ -835,7 +806,6 @@
     rows.forEach(row => {
       const matches =
         (status === 'all' || row.dataset.status === status) &&
-        (!garment || row.dataset.garment === garment) &&
         (!tailor || row.dataset.tailor === tailor) &&
         (!search || (row.dataset.name || '').includes(search));
 

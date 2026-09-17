@@ -6,6 +6,21 @@
   var blankGarment = () => ({client_key:itemKey(), product_service_id:'', quantity:1, unit_price:'0.00', tailor_rate_override:'', fabric:'', style_notes:'', pieces:[blankPiece()]});
   blankOrderState = () => ({customerId:null, customerName:'', customerPhone:'', garments:[blankGarment()], advance:0, date:'', slot:'', priority:'Normal', tailorId:'', notes:'', activeItem:0, activePiece:0});
   newOrderState = blankOrderState();
+  
+  if (typeof window.appendMeasurementQuickAction !== 'function') {
+      window.appendMeasurementQuickAction = function(targetId, text) {
+          const textarea = document.getElementById(targetId);
+          if (!textarea) return;
+          const current = textarea.value.trim();
+          const addition = current ? ', ' + text : text;
+          if (current.length + addition.length > 2000) {
+              if (typeof toast === 'function') toast('Notes limit reached.', 'error');
+              return;
+          }
+          textarea.value = current ? current + addition : text;
+          textarea.dispatchEvent(new Event('input', { bubbles: true }));
+      };
+  }
   var itemEsc = value => Atelier.escapeHtml(String(value ?? ''));
   var itemInputClass = 'w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900';
   var itemButtonClass = 'px-3 py-2 rounded-lg border border-slate-200 text-sm hover:bg-indigo-50';
@@ -420,10 +435,11 @@
         
         <div class="mt-6 mb-2">
           <label class="block text-sm text-slate-900 font-bold mb-2">Special Instructions / Notes</label>
-          <textarea class="w-full px-3 py-2 text-base font-medium bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:border-indigo-500 focus:ring-indigo-500 transition-all text-slate-900"
+          <textarea id="order-meas-notes" class="w-full px-3 py-2 text-base font-medium bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:border-indigo-500 focus:ring-indigo-500 transition-all text-slate-900"
                     rows="3"
                     placeholder="Customer ki special stitching requirements, fitting instructions, design details, loose/tight preference, collar/cuff instructions, etc."
                     oninput="itemMeasure('notes', this.value);">${itemEsc(piece.values.notes ?? '')}</textarea>
+          ${ @json(view('components.measurement-note-quick-actions', ['targetId' => 'order-meas-notes'])->render()) }
         </div>`;
       }
 
