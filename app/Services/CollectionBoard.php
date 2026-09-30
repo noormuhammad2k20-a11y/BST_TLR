@@ -9,11 +9,11 @@ final class CollectionBoard
     {
         $now=now(Settings::timezone());
         $notifier=app(CollectionNotifications::class);
-        $orders=Order::whereIn('status',array_merge(Order::OPEN_STATUSES,['Delivered','Completed']))->with(['customer','collectionMessages','statusHistories','lineItems.productService','lineItems.pieces'])
+        $orders=Order::whereIn('status',array_merge(Order::OPEN_STATUSES,['Delivered','Completed']))->with(['customer.primaryCustomer','collectionMessages','statusHistories','lineItems.productService','lineItems.pieces'])
             ->orderBy('delivery_date')->orderBy('id')->get();
         $phoneLogs=SmsLog::whereNotNull('reason')->get()->groupBy(fn ($l)=>NotificationPhone::normalize($l->phone) ?? $l->phone);
         $rows=$orders->map(function ($order) use ($now,$notifier,$phoneLogs) {
-            $phone=NotificationPhone::normalize($order->customer?->phone) ?? $order->customer?->phone;
+            $phone=NotificationPhone::normalize($order->customer?->effectivePhone()) ?? $order->customer?->effectivePhone();
             $state=$notifier->state($order,$phoneLogs->get($phone,collect()));
             $due=$order->delivery_date?->copy()->timezone(Settings::timezone());
             $days=$due ? (int)$now->copy()->startOfDay()->diffInDays($due->copy()->startOfDay(),false) : null;
@@ -22,7 +22,7 @@ final class CollectionBoard
             $verifiedAt=$order->statusHistories->where('to_status','Ready for Verification')->first()?->created_at ?? $order->completed_at;
             $readyAt=$order->statusHistories->where('to_status','Ready')->first()?->created_at ?? $order->notified_at;
             return $state + app(CustomerLedger::class)->orderDues($order) + ['db_id'=>$order->id,'order_id'=>$order->id,'customer_id'=>$order->customer_id,
-                'id'=>$order->display_number,'cust'=>$order->customer?->name ?? 'Customer removed','phone'=>$order->customer?->phone ?? '',
+                'id'=>$order->display_number,'cust'=>$order->customer?->name ?? 'Customer removed','phone'=>$order->customer?->effectivePhone() ?? '',
                 'gmt'=>$order->primary_item_name,'pieces'=>$order->quantity,'status'=>$collected ? 'Delivered' : $order->status,'orderStatus'=>$order->status,
                 'collectionReady'=>$ready && !$collected,'overdue'=>!$collected && $days !== null && $days < 0,'dueToday'=>!$collected && $days === 0,'dueTomorrow'=>!$collected && $days === 1,
                 'upcoming'=>!$collected && $days !== null && $days > 0 && $days <= Settings::int('delivery_alert_before_days'),

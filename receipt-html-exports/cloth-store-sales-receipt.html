@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloth Store Sales Receipt</title>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+          .slip {
+    width: 72mm;
+    box-sizing: border-box;
+    padding: 3mm 2mm 4mm;
+    background: #fff;
+    color: #000;
+    font-family: 'Courier New', ui-monospace, 'Cascadia Mono', monospace;
+    font-size: 12px;
+    line-height: 1.45;
+    -webkit-font-smoothing: none;
+  }
+
+  /* Rules ------------------------------------------------------------------ */
+  .slip-rule    { border-top: 1px dashed #000; margin: 2mm 0; }
+  .slip-rule-s  { border-top: 1px solid  #000; margin: 2mm 0; }
+  .slip-rule-d  { border-top: 3px double #000; margin: 2mm 0; }
+
+  /* Header ----------------------------------------------------------------- */
+  .slip-hd     { text-align: center; }
+  .slip-logo   { max-width: 34mm; max-height: 16mm; margin: 0 auto 1.5mm; display: block; }
+  .slip-shop   { font-size: 17px; font-weight: 700; letter-spacing: .06em; line-height: 1.2; }
+  .slip-tag    { font-size: 10px; font-style: italic; margin-top: .5mm; }
+  .slip-meta   { font-size: 10px; line-height: 1.35; margin-top: 1mm; }
+
+  /* The copy marker. Inverted so the tailor can tell the two slips apart at a
+     glance from across the workshop, without reading anything. */
+  .slip-kind {
+    background: #000; color: #fff;
+    text-align: center; font-weight: 700;
+    font-size: 11px; letter-spacing: .22em;
+    padding: 1mm 0; margin: 2mm 0;
+  }
+  .slip-kind.ghost {
+    background: #fff; color: #000;
+    border: 1px solid #000; letter-spacing: .18em;
+  }
+
+  /* Rows ------------------------------------------------------------------- */
+  .slip-row {
+    display: flex; justify-content: space-between;
+    align-items: baseline; gap: 3mm;
+  }
+  .slip-row .k { flex: 1 1 auto; min-width: 0; word-break: break-word; }
+  .slip-row .v {
+    flex: 0 0 auto; text-align: right; white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  .slip-sec {
+    font-size: 10px; font-weight: 700; letter-spacing: .14em;
+    margin: 2mm 0 1mm;
+  }
+  .slip-sub  { font-size: 10px; padding-left: 3mm; }
+  .slip-bold { font-weight: 700; }
+
+  /* The one number the customer looks for. */
+  .slip-total {
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-size: 15px; font-weight: 700; padding: 1.5mm 0;
+  }
+
+  /* Deadline block on the job card — deliberately the loudest thing on it. */
+  .slip-due {
+    text-align: center; border: 2px solid #000;
+    padding: 1.5mm 1mm; margin: 2mm 0;
+  }
+  .slip-due .lbl { font-size: 9px; letter-spacing: .2em; }
+  .slip-due .val { font-size: 14px; font-weight: 700; line-height: 1.25; }
+
+  /* Measurements ----------------------------------------------------------- */
+  .slip-mgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 3mm; }
+  .slip-mcell {
+    display: flex; justify-content: space-between; gap: 1mm;
+    border-bottom: 1px dotted #666;
+    padding: .6mm 0; font-size: 11px;
+  }
+  .slip-mcell .l {
+    flex: 1 1 auto; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .slip-mcell .n {
+    flex: 0 0 auto; padding-left: 2mm;
+    font-weight: 700; font-variant-numeric: tabular-nums;
+  }
+
+  /* Hanging indent, so a wrapped instruction lines up under its own text
+     rather than under the bullet. */
+  .slip-note { font-size: 11px; padding-left: 3mm; text-indent: -3mm; }
+
+  /* Sign-off boxes the workshop ticks as the garment moves along. */
+  .slip-sign { display: flex; gap: 2mm; margin-top: 3mm; text-align: center; font-size: 9px; }
+  .slip-sign > div { flex: 1; }
+  .slip-sign .line { border-bottom: 1px solid #000; height: 7mm; }
+
+  /* pre-line so a footer the shop typed across several lines actually prints
+     across several lines, instead of collapsing into one run-on paragraph. */
+  .slip-foot {
+    text-align: center; font-size: 10px; line-height: 1.4;
+    white-space: pre-line;
+  }
+
+  /* Software credit. Deliberately the smallest thing on the slip: it belongs
+     to us, not to the customer's transaction. Four fixed lines — the developer
+     name appears here and nowhere else on the slip. */
+  .slip-credit {
+    text-align: center; font-size: 9px; line-height: 1.45;
+    margin-top: 2.5mm; color: #444;
+  }
+  /* The two facts a customer might actually need again — who built it and the
+     number to call — carry the weight. The connective wording around them
+     stays light so the block reads in one glance. */
+  .slip-credit .name  { font-weight: 700; color: #000; }
+  .slip-credit .sys   { font-weight: 600; font-size: 8.5px; letter-spacing: .03em; color: #222; }
+  .slip-credit .tel   { font-weight: 700; color: #000; letter-spacing: .04em; }
+  .slip-credit .ty    { font-size: 9.5px; color: #444; margin-top: 1mm; }
+  .slip-code {
+    text-align: center; font-size: 13px; font-weight: 700;
+    letter-spacing: .18em; margin-top: 2mm;
+  }
+
+  /* ==========================================================================
+     THERMAL PRINT DENSITY
+     --------------------------------------------------------------------------
+     Thermal printers render font-weight:400 as thin, faded strokes because the
+     heating element is narrower than an ink nozzle.  Elements already at 700
+     print dark; everything else needs at least 600 to produce legible output.
+
+     These rules live in the shared partial so every path that @includes it —
+     orders, delivery, settings — picks up the fix automatically.
+     ========================================================================== */
+  @media print {
+    /* Base density: lift ordinary slip text from 400 → 600.  On Courier New
+       under Windows / Chrome this resolves to the bold face, which is exactly
+       what the thermal head needs.  Classes that already declare 700 (.slip-shop,
+       .slip-sec, .slip-bold, .slip-total, .slip-due .val, .slip-mcell .n,
+       .slip-kind, .slip-code, .slip-credit .name, .slip-credit .tel) keep their
+       higher weight because their selectors are more specific than `.slip`. */
+    .slip {
+      font-weight: 600;
+    }
+
+    /* Solid black everywhere — eliminate any gray that would dither on a
+       monochrome thermal head. */
+    .slip,
+    .slip *,
+    .slip-credit,
+    .slip-credit .sys,
+    .slip-credit .ty {
+      color: #000 !important;
+      opacity: 1 !important;
+      filter: none !important;
+      text-shadow: none !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+
+    /* The inverted copy-marker bar must keep white text on black background. */
+    .slip-kind:not(.ghost),
+    .slip-kind:not(.ghost) * {
+      color: #fff !important;
+    }
+
+    /* Measurement cell dotted borders: #666 → solid black. */
+    .slip-mcell {
+      border-bottom-color: #000 !important;
+    }
+
+    /* Branding images: grayscale + high contrast for monochrome thermal. */
+    .slip img {
+      filter: grayscale(1) brightness(.75) contrast(3) !important;
+    }
+
+    /* On-screen decorations that waste thermal energy / confuse the head. */
+    .slip-preview {
+      box-shadow: none !important;
+      border-radius: 0 !important;
+    }
+  }
+
+  /* On-screen preview only — never printed. */
+  .slip-preview {
+    box-shadow: 0 1px 3px rgba(15, 23, 42, .12), 0 8px 24px rgba(15, 23, 42, .08);
+    border-radius: 2px;
+  }
+  .slip-label {
+    font-family: Inter, system-ui, sans-serif;
+    font-size: 11px; font-weight: 700; letter-spacing: .12em;
+    text-transform: uppercase; color: #64748b;
+    text-align: center; margin-bottom: 8px;
+  }
+
+
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+/* =========================================================
+   CLOTH STORE — SIMPLE 80MM RECEIPT
+   Scoped so Tailor/Workshop receipts are untouched.
+========================================================= */
+
+.cloth-receipt {
+    width: 72mm;
+    max-width: 72mm;
+    box-sizing: border-box;
+    margin: 0 auto;
+    padding: 2.5mm 2mm 5mm;
+    background: #fff;
+    color: #111;
+    font-family: Arial, Helvetica, sans-serif !important;
+    font-size: 11px;
+    line-height: 1.4;
+    -webkit-font-smoothing: antialiased;
+}
+
+.cloth-receipt .cr-header {
+    text-align: center;
+}
+
+.cloth-receipt .cr-brand {
+    margin: 0;
+    font-size: 19px;
+    line-height: 1.15;
+    font-weight: 700;
+    overflow-wrap: anywhere;
+}
+
+.cloth-receipt .cr-tagline {
+    margin-top: 3px;
+    font-size: 9px;
+    color: #555;
+}
+
+.cloth-receipt .cr-contact {
+    margin-top: 3px;
+    font-size: 9px;
+    line-height: 1.4;
+    color: #333;
+    overflow-wrap: anywhere;
+}
+
+.cloth-receipt .cr-separator {
+    border-top: 1px dashed #777;
+    margin: 9px 0;
+}
+
+.cloth-receipt .cr-info {
+    display: grid;
+    gap: 4px;
+}
+
+.cloth-receipt .cr-info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.cloth-receipt .cr-info-label {
+    flex: 0 0 auto;
+    color: #555;
+    white-space: nowrap;
+}
+
+.cloth-receipt .cr-info-value {
+    min-width: 0;
+    font-weight: 600;
+    text-align: right;
+    overflow-wrap: anywhere;
+}
+
+.cloth-receipt .cr-section-title {
+    margin-bottom: 6px;
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.cloth-receipt .cr-item-head,
+.cloth-receipt .cr-item-main {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 32px 58px;
+    gap: 5px;
+}
+
+.cloth-receipt .cr-item-head {
+    padding-bottom: 4px;
+    border-bottom: 1px solid #222;
+    font-size: 9px;
+    font-weight: 700;
+}
+
+.cloth-receipt .cr-item-head > :nth-child(2),
+.cloth-receipt .cr-item-qty {
+    text-align: center;
+}
+
+.cloth-receipt .cr-item-head > :nth-child(3),
+.cloth-receipt .cr-item-total {
+    text-align: right;
+}
+
+.cloth-receipt .cr-item {
+    padding: 6px 0;
+    border-bottom: 1px dotted #aaa;
+    break-inside: avoid;
+    page-break-inside: avoid;
+}
+
+.cloth-receipt .cr-item:last-child {
+    border-bottom: 0;
+}
+
+.cloth-receipt .cr-item-main {
+    align-items: start;
+}
+
+.cloth-receipt .cr-item-name {
+    min-width: 0;
+    font-size: 10px;
+    line-height: 1.3;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.cloth-receipt .cr-item-meta {
+    margin-top: 2px;
+    font-size: 8.5px;
+    color: #555;
+}
+
+.cloth-receipt .cr-item-qty {
+    font-size: 9.5px;
+}
+
+.cloth-receipt .cr-item-total {
+    font-size: 10px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.cloth-receipt .cr-totals {
+    margin-top: 3px;
+}
+
+.cloth-receipt .cr-total-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 15px;
+    padding: 2px 0;
+    font-size: 10px;
+}
+
+.cloth-receipt .cr-total-row > :last-child {
+    text-align: right;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.cloth-receipt .cr-grand-total {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 15px;
+    margin-top: 6px;
+    padding-top: 7px;
+    border-top: 1.5px solid #111;
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.cloth-receipt .cr-grand-total > :last-child {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.cloth-receipt .cr-footer {
+    margin-top: 15px;
+    text-align: center;
+}
+
+.cloth-receipt .cr-thanks {
+    font-size: 10.5px;
+    font-weight: 700;
+}
+
+.cloth-receipt .cr-footer-note {
+    margin-top: 4px;
+    font-size: 8.5px;
+    line-height: 1.4;
+    color: #555;
+}
+
+.cloth-receipt .cr-developer {
+    margin-top: 11px;
+    padding-top: 8px;
+    border-top: 1px dashed #999;
+    text-align: center;
+    font-size: 7.8px;
+    line-height: 1.45;
+    color: #555;
+}
+
+.cloth-receipt .cr-dev-title {
+    font-size: 7.5px;
+}
+
+.cloth-receipt .cr-dev-name {
+    margin-top: 1px;
+    font-size: 9px;
+    font-weight: 700;
+    color: #111;
+}
+
+.cloth-receipt .cr-dev-phone {
+    margin-top: 1px;
+    font-size: 8px;
+    color: #333;
+}
+
+.cloth-receipt .cr-dev-system {
+    margin-top: 2px;
+    font-size: 7px;
+    letter-spacing: .05em;
+}
+
+@media print {
+    .cloth-receipt {
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+        color: #000 !important;
+        font-weight: 600;
+        -webkit-font-smoothing: none;
+    }
+
+    .cloth-receipt,
+    .cloth-receipt * {
+        color: #000 !important;
+        opacity: 1 !important;
+        filter: none !important;
+        text-shadow: none !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
+    .cloth-receipt .cr-item {
+        border-bottom-color: #000 !important;
+    }
+
+    .cloth-receipt .cr-separator,
+    .cloth-receipt .cr-developer {
+        border-color: #000 !important;
+    }
+}
+
+/* Scope the shared slip typography to Cloth Store receipts only. */
+.cloth-receipt .slip-hd { padding: 1mm 0 2mm; }
+.cloth-receipt .slip-shop { font-family: Arial, sans-serif; font-size: 21px; letter-spacing: -.02em; line-height: 1.2; overflow-wrap: anywhere; }
+.cloth-receipt .slip-tag { font-size: 10px; margin-top: 1mm; }
+.cloth-receipt .slip-meta { font-size: 10px; margin-top: 1.5mm; line-height: 1.5; }
+.cloth-receipt .cr-receipt-title { margin: 2mm 0; padding: 1.5mm 0; border-top: 1px solid #111; border-bottom: 1px solid #111; text-align: center; font-size: 10px; font-weight: 700; letter-spacing: .18em; }
+.cloth-receipt .slip-row { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 3mm; padding: .8mm 0; font-size: 11px; line-height: 1.4; }
+.cloth-receipt .slip-row .k { color: #333; word-break: normal; overflow-wrap: anywhere; }
+.cloth-receipt .slip-row .v { white-space: normal; overflow-wrap: anywhere; font-weight: 600; }
+.cloth-receipt .cr-item-head { grid-template-columns: minmax(0,1fr) 90px; margin-bottom: 1mm; padding: 1.5mm 0; }
+.cloth-receipt .cr-item-head > :last-child { text-align: right; }
+.cloth-receipt .slip-sub { font-size: 9px; color: #555; padding: 0 0 2mm; margin-bottom: 1mm; border-bottom: 1px dotted #bbb; }
+.cloth-receipt .slip-total { font-size: 17px; gap: 3mm; padding: 2mm 0; }
+.cloth-receipt .slip-total > :last-child { text-align: right; }
+.cloth-receipt .slip-rule { border-color: #888; margin: 2.5mm 0; }
+.cloth-receipt .slip-foot { font-size: 10px; line-height: 1.5; white-space: normal; padding-top: 2mm; }
+.cloth-receipt .slip-credit { margin-top: 2mm; font-size: 9px; line-height: 1.5; }
+.cloth-receipt .slip-credit .name { display: block; font-size: 11px; }
+.cloth-receipt .slip-credit .tel { font-size: 11px; }
+.cloth-receipt .slip-credit .sys { font-size: 8px; margin: 1mm 0; }
+#receipt-content { max-height: 70vh; overflow-y: auto; }
+
+/* =========================================================
+   NEO DESIGN: CLOTH SALES RECEIPT 
+========================================================= */
+.cloth-sales-neo {
+    width: 302px;
+    background: #fff;
+    color: #141414;
+    padding: 19px 15px 21px;
+    font: 400 10px/1.5 'IBM Plex Mono', monospace;
+    border: 1px solid #BFBAB0; /* screen preview only */
+    margin: 0 auto;
+}
+.cloth-sales-neo .rc-head { text-align: center; }
+.cloth-sales-neo .rc-name { font: 700 23px/1.1 'Space Grotesk', sans-serif; letter-spacing: .03em; color: #000; overflow-wrap: anywhere;}
+.cloth-sales-neo .rc-tag { display: flex; align-items: center; gap: 8px; margin: 9px 0 0; }
+.cloth-sales-neo .rc-tag::before, .cloth-sales-neo .rc-tag::after { content: ''; flex: 1; height: 1px; background: #000; }
+.cloth-sales-neo .rc-tag span { font: 600 7.5px 'Space Grotesk', sans-serif; letter-spacing: .32em; margin-right: -.32em; text-transform: uppercase; white-space: nowrap; }
+.cloth-sales-neo .rc-addr { font: 500 9.5px/1.55 'IBM Plex Mono', monospace; color: #000; margin-top: 8px; overflow-wrap: anywhere;}
+.cloth-sales-neo .rc-ph { font: 600 8.5px 'IBM Plex Mono', monospace; margin-top: 2px; }
+.cloth-sales-neo .rc-rule { height: 1.5px; background: #000; border: 0; margin: 12px 0 14px; }
+.cloth-sales-neo .rc-doc { display: flex; justify-content: center; margin: 3px 0 13px; }
+.cloth-sales-neo .rc-doc b { font: 700 8.5px 'Space Grotesk', sans-serif; letter-spacing: .3em; margin-right: -.3em; text-transform: uppercase; color: #000; }
+.cloth-sales-neo .rc-meta { display: flex; flex-direction: column; gap: 6px; margin: 0 0 3px; }
+.cloth-sales-neo .rc-m { display: flex; align-items: baseline; gap: 6px; }
+.cloth-sales-neo .rc-m .k { font: 600 8px 'Space Grotesk', sans-serif; letter-spacing: .12em; color: #5c5c5c; white-space: nowrap; text-transform: uppercase; }
+.cloth-sales-neo .rc-m .dots { flex: 1; min-width: 12px; border-bottom: 1px dotted #9a9a9a; transform: translateY(-3px); }
+.cloth-sales-neo .rc-m .v { font: 500 10.5px 'IBM Plex Mono', monospace; color: #000; word-break: break-word; overflow-wrap: anywhere;}
+.cloth-sales-neo .rc-m .v.b { font-weight: 700; }
+.cloth-sales-neo .rc-sec { display: flex; align-items: center; gap: 8px; margin: 16px 0 8px; }
+.cloth-sales-neo .rc-sec::before, .cloth-sales-neo .rc-sec::after { content: ''; flex: 1; height: 1px; background: #000; }
+.cloth-sales-neo .rc-sec span { font: 700 8px 'Space Grotesk', sans-serif; letter-spacing: .3em; margin-right: -.3em; text-transform: uppercase; }
+.cloth-sales-neo .rc-item { padding: 7px 0; }
+.cloth-sales-neo .rc-item + .rc-item { border-top: 1px dashed #d5d5d5; }
+.cloth-sales-neo .rc-i1 { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.cloth-sales-neo .rc-i1 .nm { font: 600 11px 'Space Grotesk', sans-serif; color: #000; word-break: break-word; overflow-wrap: anywhere;}
+.cloth-sales-neo .rc-i1 .qt { font: 500 9px 'IBM Plex Mono', monospace; color: #555; white-space: nowrap; }
+.cloth-sales-neo .rc-i2 { display: flex; align-items: baseline; gap: 6px; margin-top: 2px; }
+.cloth-sales-neo .rc-i2 .rt { font: 400 8.5px 'IBM Plex Mono', monospace; color: #5a5a5a; white-space: nowrap; }
+.cloth-sales-neo .rc-i2 .dots { flex: 1; min-width: 10px; border-bottom: 1px dotted #a5a5a5; transform: translateY(-3px); }
+.cloth-sales-neo .rc-i2 .tt { font: 700 11px 'IBM Plex Mono', monospace; white-space: nowrap;}
+.cloth-sales-neo .rc-tot { margin-top: 3px; }
+.cloth-sales-neo .rc-tr { display: flex; align-items: baseline; gap: 6px; padding: 3.5px 0; }
+.cloth-sales-neo .rc-tr .k { font: 600 8px 'Space Grotesk', sans-serif; letter-spacing: .14em; color: #555; white-space: nowrap; text-transform: uppercase; }
+.cloth-sales-neo .rc-tr .dots { flex: 1; min-width: 10px; border-bottom: 1px dotted #a5a5a5; transform: translateY(-3px); }
+.cloth-sales-neo .rc-tr .v { font: 600 10.5px 'IBM Plex Mono', monospace; white-space: nowrap;}
+.cloth-sales-neo .rc-tr.due .k { color: #000; }
+.cloth-sales-neo .rc-tr.due .v { font-weight: 700; font-size: 11.5px; }
+.cloth-sales-neo .rc-tr.sub .k { color: #666; }
+.cloth-sales-neo .rc-tr.sub .v { font-weight: 500; font-size: 9.5px; }
+.cloth-sales-neo .rc-tb { border: 1.5px solid #000; border-radius: 3px; margin: 10px 0 8px; padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; }
+.cloth-sales-neo .rc-tb span { font: 700 9px 'Space Grotesk', sans-serif; letter-spacing: .24em; text-transform: uppercase; }
+.cloth-sales-neo .rc-tb b { font: 700 15px 'IBM Plex Mono', monospace; white-space: nowrap;}
+.cloth-sales-neo .rc-stat { margin-top: 13px; text-align: center; font: 700 7.5px 'Space Grotesk', sans-serif; letter-spacing: .18em; border: 1px solid #000; border-radius: 3px; padding: 6px 4px; text-transform: uppercase; }
+.cloth-sales-neo .rc-note { text-align: center; font: 400 8.5px/1.65 'IBM Plex Mono', monospace; color: #333; margin-top: 13px; }
+.cloth-sales-neo .rc-credit { margin-top: 15px; border: 1px solid #000; border-radius: 3px; padding: 10px 10px 12px; text-align: center; }
+.cloth-sales-neo .rc-credit .c1 { font: 600 7px 'IBM Plex Mono', monospace; color: #000; letter-spacing: .28em; margin-right: -.28em; text-transform: uppercase; }
+.cloth-sales-neo .rc-credit .c2 { font: 700 7.5px/1.6 'Space Grotesk', sans-serif; letter-spacing: .04em; margin-top: 4px; color: #000; text-transform: uppercase; }
+.cloth-sales-neo .rc-credit .cline { display: block; width: 24px; height: 1.5px; background: #000; margin: 7px auto; }
+.cloth-sales-neo .rc-credit .c3 { font: 700 8.5px 'Space Grotesk', sans-serif; letter-spacing: .08em; color: #000; text-transform: uppercase; }
+.cloth-sales-neo .rc-credit .c3 span { font: 600 7.5px 'IBM Plex Mono', monospace; color: #000; letter-spacing: .08em; margin-right: 6px; }
+.cloth-sales-neo .rc-credit .c4 { font: 600 9px 'IBM Plex Mono', monospace; color: #000; letter-spacing: .03em; margin-top: 5px; }
+.cloth-sales-neo .rc-credit .c4 span { font: 600 7.5px 'IBM Plex Mono', monospace; color: #000; letter-spacing: .08em; margin-right: 6px; text-transform: uppercase; }
+.cloth-sales-neo .rc-thx { display: flex; align-items: center; gap: 8px; margin-top: 13px; }
+.cloth-sales-neo .rc-thx::before, .cloth-sales-neo .rc-thx::after { content: ''; flex: 1; height: 1px; background: #000; }
+.cloth-sales-neo .rc-thx span { font: 700 8.5px 'Space Grotesk', sans-serif; letter-spacing: .4em; margin-right: -.4em; text-transform: uppercase; color: #000; }
+
+@media print {
+    #thermal-print-area .cloth-sales-neo {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
+        background: #fff;
+        border: none;
+    }
+}
+
+        @media print {
+            body { background: white !important; padding: 0 !important; }
+        }
+    </style>
+</head>
+<body style="background: #e2e8f0; padding: 40px; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh;">
+    
+<div class="slip slip-preview cloth-receipt" style="background: white; border: 1px solid #BFBAB0; width: 72mm; margin: 0 auto; box-sizing: border-box; padding: 2.5mm 2mm 5mm; color: #111; font-family: Arial, Helvetica, sans-serif !important; font-size: 11px; line-height: 1.4;">
+    <div class="slip-hd" style="padding: 1mm 0 2mm; text-align: center;">
+        <div class="slip-shop" style="font-size: 21px; letter-spacing: -.02em; line-height: 1.2; overflow-wrap: anywhere; font-weight: 700;">Cloth Store</div>
+        <div class="slip-tag" style="font-size: 10px; margin-top: 1mm;">Premium Fabrics</div>
+        <div class="slip-meta" style="font-size: 10px; margin-top: 1.5mm; line-height: 1.5;">
+            <div>456 Fabric Lane, City</div>
+            <div>0300-9876543</div>
+        </div>
+    </div>
+
+    <div class="cr-receipt-title" style="margin: 2mm 0; padding: 1.5mm 0; border-top: 1px solid #111; border-bottom: 1px solid #111; text-align: center; font-size: 10px; font-weight: 700; letter-spacing: .18em;">SALES RECEIPT</div>
+
+    <div class="slip-row" style="display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 3mm; padding: .8mm 0; font-size: 11px; line-height: 1.4;"><span class="k">Invoice</span><span class="v slip-bold" style="font-weight: 700; text-align: right;">INV-CLOTH-001</span></div>
+    <div class="slip-row" style="display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 3mm; padding: .8mm 0; font-size: 11px; line-height: 1.4;"><span class="k">Date</span><span class="v" style="text-align: right;">24 Oct 2023, 03:45 PM</span></div>
+    <div class="slip-row" style="display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 3mm; padding: .8mm 0; font-size: 11px; line-height: 1.4;"><span class="k">Customer</span><span class="v slip-bold" style="font-weight: 700; text-align: right;">Jane Smith</span></div>
+
+    <div class="slip-rule" style="border-top: 1px dashed #000; margin: 2mm 0;"></div>
+
+    <div class="cr-item-head" style="display: grid; grid-template-columns: minmax(0, 1fr) 32px 58px; gap: 5px; padding-bottom: 4px; border-bottom: 1px solid #222; font-size: 9px; font-weight: 700;"><span>DESCRIPTION / QUANTITY</span><span style="text-align: center;"></span><span style="text-align: right;">AMOUNT</span></div>
+    
+        <div class="slip-row" style="display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 3mm; padding: .8mm 0; font-size: 11px; line-height: 1.4;">
+            <span class="k">Premium Cotton × 4.5m</span>
+            <span class="v" style="text-align: right;">Rs 4,500</span>
+        </div>
+        <div class="slip-sub" style="font-size: 10px; padding-left: 3mm;">Unit Price: Rs 1,000</div>
+    
+        <div class="slip-row" style="display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 3mm; padding: .8mm 0; font-size: 11px; line-height: 1.4;">
+            <span class="k">Silk Fabric × 2m</span>
+            <span class="v" style="text-align: right;">Rs 3,000</span>
+        </div>
+        <div class="slip-sub" style="font-size: 10px; padding-left: 3mm;">Unit Price: Rs 1,500</div>
+
+    <div class="slip-rule" style="border-top: 1px dashed #000; margin: 2mm 0;"></div>
+
+    <div class="slip-row" style="display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 3mm; padding: .8mm 0; font-size: 11px; line-height: 1.4;"><span class="k">Subtotal</span><span class="v" style="text-align: right;">Rs 7,500</span></div>
+    
+        <div class="slip-row" style="display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 3mm; padding: .8mm 0; font-size: 11px; line-height: 1.4;"><span class="k">Discount</span><span class="v" style="text-align: right;">-Rs 500</span></div>
+
+    <div class="slip-rule-s" style="border-top: 1px solid #000; margin: 2mm 0;"></div>
+    <div class="slip-total" style="display: flex; justify-content: space-between; align-items: baseline; font-size: 15px; font-weight: 700; padding: 1.5mm 0;"><span>TOTAL</span><span>Rs 7,000</span></div>
+    <div class="slip-rule-d" style="border-top: 3px double #000; margin: 2mm 0;"></div>
+
+    
+        <div class="slip-row" style="display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 3mm; padding: .8mm 0; font-size: 11px; line-height: 1.4;"><span class="k">Payment Method</span><span class="v" style="text-align: right;">Cash</span></div>
+
+    <div class="slip-foot" style="margin-top:2mm; text-align: center; font-size: 10px; line-height: 1.4; white-space: pre-line;">
+        Thank you for shopping with us.<br>
+        We look forward to serving you again.
+    </div>
+
+    <div class="slip-rule" style="margin-top:4mm; border-top: 1px dashed #000;"></div>
+    <div class="slip-credit slip-credit-customer" style="text-align: center; font-size: 9px; line-height: 1.45; margin-top: 2.5mm; color: #444;">
+        <div>Designed &amp; Developed by <span class="name" style="font-weight: 700; color: #000;">Noor M Hingorjo</span></div>
+        <div class="sys" style="font-weight: 600; font-size: 8.5px; letter-spacing: .03em; color: #222;">POS &amp; MANAGEMENT SYSTEM</div>
+        <div class="tel" style="font-weight: 700; color: #000; letter-spacing: .04em;">0303 4980786</div>
+        <div class="ty" style="font-size: 9.5px; color: #444; margin-top: 1mm;">Thank You!</div>
+    </div>
+</div>
+
+</body>
+</html>

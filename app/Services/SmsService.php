@@ -108,10 +108,11 @@ class SmsService
             }
             $message = self::renderTemplate($id, NotificationVariables::variablesForOrder($order, $extra));
 
-            return $message === null ? null : self::send($order->customer?->phone, $message, $order->id, $order->customer_id, $id);
+            $message = NotificationVariables::forRecipient($order, $message);
+            return $message === null ? null : self::send($order->customer?->effectivePhone(), $message, $order->id, $order->customer_id, $id);
         } catch (\InvalidArgumentException $error) {
             $result = DeliveryResult::make(self::provider(), error: $error->getMessage());
-            DeliveryResult::log(SmsLog::class, ['phone'=>$order->customer?->phone ?? '', 'message'=>'', 'template_id'=>$id, 'order_id'=>$order->id, 'customer_id'=>$order->customer_id], $result);
+            DeliveryResult::log(SmsLog::class, ['phone'=>$order->customer?->effectivePhone() ?? '', 'message'=>'', 'template_id'=>$id, 'order_id'=>$order->id, 'customer_id'=>$order->customer_id], $result);
             return $result;
         } catch (\Throwable) {
             return DeliveryResult::make('sms', error: 'SMS notification could not be prepared.');

@@ -13,6 +13,7 @@ final class OrderAutoProgressTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        (new \ReflectionProperty(\Illuminate\Database\Eloquent\Model::class, 'guardableColumns'))->setValue(null, []);
         config(['database.default'=>'sqlite', 'database.connections.sqlite.database'=>':memory:', 'database.connections.sqlite.url'=>null]);
         DB::purge('sqlite');
         Schema::create('orders', function (Blueprint $t) {
@@ -25,6 +26,7 @@ final class OrderAutoProgressTest extends TestCase
         });
         (require database_path('migrations/2026_08_07_233018_create_settings_table.php'))->up();
         Settings::flush();
+        Settings::put(['verification_before_days'=>0]);
         Http::preventStrayRequests();
         config(['app.timezone'=>Settings::timezone()]);
         date_default_timezone_set(Settings::timezone());
@@ -77,4 +79,41 @@ final class OrderAutoProgressTest extends TestCase
         $this->assertSame('Ready for Verification',$order->fresh()->status);
         $this->assertSame(1,$order->statusHistories()->count());
     }
+    public function test_two_day_verification_boundary_and_due_labels_without_sms(): void
+    {
+        Settings::put(['verification_before_days'=>2]);
+        $this->travelTo(\Illuminate\Support\Carbon::parse('2026-10-10 15:00:00',Settings::timezone()));
+        $order=Order::create(['status'=>'Stitching','delivery_date'=>'2026-10-20 15:00:00']);
+        foreach (['Ready','Delivered','Completed','Cancelled','On Hold'] as $closed) {
+            Order::create(['status'=>$closed,'delivery_date'=>'2026-10-20 15:00:00']);
+        }
+        $this->travelTo(now()->setDate(2026,10,17));
+        $this->assertSame(0,app(OrderAutoProgress::class)->run());
+        $this->travelTo(now()->setDate(2026,10,18)->setTime(14,59,59));
+        $this->assertSame(0,app(OrderAutoProgress::class)->run());
+        $this->travel(1)->seconds();
+        $this->assertSame(1,app(OrderAutoProgress::class)->run());
+        $this->assertSame('Ready for Verification',$order->fresh()->status);
+        $this->assertSame('Due in 2 Days',\App\Services\DeliveryTiming::describe($order->fresh())['text']);
+        $this->travel(1)->days();
+        $this->assertSame('Due Tomorrow',\App\Services\DeliveryTiming::describe($order->fresh())['text']);
+        $this->travel(1)->days();
+        $this->assertSame('Due Today',\App\Services\DeliveryTiming::describe($order->fresh())['text']);
+        $this->travel(1)->days();
+        $this->assertTrue(\App\Services\DeliveryTiming::describe($order->fresh())['overdue']);
+        $this->assertSame(0,app(OrderAutoProgress::class)->run());
+        $this->assertSame(1,$order->statusHistories()->count());
+        Http::assertNothingSent();
+    }
+
+    public function test_short_promises_enter_verification_at_booking_and_setting_is_configurable(): void
+    {
+        Settings::put(['verification_before_days'=>3]);
+        $o=$this->order();
+        app(OrderAutoProgress::class)->run();
+        $this->assertSame('Ready for Verification',$o->fresh()->status);
+        $this->assertTrue($o->statusHistories()->first()->created_at->equalTo($o->created_at));
+        $this->assertSame(0,app(OrderAutoProgress::class)->run());
+    }
+
 }

@@ -17,7 +17,7 @@ class CustomerController extends Controller
     public function sendSms(Request $request, Customer $customer): JsonResponse
     {
         $validated = $request->validate(['message' => ['required', 'string', 'max:2000']]);
-        $result = \App\Services\SmsService::send($customer->phone, $validated['message'], customerId: $customer->id);
+        $result = \App\Services\SmsService::send($customer->effectivePhone(), $validated['message'], customerId: $customer->id);
 
         return response()->json([
             'success' => $result['sent'],
@@ -27,7 +27,7 @@ class CustomerController extends Controller
 
     public function index()
     {
-        $customers = Customer::query()
+        $customers = Customer::query()->with('primaryCustomer')
             ->withCount('orders')
             ->withSum('orders as orders_total', 'total')
             ->withSum('orders as orders_balance', 'balance')
@@ -67,7 +67,15 @@ class CustomerController extends Controller
     {
         $validated = $this->validated($request);
 
-        $customer = Customer::create($validated);
+        $customer = \Illuminate\Support\Facades\DB::transaction(function () use ($validated) {
+            if (!empty($validated['parent_customer_id'])) {
+                // Serialize family creation with primary archive/delete operations.
+                $parent = Customer::whereNull('parent_customer_id')->whereNull('anonymized_at')
+                    ->lockForUpdate()->find($validated['parent_customer_id']);
+                if (!$parent) throw \Illuminate\Validation\ValidationException::withMessages(['parent_customer_id'=>'Choose an active primary customer.']);
+            }
+            return Customer::create($validated);
+        });
 
         ActivityLogger::created(
             $customer,
@@ -188,6 +196,16 @@ class CustomerController extends Controller
 
     private function validated(Request $request, ?Customer $customer = null): array
     {
+        $request->validate(['parent_customer_id'=>['nullable','integer']]);
+        // Existing links are stable: this form cannot re-parent customers or create nested families.
+        $parentId = $customer ? $customer->parent_customer_id : $request->input('parent_customer_id');
+        $request->merge(['parent_customer_id' => $parentId]);
+        if (!$parentId) $request->merge(['relationship'=>null]);
+        if ($parentId) {
+            $parent = Customer::whereNull('parent_customer_id')->whereNull('anonymized_at')->find($parentId);
+            if (!$parent) throw \Illuminate\Validation\ValidationException::withMessages(['parent_customer_id'=>'Choose an active primary customer.']);
+            $request->merge(['relationship'=>$request->input('relationship', $customer?->relationship)]);
+        }
         $phone = $request->input('phone');
         if (is_string($phone)) {
             $phoneChanged = !$customer || CustomerLifecycle::phoneKey($phone) !== CustomerLifecycle::phoneKey($customer->phone);
@@ -198,9 +216,16 @@ class CustomerController extends Controller
         return $request->validate([
             'name'    => ['required', 'string', 'max:255'],
             'phone'   => [
-                'required', 'string', 'max:50',
+                $parentId ? 'nullable' : 'required', 'string', 'max:50',
                 Rule::unique('customers')->ignore($customer?->id),
+                function ($attribute, $value, $fail) use ($parentId) {
+                    if ($parentId && filled($value) && !\App\Services\NotificationPhone::normalize($value)) {
+                        $fail('Enter a valid Pakistani mobile number or leave the personal phone blank.');
+                    }
+                },
             ],
+            'parent_customer_id' => ['nullable', 'integer'],
+            'relationship' => [$parentId ? 'required' : 'nullable', Rule::in(Customer::RELATIONSHIPS)],
             'email'   => ['nullable', 'email', 'max:255'],
             'city'    => ['nullable', 'string', 'max:255'],
             'address' => ['nullable', 'string', 'max:500'],
@@ -222,6 +247,10 @@ class CustomerController extends Controller
             'id'        => $c->display_code,
             'name'      => $c->name,
             'phone'     => $c->phone,
+            'parent_customer_id' => $c->parent_customer_id,
+            'relationship' => $c->relationship,
+            'contact_name' => $c->effectiveContact()?->name,
+            'effective_phone' => $c->effectivePhone(),
             'email'     => $c->email,
             'type'      => $c->type ?: 'Regular',
             'city'      => $c->city,

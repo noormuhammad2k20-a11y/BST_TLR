@@ -16,6 +16,7 @@ class Customer extends Model
         'last_visit_at'  => 'datetime',
         'loyalty_score'  => 'float',
         'is_active'      => 'boolean',
+        'parent_customer_id' => 'integer',
         'anonymized_at'  => 'datetime',
     ];
 
@@ -23,6 +24,14 @@ class Customer extends Model
     {
         static::saving(function (Customer $customer) {
             if ($customer->anonymized_at) return;
+            if ($customer->isDirty('parent_customer_id') && ($customer->exists || $customer->parent_customer_id !== null)) {
+                if ($customer->exists || !self::whereKey($customer->parent_customer_id)->whereNull('parent_customer_id')->whereNull('anonymized_at')->exists()) {
+                    throw \Illuminate\Validation\ValidationException::withMessages(['parent_customer_id'=>'Family members must be linked to an active primary customer when created.']);
+                }
+            }
+            if ($customer->isFamilyMember() && !in_array($customer->relationship, self::RELATIONSHIPS, true)) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['relationship'=>'Choose a family relationship.']);
+            }
             if ($customer->isDirty('phone')) {
                 // Formatting-only edits must not break an existing legacy duplicate.
                 if ($customer->exists && \App\Services\CustomerLifecycle::phoneKey($customer->phone)
@@ -30,7 +39,7 @@ class Customer extends Model
                 if ($existing = \App\Services\CustomerLifecycle::matchingPhone((string)$customer->phone, $customer->id)) {
                     \App\Services\CustomerLifecycle::rejectDuplicate($existing);
                 }
-                $customer->phone_key = \App\Services\CustomerLifecycle::phoneKey($customer->phone);
+                $customer->phone_key = filled($customer->phone) ? \App\Services\CustomerLifecycle::phoneKey($customer->phone) : null;
             }
         });
         // Give every customer a stable, human-readable code without needing a
@@ -45,6 +54,36 @@ class Customer extends Model
     /* ------------------------------------------------------------------ */
     /* Relationships                                                       */
     /* ------------------------------------------------------------------ */
+
+    public const RELATIONSHIPS = ['Son', 'Father', 'Brother', 'Uncle', 'Cousin', 'Other'];
+
+    public function primaryCustomer(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(self::class, 'parent_customer_id')->withTrashed();
+    }
+
+    public function familyMembers(): HasMany
+    {
+        return $this->hasMany(self::class, 'parent_customer_id');
+    }
+
+    public function isFamilyMember(): bool
+    {
+        return $this->parent_customer_id !== null;
+    }
+
+    public function effectiveContact(): ?self
+    {
+        if ($this->anonymized_at) return null;
+        if (filled($this->phone)) return $this;
+        $primary = $this->isFamilyMember() ? $this->primaryCustomer : null;
+        return $primary && !$primary->anonymized_at ? $primary : null;
+    }
+
+    public function effectivePhone(): ?string
+    {
+        return $this->effectiveContact()?->phone;
+    }
 
     public function orders(): HasMany
     {

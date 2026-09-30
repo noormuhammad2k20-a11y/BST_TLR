@@ -20,10 +20,11 @@ final class CollectionNotifications
         $last = $sent->last()?->sent_at ?? $order->notified_at;
         $reminder = $sent->filter(fn ($log) => $log->pivot->reason === 'collection-reminder')->last()?->sent_at;
         $latest = $logs->last();
-        $phone = NotificationPhone::normalize($order->customer?->phone) ?? $order->customer?->phone;
+        $phone = NotificationPhone::normalize($order->customer?->effectivePhone()) ?? $order->customer?->effectivePhone();
         $phoneLogs ??= SmsLog::whereNotNull('reason')->whereIn('phone',[$phone,'+'.$phone])->get();
         $phoneLast = $phoneLogs->whereIn('status',self::SUCCESS)->whereNotNull('sent_at')->sortBy('sent_at')->last()?->sent_at;
-        $pending = $phoneLogs->whereIn('status',['sending','unknown'])->isNotEmpty();
+        $pending = $phoneLogs->whereIn('status',['sending','unknown'])->isNotEmpty()
+            || $logs->whereIn('status',['sending','unknown'])->isNotEmpty();
         $dueAt = $last?->copy()->addDays(max(1,Settings::int('collection_reminder_days')));
         if ($dueAt && $phoneLast) $dueAt = $dueAt->max($phoneLast->copy()->addDays(max(1,Settings::int('collection_reminder_days'))));
         $reminderDue = Settings::bool('collection_reminder_enabled') && $order->status === 'Ready' && !$order->delivered_at && $dueAt && $now->gte($dueAt);
@@ -32,8 +33,8 @@ final class CollectionNotifications
         $blocked = match (true) {
             !$eligible => 'Garments are not awaiting collection.',
             !$order->customer || (bool)$order->customer->anonymized_at => 'Customer contact data is unavailable.',
-            !filled($order->customer?->phone) => 'Missing customer phone.',
-            !NotificationPhone::normalize($order->customer?->phone) => 'Enter a valid Pakistani mobile number on the customer profile.',
+            !filled($order->customer?->effectivePhone()) => 'Missing customer phone.',
+            !NotificationPhone::normalize($order->customer?->effectivePhone()) => 'Enter a valid Pakistani mobile number on the customer profile.',
             $pending => 'An SMS is sending or its result is unknown. Check SMS History before retrying.',
             $first && !Settings::bool('collection_reminder_enabled') => 'Customer reminders are disabled in Settings.',
             (bool)($phoneLast && $phoneLast->gt($now->copy()->subMinutes(2))) => 'This customer was just notified. Wait 2 minutes before notifying another order.',
@@ -49,17 +50,17 @@ final class CollectionNotifications
             'canNotify'=>$blocked === null,'blockedReason'=>$blocked,'smsReason'=>$reason];
     }
 
-    public function sendOrders(array $ids): array
+    public function sendOrders(array $ids, bool $firstOnly = false): array
     {
         if (DB::transactionLevel() > 0) throw \Illuminate\Validation\ValidationException::withMessages(['sms'=>'Send collection SMS after the database transaction commits.']);
         $ids = array_values(array_unique(array_map('intval',$ids)));
         $result = ['success'=>true,'sent'=>0,'failed'=>[],'skipped'=>[],'results'=>[],'promoted'=>0];
-        $orders = Order::with('customer')->whereIn('id',$ids)->get();
+        $orders = Order::with('customer.primaryCustomer')->whereIn('id',$ids)->get();
         foreach (array_diff($ids,$orders->modelKeys()) as $id) $result['skipped'][]=['order'=>(string)$id,'customer'=>'','reason'=>'Order no longer available.'];
         // One SMS per phone for all selected eligible orders, including legacy
         // customer duplicates. The pivot records each order's first/reminder type.
-        foreach ($orders->groupBy(fn ($o) => NotificationPhone::normalize($o->customer?->phone) ?? 'invalid:'.$o->customer_id) as $group) {
-            $claim = $this->claim($group->modelKeys());
+        foreach ($orders->groupBy(fn ($o) => NotificationPhone::normalize($o->customer?->effectivePhone()) ?? 'invalid:'.$o->customer_id) as $group) {
+            $claim = $this->claim($group->modelKeys(), $firstOnly);
             $result['skipped'] = array_merge($result['skipped'],$claim['skipped']);
             if (!$claim['log']) continue;
             $log = $claim['log'];
@@ -81,28 +82,33 @@ final class CollectionNotifications
         }
         StatsService::flush();
         $result['message'] = sprintf('%d SMS sent successfully. %d failed. %d orders skipped.',$result['sent'],count($result['failed']),count($result['skipped']));
+        foreach ($result['failed'] as $failure) $result['message'] .= ' '.$failure['order'].': '.$failure['reason'];
         foreach ($result['skipped'] as $skip) $result['message'] .= ' '.$skip['order'].': '.$skip['reason'];
         return $result;
     }
 
-    private function claim(array $ids): array
+    private function claim(array $ids, bool $firstOnly): array
     {
-        return DB::transaction(function () use ($ids) {
-            $orders = Order::with(['customer','collectionMessages'])->whereIn('id',$ids)->orderBy('id')->lockForUpdate()->get();
+        return DB::transaction(function () use ($ids, $firstOnly) {
+            $orders = Order::with(['customer.primaryCustomer','collectionMessages'])->whereIn('id',$ids)->orderBy('id')->lockForUpdate()->get();
             $claim = ['log'=>null,'skipped'=>[],'ids'=>[],'numbers'=>[],'customer'=>$orders->first()?->customer?->name ?? 'Customer'];
             if ($orders->isEmpty()) return $claim;
-            $phone = NotificationPhone::normalize($orders->first()->customer?->phone) ?? (string)$orders->first()->customer?->phone;
+            $phone = NotificationPhone::normalize($orders->first()->customer?->effectivePhone()) ?? (string)$orders->first()->customer?->effectivePhone();
             $hash = hash('sha256',$phone);
             DB::table('collection_sms_locks')->insertOrIgnore(['phone_hash'=>$hash]);
             DB::table('collection_sms_locks')->where('phone_hash',$hash)->lockForUpdate()->first();
             $phoneLogs = SmsLog::whereNotNull('reason')->whereIn('phone',[$phone,'+'.$phone])->get();
             $messages = []; $reasons = []; $templateErrors = [];
             foreach ($orders as $order) {
-                if ((NotificationPhone::normalize($order->customer?->phone) ?? (string)$order->customer?->phone) !== $phone) {
+                if ((NotificationPhone::normalize($order->customer?->effectivePhone()) ?? (string)$order->customer?->effectivePhone()) !== $phone) {
                     $claim['skipped'][] = ['order'=>$order->display_number,'customer'=>$order->customer?->name ?? 'Customer','reason'=>'Customer phone changed during selection. Refresh and retry.'];
                     continue;
                 }
                 $state = $this->state($order,$phoneLogs);
+                if ($firstOnly && $state['firstSmsAt']) {
+                    $claim['skipped'][] = ['order'=>$order->display_number,'customer'=>$order->customer?->name ?? 'Customer','reason'=>'Collection SMS already accepted.'];
+                    continue;
+                }
                 if (!$state['canNotify']) {
                     $claim['skipped'][] = ['order'=>$order->display_number,'customer'=>$order->customer?->name ?? 'Customer','reason'=>$state['blockedReason']];
                     continue;
@@ -114,7 +120,7 @@ final class CollectionNotifications
                     $message = null;
                     $templateErrors[] = $error->getMessage();
                 }
-                $messages[] = $message ?? '';
+                $messages[] = NotificationVariables::forRecipient($order, $message) ?? '';
                 $reasons[$order->id] = $state['smsReason'];
                 $claim['ids'][] = $order->id; $claim['numbers'][] = $order->display_number;
             }

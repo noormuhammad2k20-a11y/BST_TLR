@@ -26,6 +26,7 @@ final class CustomerLifecycleTest extends TestCase
             $t->timestamp('last_visit_at')->nullable(); $t->boolean('is_active')->default(true); $t->timestamps(); $t->softDeletes();
         });
         (require database_path('migrations/2026_09_12_000001_customer_archive_lifecycle.php'))->up();
+        (require database_path('migrations/2026_09_30_000001_link_customer_family_members.php'))->up();
         Schema::create('orders', function (Blueprint $t) {
             $t->id(); $t->foreignId('customer_id')->constrained()->restrictOnDelete();
             $t->string('order_number')->nullable(); $t->string('invoice_number')->nullable();
@@ -40,6 +41,7 @@ final class CustomerLifecycleTest extends TestCase
             $t->string('invoice_id')->nullable(); $t->decimal('amount',12,2); $t->string('status')->default('Paid');
             $t->text('notes')->nullable(); $t->timestamps();
         });
+        (require database_path('migrations/2026_09_14_000001_add_tailor_customer_ledger.php'))->up();
         Schema::create('measurements', function (Blueprint $t) {
             $t->id(); $t->foreignId('customer_id')->constrained()->restrictOnDelete();
             $t->text('notes')->nullable(); $t->string('template_name')->nullable(); $t->decimal('chest')->nullable();
@@ -251,4 +253,33 @@ final class CustomerLifecycleTest extends TestCase
         $this->deleteJson('/customers/'.$c->id.'/permanent',['confirmation'=>'DELETE'])->assertForbidden();
         $this->assertNotNull(Customer::onlyTrashed()->find($c->id));
     }
+    public function test_family_creation_optional_phone_duplicate_rules_and_no_nested_family(): void
+    {
+        $primary = $this->postJson('/customers', ['name'=>'Ali Ahmed','phone'=>'03001234567'])->assertCreated()->json('customer.db_id');
+        $member = $this->postJson('/customers', ['name'=>'Ahmed','parent_customer_id'=>$primary,'relationship'=>'Son','phone'=>null])->assertCreated()->json('customer.db_id');
+        $this->postJson('/customers', ['name'=>'Usman','parent_customer_id'=>$primary,'relationship'=>'Son','phone'=>null])->assertCreated();
+        $this->assertNull(Customer::find($member)->phone);
+        $this->assertNull(Customer::find($member)->phone_key);
+        $this->assertSame('03001234567',Customer::find($member)->effectivePhone());
+        $this->postJson('/customers', ['name'=>'Duplicate','phone'=>'+923001234567'])->assertUnprocessable();
+        $this->postJson('/customers', ['name'=>'Missing phone'])->assertUnprocessable();
+        $this->postJson('/customers', ['name'=>'Nested','parent_customer_id'=>$member,'relationship'=>'Son'])->assertUnprocessable();
+        $this->putJson('/customers/'.$member, ['name'=>'Ahmed','phone'=>'03123456789'])->assertOk();
+        $this->assertSame('03123456789',Customer::find($member)->effectivePhone());
+    }
+
+    public function test_family_archive_restore_and_permanent_delete_preserve_links(): void
+    {
+        $primary=Customer::create(['name'=>'Ali','phone'=>'03001234567']);
+        $member=Customer::create(['name'=>'Ahmed','phone'=>null,'parent_customer_id'=>$primary->id,'relationship'=>'Son']);
+        $this->deleteJson('/customers/'.$primary->id)->assertUnprocessable();
+        $this->deleteJson('/customers/'.$member->id)->assertOk();
+        $this->deleteJson('/customers/'.$primary->id)->assertOk();
+        $this->postJson('/customers/'.$member->id.'/restore')->assertUnprocessable();
+        $this->deleteJson('/customers/'.$primary->id.'/permanent',['confirmation'=>'DELETE'])->assertUnprocessable();
+        $this->postJson('/customers/'.$primary->id.'/restore')->assertOk();
+        $this->postJson('/customers/'.$member->id.'/restore')->assertOk();
+        $this->assertSame($primary->id,$member->fresh()->parent_customer_id);
+    }
+
 }

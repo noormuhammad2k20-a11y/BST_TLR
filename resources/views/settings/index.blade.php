@@ -498,6 +498,9 @@
     return `<div class="p-6"><h3 class="text-lg font-semibold text-slate-900 mb-1 tracking-tight">Delivery & Customer Reminder Alerts</h3>
       <p class="text-sm text-slate-500 mb-6">Manage collection notices and follow-ups using the shop timezone. SMS is sent only when an operator chooses Send SMS.</p>
       <div class="set-card mb-6"><h4 class="set-legend">Due Date Alerts</h4>
+        <div class="mt-4"><label class="set-label">Verification Before Delivery (days)</label>
+          <input type="number" min="0" max="365" data-setting="verification_before_days" value="${esc(val('verification_before_days'))}" class="set-field pro-input">
+          <p class="set-hint">Orders enter Ready for Verification this many days before the promised time. Physically check garments, then send SMS.</p></div>
         ${toggle('delivery_alerts_enabled','Enable delivery alerts','Show actionable due-date alerts for open orders.')}
         <div class="mt-4"><label class="set-label">Alert before due date (days)</label>
           <input type="number" min="0" max="365" list="delivery-alert-day-options" data-setting="delivery_alert_before_days" value="${esc(val('delivery_alert_before_days'))}" class="set-field pro-input">

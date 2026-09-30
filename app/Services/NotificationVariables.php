@@ -7,6 +7,22 @@ use App\Models\Order;
 
 class NotificationVariables
 {
+    public static function forRecipient(Order $order, ?string $message): ?string
+    {
+        if ($message === null || $message === '') return $message;
+        $owner = $order->customer;
+        $contact = $owner?->effectiveContact();
+        if (!$contact || $contact->id === $owner->id) return $message;
+        $names = SmsTemplateContent::variables(['owner'=>$owner->name, 'contact'=>$contact->name, 'order'=>$order->display_number]);
+        $context = "Dear {$names['contact']}, regarding {$names['owner']}'s order {$names['order']}:";
+        $greeting = 'Dear '.$names['owner'].',';
+        // Preserve custom wording; replace the known greeting when possible.
+        if (str_contains($message, $greeting)) {
+            return preg_replace_callback('/'.preg_quote($greeting, '/').'/', fn () => $context, $message, 1);
+        }
+        return $context."\n".$message;
+    }
+
     public static function variablesForOrder(Order $order, array $extra = []): array
     {
         $order->loadMissing('customer');
@@ -21,7 +37,9 @@ class NotificationVariables
 
         return array_merge([
             'customerName' => $order->customer?->name ?? 'Customer',
-            'customerPhone' => $order->customer?->phone ?? '',
+            'customerPhone' => $order->customer?->effectivePhone() ?? '',
+            'contactName' => $order->customer?->effectiveContact()?->name ?? '',
+            'relationship' => $order->customer?->relationship ?? '',
             'customerID' => $order->customer?->display_code ?? '',
             'orderID' => $order->display_number,
             'invoiceID' => $order->display_invoice,
@@ -52,7 +70,8 @@ class NotificationVariables
     {
         return array_merge([
             'customerName' => $customer->name,
-            'customerPhone' => $customer->phone ?? '',
+            'customerPhone' => $customer->effectivePhone() ?? '',
+            'contactName' => $customer->effectiveContact()?->name ?? '',
             'customerID' => $customer->display_code,
         ], self::shopVariables(), $extra);
     }

@@ -238,6 +238,7 @@
 
     /* ---------- Step 2 — Garment & Fabric --------------------------- */
     } else if (wizardStep === 2) {
+      html += orderFamilySelector();
       html += `<div class="flex justify-between items-center mb-6">
                  <div>
                    <h3 class="text-xl font-bold text-slate-900 tracking-tight">Garment Details</h3>

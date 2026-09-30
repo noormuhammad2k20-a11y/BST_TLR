@@ -25,9 +25,10 @@ final class OrderAutoProgress
                         $rank = ['Received'=>0, 'Pending'=>1, 'In Progress'=>2, 'Stitching'=>2];
                         $currentRank = $rank[$order->status];
                         $count = 0;
-                        foreach (['Pending'=>0.2, 'Stitching'=>0.5, 'Ready for Verification'=>1.0] as $status => $fraction) {
+                        foreach (['Pending'=>0.2, 'Stitching'=>0.5, 'Ready for Verification'=>null] as $status => $fraction) {
                             $stageRank = ['Pending'=>1, 'Stitching'=>2, 'Ready for Verification'=>3][$status];
-                            $at = $start->copy()->addSeconds((int) ceil($seconds * $fraction));
+                            $verificationAt = $order->delivery_date->copy()->subDays(Settings::int('verification_before_days'))->max($start);
+                            $at = $fraction === null ? $verificationAt : $start->copy()->addSeconds((int) ceil($seconds * $fraction))->min($verificationAt);
                             if ($stageRank <= $currentRank || $now->lt($at)) continue;
                             $from = $order->status;
                             $order->forceFill(['status'=>$status, 'progress'=>Order::progressFor($status)])->save();

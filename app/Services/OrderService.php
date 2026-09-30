@@ -285,7 +285,7 @@ class OrderService
     {
         $this->prepareForCollection($order);
         $before = $order->fresh()->status;
-        $notification = app(CollectionNotifications::class)->sendOrders([$order->id]);
+        $notification = app(CollectionNotifications::class)->sendOrders([$order->id], firstOnly: true);
         $fresh = $order->fresh()->load('customer');
         return ['changed'=>$before !== 'Ready' && $fresh->status === 'Ready','order'=>$fresh,'notification'=>$notification];
     }

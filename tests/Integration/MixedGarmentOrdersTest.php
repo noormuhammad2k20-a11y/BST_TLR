@@ -295,4 +295,37 @@ class MixedGarmentOrdersTest extends TestCase
         $this->assertCount(2,$response->json('order.garments.0.pieces'));
         $this->assertEquals(40,$response->json('order.garments.0.pieces.1.values.length'));
     }
+    public function test_family_order_measurements_notes_receipt_and_ledger_keep_the_member_owner(): void
+    {
+        $payload=$this->payload();
+        $primary=Customer::findOrFail($payload['customer_id']);
+        $member=Customer::create(['name'=>'Ahmed family test','parent_customer_id'=>$primary->id,'relationship'=>'Son','phone'=>null]);
+        $parentSheet=Measurement::create(['customer_id'=>$primary->id,'garment_type'=>'Custom','unit'=>'in','chest'=>'40','notes'=>'Primary only']);
+        $memberSheet=Measurement::create(['customer_id'=>$member->id,'garment_type'=>'Custom','unit'=>'in','chest'=>'34','notes'=>'Loose cuffs']);
+        $payload['customer_id']=$member->id;
+        foreach ($payload['garments'][0]['pieces'] as &$piece) {
+            $piece['values']['chest']='34';
+            $piece['values']['notes']='Loose cuffs';
+        }
+        unset($piece);
+        $order=app(OrderService::class)->create($payload);
+        $this->assertSame($member->id,$order->customer_id);
+        $this->assertSame('40',$parentSheet->fresh()->chest);
+        $this->assertSame('34',$order->measurement->chest);
+        $this->assertSame('Loose cuffs',$order->measurement->notes);
+        $this->assertSame($member->id,$order->payments()->first()->customer_id);
+        $view=app(\App\Http\Controllers\OrderController::class)->index()->getData();
+        $person=$view['customers']->firstWhere('db_id',$member->id);
+        $this->assertSame('Loose cuffs',$person['measurements']->firstWhere('id',$memberSheet->id)['notes']);
+        $this->assertFalse($person['measurements']->contains('id',$parentSheet->id));
+        $this->assertSame($primary->phone,$person['phone']);
+        $receipt=$this->getJson('/orders/'.$order->id.'/receipt')->assertOk();
+        $this->assertStringContainsString($member->name,$receipt->getContent());
+        $this->assertSame('0.00',app(\App\Services\CustomerLedger::class)->statement($primary)['due']);
+        $this->assertSame('200.00',app(\App\Services\CustomerLedger::class)->statement($member)['due']);
+        $payload['garments'][0]['pieces'][0]['measurement_id']=$parentSheet->id;
+        $this->expectException(ValidationException::class);
+        app(OrderService::class)->create($payload);
+    }
+
 }

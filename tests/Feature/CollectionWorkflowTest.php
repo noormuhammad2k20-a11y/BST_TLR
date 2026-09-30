@@ -17,6 +17,7 @@ final class CollectionWorkflowTest extends TestCase
             \App\Http\Middleware\EnsureUserHasRole::class,
             \App\Http\Middleware\AuthorizeBusinessRequest::class,\App\Http\Middleware\ApplyShopSettings::class]);
         Schema::create('customers',function(Blueprint $t){$t->id();$t->string('name');$t->string('phone');$t->string('phone_key')->nullable()->unique();$t->string('code')->nullable();$t->timestamp('anonymized_at')->nullable();$t->timestamps();$t->softDeletes();});
+        (require database_path('migrations/2026_09_30_000001_link_customer_family_members.php'))->up();
         Schema::create('orders',function(Blueprint $t){
             $t->id();$t->foreignId('customer_id')->constrained();$t->string('status');$t->integer('progress')->default(0);$t->integer('edit_version')->default(0);
             $t->string('time_slot')->nullable();$t->string('order_number')->nullable();$t->string('garment')->nullable();$t->json('items')->nullable();$t->integer('staff_id')->nullable();
@@ -377,6 +378,53 @@ final class CollectionWorkflowTest extends TestCase
         Http::assertSentCount(1);
         $this->assertStringContainsString('safe-retry',SmsLog::latest('id')->first()->api_response);
     }
+    public function test_family_bulk_sms_uses_primary_phone_and_names_each_owner(): void
+    {
+        $primary=Customer::create(['name'=>'Ali Ahmed','phone'=>'03001234567']);
+        $member=Customer::create(['name'=>'Ahmed','phone'=>null,'parent_customer_id'=>$primary->id,'relationship'=>'Son']);
+        $a=$this->order($primary); $b=$this->order($member);
+        $result=$this->send([$a->id,$b->id]);
+        $this->assertSame(1,$result['sent']);
+        $this->assertSame('923001234567',SmsLog::first()->phone);
+        $this->assertStringContainsString("Ahmed's order ".$b->display_number,SmsLog::first()->message);
+        $this->assertSame($member->id,$b->fresh()->customer_id);
+        $this->assertSame('Ready',$b->fresh()->status);
+        $this->assertCount(2,SmsLog::first()->collectionOrders);
+        $member->update(['phone'=>'03123456789']);
+        $c=$this->order($member);
+        $this->assertSame(1,$this->send([$c->id])['sent']);
+        $this->assertSame('923123456789',SmsLog::latest('id')->first()->phone);
+    }
+
+    public function test_early_ready_action_does_not_send_a_reminder_on_repeated_action(): void
+    {
+        $o=$this->order(status:'Stitching');
+        $o->update(['delivery_date'=>now()->addDays(4)]);
+        $action=app(OrderService::class)->markReady($o);
+        $this->assertSame('Ready',$action['order']->status);
+        $this->travel(8)->days();
+        app(OrderService::class)->markReady($o->fresh());
+        Http::assertSentCount(1);
+        $this->assertSame(1,SmsLog::count());
+        $this->assertSame(1,$this->send([$o->id])['sent']);
+        Http::assertSentCount(2);
+    }
+
+    public function test_changing_family_contact_cannot_bypass_an_unknown_order_attempt(): void
+    {
+        $primary=Customer::create(['name'=>'Ali','phone'=>'03001234567']);
+        $member=Customer::create(['name'=>'Ahmed','phone'=>null,'parent_customer_id'=>$primary->id,'relationship'=>'Son']);
+        $order=$this->order($member);
+        $log=SmsLog::create(['customer_id'=>$member->id,'order_id'=>$order->id,'phone'=>'923001234567','message'=>'Pending','reason'=>'collection-first','status'=>'unknown']);
+        $log->collectionOrders()->attach($order->id,['reason'=>'collection-first']);
+        $member->update(['phone'=>'03123456789']);
+        $result=app(OrderService::class)->markReady($order);
+        $this->assertSame('Ready for Verification',$result['order']->status);
+        $this->assertSame(0,$result['notification']['sent']);
+        $this->assertStringContainsString('unknown',$result['notification']['message']);
+        Http::assertNothingSent();
+    }
+
 }
 
 

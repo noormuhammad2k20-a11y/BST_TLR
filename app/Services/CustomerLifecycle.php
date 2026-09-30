@@ -17,8 +17,9 @@ final class CustomerLifecycle
             ? CustomerImporter::phoneKey($value) : mb_strtolower($value);
     }
 
-    public static function matchingPhone(string $phone, ?int $except = null): ?Customer
+    public static function matchingPhone(?string $phone, ?int $except = null): ?Customer
     {
+        if (blank($phone)) return null;
         $key = self::phoneKey($phone);
         return Customer::withTrashed()->whereNull('anonymized_at')
             ->when($except, fn ($q) => $q->where('id','<>',$except))
@@ -44,6 +45,9 @@ final class CustomerLifecycle
         DB::transaction(function () use ($customer) {
             $record = Customer::withTrashed()->lockForUpdate()->findOrFail($customer->id);
             if ($record->trashed()) return;
+            if ($record->familyMembers()->exists()) {
+                throw ValidationException::withMessages(['customer'=>'Archive family members first; their primary contact must remain available.']);
+            }
             $record->delete();
             ActivityLogger::log('Archived Customer', 'Customer archived; history retained.', 'customers', $record, [], 'archived');
         });
@@ -54,6 +58,12 @@ final class CustomerLifecycle
         return DB::transaction(function () use ($id) {
             $customer = Customer::onlyTrashed()->whereNull('anonymized_at')->lockForUpdate()->findOrFail($id);
             if ($existing = self::matchingPhone($customer->phone, $id)) self::rejectDuplicate($existing);
+            if ($customer->isFamilyMember()) {
+                $primary = Customer::withTrashed()->lockForUpdate()->find($customer->parent_customer_id);
+                if (!$primary || $primary->trashed() || $primary->anonymized_at) {
+                    throw ValidationException::withMessages(['customer'=>'Restore the primary customer first.']);
+                }
+            }
             $customer->restore();
             ActivityLogger::log('Restored Customer', 'Customer restored to the directory.', 'customers', $customer, [], 'restored');
             return $customer;
@@ -75,6 +85,9 @@ final class CustomerLifecycle
         if ($confirmation !== 'DELETE') throw ValidationException::withMessages(['confirmation'=>'Type DELETE exactly to confirm permanent deletion.']);
         return DB::transaction(function () use ($id) {
             $customer = Customer::onlyTrashed()->whereNull('anonymized_at')->lockForUpdate()->findOrFail($id);
+            if ($customer->familyMembers()->withTrashed()->exists()) {
+                throw ValidationException::withMessages(['customer'=>'This primary customer has linked family members and cannot be permanently removed.']);
+            }
             $history = $this->hasHistory($customer);
             $this->scrubPersonalCopies($customer);
             if ($history) {

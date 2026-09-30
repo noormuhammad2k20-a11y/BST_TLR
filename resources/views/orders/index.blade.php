@@ -321,6 +321,7 @@
 @endsection
 
 @push('scripts')
+@include('components.family-member-form')
 <script>
   /* Toast and confirmation dialog are provided globally by the layout.
      `showCustomToast` stays as an alias so existing calls keep working. */
@@ -444,20 +445,136 @@
       order.status !== 'Delivered';
   }
 
+  var readyRequests = window.orderReadyRequests || (window.orderReadyRequests = new Set());
+  var readyConfirmation = null;
+  var readyConfirmationTimers = [];
+  var readyConfirmDelay = 800;
+  var readyConfirmWindow = 6000;
+
+  function syncReadyButtons() {
+    document.querySelectorAll('[data-ready-action]').forEach(button => {
+      const id = Number(button.dataset.orderId);
+      const order = orders.find(o => o.db_id === id);
+      const sending = readyRequests.has(id);
+      const armed = readyConfirmation?.id === id;
+      const pending = ['sending', 'unknown'].includes(order?.smsState);
+      const label = button.querySelector('[data-ready-label]');
+      if (!label) return;
+      // Freeze the existing footprint only while its label changes. No table reflow.
+      if ((armed || sending) && !button.dataset.readySized) {
+        const box = button.getBoundingClientRect();
+        if (box.width && box.height) {
+          button.style.width = box.width + 'px';
+          button.style.height = box.height + 'px';
+          button.dataset.readySized = 'true';
+        }
+      } else if (!armed && !sending && button.dataset.readySized) {
+        button.style.removeProperty('width');
+        button.style.removeProperty('height');
+        delete button.dataset.readySized;
+      }
+      label.textContent = sending ? (button.dataset.readySending || 'SENDING...') : armed ? (button.dataset.readyConfirm || 'CONFIRM READY & SMS') : pending && !button.hasAttribute('data-ready-status') ? 'SMS pending' : button.dataset.readyDefault;
+      label.style.fontSize = '';
+      label.style.whiteSpace = armed || sending ? 'nowrap' : '';
+      if (armed || sending) {
+        // Fit the longer confirmation inside the current button, even on narrow rows.
+        const available = label.clientWidth;
+        if (available && label.scrollWidth > available) label.style.fontSize = `${parseFloat(getComputedStyle(label).fontSize) * available / label.scrollWidth}px`;
+      }
+      button.disabled = sending || pending || !order || !['Stitching', 'In Progress', 'Ready for Verification'].includes(order.status)
+        || (armed && performance.now() < readyConfirmation.confirmableAt);
+    });
+  }
+
+  function cancelReadyConfirmation() {
+    readyConfirmationTimers.forEach(clearTimeout);
+    readyConfirmationTimers = [];
+    readyConfirmation = null;
+    syncReadyButtons();
+  }
+
+  function bindReadyConfirmation() {
+    const signal = Atelier.pageSignal();
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape') cancelReadyConfirmation();
+    }, {signal});
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) cancelReadyConfirmation();
+    }, {signal});
+    window.addEventListener('blur', cancelReadyConfirmation, {signal});
+    window.addEventListener('pagehide', cancelReadyConfirmation, {signal});
+    signal.addEventListener('abort', cancelReadyConfirmation, {once:true});
+  }
+
   async function confirmReadyAndSend(dbId) {
+    const order = orders.find(o => o.db_id === dbId);
+    if (readyRequests.has(dbId) || !order || order.notified
+        || !['Stitching', 'In Progress', 'Ready for Verification'].includes(order.status)
+        || ['sending', 'unknown'].includes(order.smsState) || document.hidden) return;
+    const time = performance.now();
+    if (readyConfirmation?.id !== dbId || time >= readyConfirmation.expiresAt) {
+      cancelReadyConfirmation();
+      const confirmation = {id:dbId, confirmableAt:time + readyConfirmDelay, expiresAt:time + readyConfirmWindow};
+      readyConfirmation = confirmation;
+      readyConfirmationTimers = [
+        setTimeout(() => { if (readyConfirmation === confirmation) syncReadyButtons(); }, readyConfirmDelay),
+        setTimeout(() => { if (readyConfirmation === confirmation) cancelReadyConfirmation(); }, readyConfirmWindow),
+      ];
+      syncReadyButtons();
+      return;
+    }
+    // Check elapsed time as well as disabled state: rapid queued clicks cannot confirm.
+    if (time < readyConfirmation.confirmableAt) return;
+    cancelReadyConfirmation();
+    const requests = readyRequests;
+    const scope = Atelier.pageSignal();
+    requests.add(dbId);
+    syncReadyButtons();
     closeModal();
+    renderPage();
 
     try {
       const res = await Atelier.api.post(ROUTES.notify(dbId), { mark_ready: true });
+      if (scope.aborted) return;
       upsertOrder(res.order);
-
-
       toast(res.message, res.notification?.sent === false ? 'warning' : 'success');
       renderPage();
       Atelier.refreshCounters();
     } catch (err) {
-      Atelier.reportError(err, 'Could not notify the customer');
+      if (!scope.aborted) Atelier.reportError(err, 'Could not notify the customer');
+    } finally {
+      requests.delete(dbId);
+      if (!scope.aborted) renderPage();
     }
+  }
+
+  function readyAction(o) {
+    if (!['Stitching', 'In Progress', 'Ready for Verification'].includes(o.status)) return '';
+    const blocked = readyRequests.has(o.db_id) || ['sending','unknown'].includes(o.smsState);
+    const label = o.status === 'Ready for Verification' ? 'READY & SEND SMS' : 'FINISHED — READY & SEND SMS';
+    return `<div class="mt-2 text-xs ${o.schedule?.overdue ? 'text-red-600 font-semibold' : 'text-slate-500'}">${Atelier.escapeHtml(o.schedule?.text || '')}</div>
+      ${o.smsState === 'failed' ? '<div class="text-xs text-red-600">SMS Failed</div>' : ''}
+      ${o.smsState === 'unknown' ? '<div class="text-xs text-amber-600">SMS result unknown — check SMS History</div>' : ''}
+      <button type="button" data-ready-action data-order-id="${o.db_id}" data-ready-default="${label}" ${blocked ? 'disabled' : ''} onclick="event.stopPropagation(); confirmReadyAndSend(${o.db_id})" class="mt-2 px-3 py-2 rounded-lg text-xs font-semibold bg-emerald-500 text-white disabled:opacity-50"><span data-ready-label style="display:block">${label}</span></button>`;
+  }
+
+  function tableOrderStatus(o) {
+    const badge = ['Received', 'Pending'].includes(o.status) ? 'badge-pending'
+      : ['Stitching', 'In Progress'].includes(o.status) ? 'badge-progress'
+      : o.status === 'Ready for Verification' ? 'badge-trial'
+      : o.status === 'Ready' ? 'badge-ready' : o.status === 'Delivered' ? 'badge-delivered' : 'badge-overdue';
+    if (['Stitching', 'In Progress', 'Ready for Verification'].includes(o.status)) {
+      const blocked = readyRequests.has(o.db_id) || ['sending', 'unknown'].includes(o.smsState);
+      const hint = o.smsState === 'unknown' ? 'SMS result unknown. Check SMS History before retrying.'
+        : o.smsState === 'failed' ? 'Last SMS failed. Click to confirm readiness and retry.'
+        : 'Physically check garments, then click twice to mark Ready and send SMS.';
+      return `<button type="button" class="badge ${badge} cursor-pointer disabled:opacity-50" title="${hint}" aria-label="${Atelier.escapeHtml(o.status)}: ${hint}"
+        data-ready-action data-ready-status data-order-id="${o.db_id}" data-ready-default="${Atelier.escapeHtml(o.status)}"
+        data-ready-confirm="Confirm Ready & SMS" data-ready-sending="Sending..." ${blocked ? 'disabled' : ''}
+        onclick="event.stopPropagation(); confirmReadyAndSend(${o.db_id})"><span data-ready-label style="display:block;min-width:0">${Atelier.escapeHtml(o.status)}</span></button>`;
+    }
+    const label = o.status === 'Ready' && o.notified ? 'Ready · Notified ✓' : o.status;
+    return `<span class="badge ${badge}">${Atelier.escapeHtml(label)}</span>`;
   }
 
   async function startBulkExtend() {
@@ -1162,6 +1279,7 @@
    * timeline once the server responds. Nothing ever blocks on the network.
    */
   window.openOrderDetails = function(dbId) {
+    cancelReadyConfirmation();
     const local = orders.find(o => o.db_id === dbId);
     if (!local) return;
 
@@ -1204,7 +1322,7 @@
       return;
     }
     
-    const filtered = customers.filter(c => c.name.toLowerCase().includes(q) || c.phone.includes(q));
+    const filtered = customers.filter(c => c.name.toLowerCase().includes(q) || (c.phone || '').includes(q));
     
     if (filtered.length === 0) {
       listContainer.innerHTML = '<div class="text-center py-6 text-sm text-slate-500">Koi customer nahi mila 🔍</div>';
@@ -1231,6 +1349,23 @@
     renderPage();
   };
 
+  window.addOrderFamilyMember = function(parentId) {
+    openFamilyMember(parentId, member => {
+      customers.push({...member, phone:member.effective_phone || '', measurements:[]});
+      selectWizardCustomer(member.db_id);
+    });
+  };
+  function orderFamilySelector() {
+    if (newOrderState.editId) return '';
+    const selected = customers.find(c=>c.db_id == newOrderState.customerId);
+    if (!selected) return '';
+    const parentId = selected.parent_customer_id || selected.db_id;
+    const family = customers.filter(c=>c.db_id == parentId || c.parent_customer_id == parentId);
+    return `<div class="mb-5 p-3 border border-slate-200 rounded-lg"><div class="text-sm font-semibold mb-2">Order For</div>
+      <div class="flex flex-wrap gap-4">${family.map(c=>`<label class="text-sm"><input type="radio" name="order-person" ${c.db_id == selected.db_id ? 'checked' : ''} onchange="selectWizardCustomer(${c.db_id})"> ${Atelier.escapeHtml(c.name)}${c.relationship ? ' — '+Atelier.escapeHtml(c.relationship) : ''}</label>`).join('')}</div>
+      <button type="button" class="text-sm text-indigo-600 mt-2" onclick="addOrderFamilyMember(${parentId})">+ Add Family Member</button></div>`;
+  }
+
   function generateCustomerCard(c, isRecent) {
     const initials = c.name.split(' ').map(n => n[0]).join('').slice(0, 2);
     return `
@@ -1238,7 +1373,7 @@
         <div class="avatar sm slate">${initials}</div>
         <div class="flex-1 flex justify-between items-center">
           <div>
-            <div class="text-sm font-semibold text-slate-900">${c.name}</div>
+            <div class="text-sm font-semibold text-slate-900">${Atelier.escapeHtml(c.name)}${c.relationship ? ' — '+Atelier.escapeHtml(c.relationship) : ''}</div>
             <div class="text-xs text-slate-500">${c.phone} &middot; ${c.orders} previous orders</div>
             <div class="text-xs font-semibold ${Number(c.due)>0?'text-red-500':'text-emerald-600'}">Previous balance: ${Atelier.money(c.due || 0)}</div>
           </div>
@@ -1472,7 +1607,7 @@
       <div class="p-4 sm:p-5 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row flex-wrap justify-end gap-3 sm:gap-2 shrink-0">
         <button class="w-full sm:w-auto justify-center bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-100 flex items-center gap-2 transition-colors" onclick="closeModal(); window.openReceipt(${d.db_id})"><i class="fa-solid fa-print text-xs"></i> Print Receipt</button>
         <button class="w-full sm:w-auto justify-center bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-800 flex items-center gap-2 transition-colors shadow-sm" onclick="closeModal(); editOrder(${JSON.stringify(d).replace(/"/g, '&quot;')})"><i class="fa-solid fa-pen-to-square text-xs"></i> Edit Details</button>
-        <button class="w-full sm:w-auto justify-center bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-600 flex items-center gap-2 transition-colors shadow-sm shadow-emerald-500/30" ${d.status === 'Ready for Verification' ? '' : 'disabled title="Staff can verify garments once stitching is complete."'} onclick="confirmReadyAndSend(${d.db_id})"><i class="fa-solid fa-comment-sms text-xs"></i> Mark Ready & Send SMS</button>
+        <button class="w-full sm:w-auto justify-center bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-600 flex items-center gap-2 transition-colors shadow-sm shadow-emerald-500/30" ${d.status === 'Ready for Verification' ? '' : 'disabled title="Staff can verify garments once stitching is complete."'} data-ready-action data-order-id="${d.db_id}" data-ready-default="Mark Ready & Send SMS" onclick="confirmReadyAndSend(${d.db_id})"><i class="fa-solid fa-comment-sms text-xs"></i> <span data-ready-label style="display:block;min-width:0">Mark Ready & Send SMS</span></button>
       </div>
     `,
     'bulk-sms-confirm': () => `
@@ -1886,7 +2021,6 @@
                 <tbody class="divide-y divide-slate-100">
                   ${paginatedOrders.map((o, i) => {
                     const dueToday = isDueToday(o) || o.due === 'Today';
-                    const autoCD = getAutoStatusCountdown(o);
                     const isSelected = selectedOrderIds.has(o.id);
                     const avClass = avatarClasses[i % avatarClasses.length];
                     const orderDataStr = JSON.stringify(o).replace(/"/g, '&quot;');
@@ -1897,21 +2031,14 @@
                       <td class="px-5 py-3">
                         <div class="flex items-center gap-2">
                           <div class="avatar sm ${avClass}">${o.customer.split(' ').map(n => n[0]).join('').slice(0, 2)}</div>
-                          <span class="font-medium text-slate-600">${o.customer}</span>
+                          <span class="font-medium text-slate-600">${Atelier.escapeHtml(o.customer)}${o.relationship ? `<small class="block text-xs text-slate-500">${Atelier.escapeHtml(o.relationship)} · Contact: ${Atelier.escapeHtml(o.contactName || 'Unavailable')}</small>` : ''}</span>
                         </div>
                       </td>
                       <td class="px-5 py-3 text-slate-600">${o.garment}<div class="text-xs text-slate-400">${o.fabric}</div></td>
                       <td class="px-5 py-3">${o.priority === 'Express' ? '<span class="badge badge-overdue">Express</span>' : o.priority === 'High' ? '<span class="badge badge-pending">High</span>' : '<span class="text-xs text-slate-500">Normal</span>'}</td>
                       <td class="px-5 py-3 font-semibold text-slate-900">${Atelier.money(o.amount)}</td>
-                      <td class="px-5 py-3 text-slate-600 ${dueToday && o.status !== 'Delivered' ? 'text-red-500 font-semibold' : ''}">${o.due}</td>
-                      <td class="px-5 py-3">
-                        <div class="flex flex-col gap-1">
-                          <span class="badge ${['Received', 'Pending'].includes(o.status) ? 'badge-pending' : o.status === 'Stitching' ? 'badge-progress' : o.status === 'Ready for Verification' ? 'badge-trial' : o.status === 'Ready' ? 'badge-ready' : o.status === 'Delivered' ? 'badge-delivered' : 'badge-overdue'}">${o.status}</span>
-                          ${o.overdue ? '<span class="badge badge-overdue text-[9px]">Overdue</span>' : o.atRisk ? '<span class="badge badge-pending text-[9px]"><i class="fa-solid fa-triangle-exclamation mr-1"></i>At Risk</span>' : ''}
-                          ${autoCD ? `<span class="text-[9px] text-slate-400" data-countdown="${o.id}">${autoCD}</span>` : ''}
-                          ${o.notified ? '<span class="badge badge-notified text-[9px]"><i class="fa-solid fa-comment-sms mr-1"></i>Notified</span>' : ''}
-                        </div>
-                      </td>
+                      <td class="px-5 py-3 text-slate-600 ${dueToday && o.status !== 'Delivered' ? 'text-red-500 font-semibold' : ''}">${o.due}${o.schedule?.overdue ? `<div class="text-xs text-red-500">${Atelier.escapeHtml(o.schedule.text)}</div>` : o.atRisk ? `<div class="text-xs text-amber-600">${Atelier.escapeHtml(o.schedule?.dueSoon ? o.schedule.text : 'At Risk')}</div>` : ''}</td>
+                      <td class="px-5 py-3">${tableOrderStatus(o)}</td>
                       <td class="px-5 py-3 text-right whitespace-nowrap flex justify-end">
                         <button class="w-8 h-8 rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-900 inline-flex items-center justify-center transition-colors mr-1" title="View" onclick="openOrderDetails(${o.db_id})"><i class="fa-regular fa-eye text-xs"></i></button>
                         <button class="w-8 h-8 rounded-md text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 inline-flex items-center justify-center transition-colors mr-1" title="Edit" onclick="editOrder(${orderDataStr})"><i class="fa-solid fa-pen-to-square text-xs"></i></button>
@@ -1961,13 +2088,14 @@
                       </div>
                       <div class="flex items-center gap-2 mb-2">
                         <div class="avatar sm ${avClass}" style="width:24px;height:24px;font-size:10px">${Atelier.initials(o.customer)}</div>
-                        <div class="text-xs text-slate-600 truncate">${Atelier.escapeHtml(o.customer)}</div>
+                        <div class="text-xs text-slate-600 truncate">${Atelier.escapeHtml(o.customer)}${o.relationship ? `<small class="block">${Atelier.escapeHtml(o.relationship)} · Contact: ${Atelier.escapeHtml(o.contactName || 'Unavailable')}</small>` : ''}</div>
                       </div>
                       <div class="text-xs text-slate-500 mb-2 truncate">${Atelier.escapeHtml(o.garment)}</div>
                       <div class="flex justify-between items-center text-xs">
                         <span class="font-semibold text-slate-900">${Atelier.money(o.amount)}</span>
                         <span class="${o.dueToday ? 'text-red-500 font-bold' : 'text-slate-500'}">${o.due}</span>
                       </div>
+                      ${readyAction(o)}
                       <div class="w-full h-1 bg-slate-200 rounded-full mt-2"><div class="h-full rounded-full bg-indigo-600" style="width:${o.progress}%"></div></div>
                     </div>
                   `}).join('') || `<div class="text-center py-8 text-xs text-slate-400">Drop an order here</div>`}
@@ -2027,6 +2155,7 @@
   }
 
   function renderPage() {
+    cancelReadyConfirmation();
     const container = document.getElementById('page-container');
     if (!container) return;
 
@@ -2036,6 +2165,7 @@
     }
 
     container.innerHTML = pages.orders();
+    syncReadyButtons();
     updateBulkSmsButtonState();
 
     if (viewMode === 'kanban') bindKanbanDragDrop();
@@ -2100,6 +2230,7 @@
   @include('delivery.payment-dialog')
 
   Atelier.onPageReady(() => {
+    bindReadyConfirmation();
     renderPage();
     handleIncomingIntent();
 

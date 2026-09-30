@@ -91,6 +91,7 @@ class Settings
 
         /* ----------------------------- Theme & display -------------------- */
         'delivery_alerts_enabled' => ['rule'=>'boolean','default'=>'1','group'=>'collection'],
+        'verification_before_days' => ['rule'=>'required|integer|min:0|max:365','default'=>'2','group'=>'collection'],
         'delivery_alert_before_days' => ['rule'=>'required|integer|min:0|max:365','default'=>'1','group'=>'collection'],
         'delivery_overdue_alerts_enabled' => ['rule'=>'boolean','default'=>'1','group'=>'collection'],
         'collection_reminder_alerts_enabled' => ['rule'=>'boolean','default'=>'1','group'=>'collection'],
@@ -412,6 +413,8 @@ class Settings
             'customerName'     => "Customer's full name",
             'customerPhone'    => "Customer's phone number",
             'customerID'       => 'Customer code',
+            'contactName'      => 'Notification recipient name',
+            'relationship'     => 'Family relationship',
             'orderID'          => 'Order number',
             'invoiceID'        => 'Invoice number',
             'garmentType'      => 'Garment described on the order',

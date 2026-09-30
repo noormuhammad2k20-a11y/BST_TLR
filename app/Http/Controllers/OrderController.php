@@ -30,7 +30,7 @@ class OrderController extends Controller
         app(\App\Services\DeliveryAttentionService::class)->run();
 
         $orders = Order::query()
-            ->with(['customer:id,name,phone,city', 'staff:id,name'])
+            ->with(['customer:id,name,phone,city,parent_customer_id,relationship,anonymized_at', 'customer.primaryCustomer', 'staff:id,name'])
             ->withPaymentTotals()
             ->withStageSince()
             ->latest()
@@ -38,12 +38,12 @@ class OrderController extends Controller
             ->map(fn (Order $o) => $this->serialize($o));
 
         // Everything the create/edit wizard needs, in one pass.
-        $customers = Customer::query()
-            ->select('id', 'code', 'name', 'phone', 'email', 'type', 'city', 'notes', 'created_at')
+        $customers = Customer::query()->with('primaryCustomer')
+            ->select('id', 'code', 'name', 'phone', 'email', 'type', 'city', 'notes', 'created_at', 'parent_customer_id', 'relationship')
             ->withCount('orders')
             ->withSum('orders as orders_total', 'total')
             ->with(['measurements' => fn ($q) => $q->savedSets()->select(
-                array_merge(['id', 'customer_id', 'garment_type', 'unit', 'details', 'order_item_piece_id', 'updated_at'], \App\Models\Measurement::FIELDS)
+                array_merge(['id', 'customer_id', 'garment_type', 'unit', 'details', 'notes', 'order_item_piece_id', 'updated_at'], \App\Models\Measurement::FIELDS)
             )->with('piece.item')])
             ->orderBy('name')
             ->get()
@@ -51,7 +51,10 @@ class OrderController extends Controller
                 'db_id'        => $c->id,
                 'id'           => $c->display_code,
                 'name'         => $c->name,
-                'phone'        => $c->phone,
+                'phone'        => $c->effectivePhone() ?? '',
+                'parent_customer_id' => $c->parent_customer_id,
+                'relationship' => $c->relationship,
+                'contact_name' => $c->effectiveContact()?->name,
                 'email'        => $c->email,
                 'type'         => $c->type,
                 'city'         => $c->city,
@@ -382,7 +385,7 @@ class OrderController extends Controller
         app(\App\Services\OrderAutoProgress::class)->run();
 
         $orders = Order::query()
-            ->with('customer:id,name,phone')
+            ->with(['customer:id,name,phone,parent_customer_id,relationship,anonymized_at', 'customer.primaryCustomer'])
             ->withPaymentTotals()
             ->withStageSince()
             ->latest()
@@ -584,13 +587,15 @@ class OrderController extends Controller
                 'id' => $item->id, 'product_service_id' => $item->product_service_id, 'name' => $item->name,
                 'quantity' => $item->quantity, 'unit_price' => $item->unit_price, 'tailor_rate_override' => $item->tailor_rate_override !== null ? (float) $item->tailor_rate_override : '', 'subtotal' => $item->subtotal, 'fabric' => $item->fabric ?? '', 'style_notes' => $item->style_notes ?? '',
                 'pieces' => $item->pieces->map(fn($piece) => ['id' => $piece->id, 'unit' => $piece->unit, 'profile' => Measurement::displayProfile($piece->profile ?? []),
-                    'values' => $piece->measurement ? array_merge($piece->measurement->only(Measurement::FIELDS), $piece->measurement->details ?? []) : (object)[]])->all(),
+                    'values' => $piece->measurement ? array_merge($piece->measurement->only(array_merge(Measurement::FIELDS, ['notes'])), $piece->measurement->details ?? []) : (object)[]])->all(),
             ])->all(),
             'id'        => $order->display_number,
             'invoice'   => $order->display_invoice,
             'customer'  => $order->customer?->name ?? 'Unknown',
             'cid'       => $order->customer?->display_code ?? '',
-            'phone'     => $order->customer?->phone ?? '',
+            'phone'     => $order->customer?->effectivePhone() ?? '',
+            'relationship' => $order->customer?->relationship,
+            'contactName' => $order->customer?->effectiveContact()?->name,
             'garment'   => $order->primary_item_name,
             'fabric'    => $order->fabric ?? '',
             'status'    => $order->status,

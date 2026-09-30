@@ -92,6 +92,10 @@ final class DeliveryTiming
             'Ready for Pickup' => 'Ready for Pickup'.($due ? ' • '.$due->format('g:i A') : ''),
             default => $due?->format('M d • g:i A') ?? 'No delivery time',
         };
+        if ($order->status === 'Ready for Verification' && $due && !$overdue) {
+            $days = (int)$now->copy()->startOfDay()->diffInDays($due->copy()->timezone(Settings::timezone())->startOfDay(), false);
+            $text = match ($days) { 0 => 'Due Today', 1 => 'Due Tomorrow', default => 'Due in '.$days.' Days' };
+        }
         return ['indicator' => $indicator, 'text' => $text, 'overdue' => (bool) $overdue, 'dueSoon' => (bool) $soon,
             'dueToday' => (bool) $today, 'attentionAt' => $attention?->toIso8601String(),
             'deliveryAt' => $due?->toIso8601String(), 'deliveryDate' => $due?->format('Y-m-d'), 'deliveryTime' => $due?->format('H:i'),

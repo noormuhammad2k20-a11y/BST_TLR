@@ -6,11 +6,11 @@ const w = dom.window;
 const profile = {key:'alteration', fields:['length','chest','thigh'], required:[], labels:{}, at_least_one:true};
 w.itemProfilesFixture = {alteration:profile, generic:profile};
 w.Atelier = {escapeHtml: value => String(value), money: String};
-w.activeServices = [{id:1,name:'Alteration and Fitting',profile,price:100},{id:2,name:'Trouser Alteration',profile,price:100}];
+w.activeServices = [{id:1,name:'Alteration and Fitting',profile,price:100},{id:2,name:'Trouser Alteration',profile:{...profile,key:'trouser'},price:100}];
 w.customers = [{db_id:1,measurements:[
   {id:110,customer_id:1,garment_type:'Alteration and Fitting',profile_key:'alteration',unit:'cm',length:40,chest:0,details:{thigh:23}},
-  {id:111,customer_id:1,garment_type:'Alteration and Fitting',profile_key:'alteration',unit:'cm',length:41,chest:0,details:{thigh:24}},
-  {id:112,customer_id:1,garment_type:'Trouser Alteration',profile_key:'alteration',length:99},
+  {id:111,customer_id:1,garment_type:'Alteration and Fitting',profile_key:'alteration',unit:'cm',notes:'Loose cuffs for Ahmed',length:41,chest:0,details:{thigh:24}},
+  {id:112,customer_id:1,garment_type:'Trouser Alteration',profile_key:'trouser',length:99},
   {id:114,customer_id:2,garment_type:'Alteration and Fitting',profile_key:'alteration',length:98},
 ]},{db_id:2,measurements:[]}];
 w.renderPage = () => {};
@@ -20,7 +20,8 @@ w.toast = () => {};
 w.wizardStep = 3;
 let source = fs.readFileSync('resources/views/orders/item-editor.blade.php','utf8')
   .replace(/@json\(.*MeasurementProfiles::all\(\)\)/, 'itemProfilesFixture')
-  .replace(/@json\(.*PricingService::breakdown\(0\)\)/, '{tax_rate:0,service_charge_rate:0}');
+  .replace(/@json\(.*PricingService::breakdown\(0\)\)/, '{tax_rate:0,service_charge_rate:0}')
+  .replace(/@json\(view\('components.measurement-note-quick-actions'.*?->render\(\)\)/g, '""');
 w.eval(source);
 w.eval('newOrderState.customerId=1; itemChoose(0,1)');
 assert.deepEqual(Array.from(w.compatibleSavedMeasurements(w.newOrderState.garments[0]),m=>m.id),[111,110]);
@@ -36,6 +37,7 @@ assert.equal(piece.values.length,41);
 assert.equal(piece.values.chest,0);
 assert.equal(piece.values.thigh,24);
 assert.equal(piece.unit,'cm');
+assert.equal(piece.values.notes,'Loose cuffs for Ahmed');
 w.itemMeasure('length','42');
 assert.equal(piece.values.length,'42');
 assert.equal(piece.measurement_id,111);

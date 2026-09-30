@@ -187,6 +187,7 @@
 @endsection
 
 @push('scripts')
+@include('components.family-member-form')
 <script>
   /* ============= DATA STORE ============= */
   /* `var` throughout: the SPA router re-evaluates this script per navigation,
@@ -237,7 +238,7 @@
       const q = customerSearch.toLowerCase();
       list = list.filter(c =>
         (c.name || '').toLowerCase().includes(q) ||
-        (c.phone || '').toLowerCase().includes(q) ||
+        (c.phone || '').toLowerCase().includes(q) || (c.effective_phone || '').toLowerCase().includes(q) || (c.contact_name || '').toLowerCase().includes(q) ||
         (c.email || '').toLowerCase().includes(q) ||
         (c.city || '').toLowerCase().includes(q) ||
         (c.id || '').toLowerCase().includes(q)
@@ -331,6 +332,19 @@
   };
 
   /* ============= CUSTOMER TABLE RENDER ============= */
+  window.addCustomerFamilyMember = function(parentId) {
+    openFamilyMember(parentId, member => {
+      customers.push(member);
+      renderCustomerTable();
+      recalcStats();
+    });
+  };
+  function familySummary(c) {
+    if (c.parent_customer_id) return `<div class="text-xs text-slate-500">${Atelier.escapeHtml(c.relationship || '')} · ${c.phone ? 'Personal phone' : 'Uses '+Atelier.escapeHtml(c.contact_name || '')+"'s contact"}</div>`;
+    const members = customers.filter(m=>m.parent_customer_id == c.db_id);
+    return members.length ? `<div class="mt-2 text-xs text-slate-500">Family Members${members.map(m=>`<div>${Atelier.escapeHtml(m.name)} — ${Atelier.escapeHtml(m.relationship)} · ${Atelier.escapeHtml(m.phone || 'Uses '+c.name+"'s contact")}</div>`).join('')}</div>` : '';
+  }
+
   function getCustomerRowHTML(c, index) {
     const avatarClass = avatarClasses[index % avatarClasses.length];
     const initials = (c.name || 'Unknown').split(' ').map(n => n[0]).join('').slice(0, 2);
@@ -349,7 +363,7 @@
           <div class="flex items-center gap-3">
             <div class="avatar sm ${avatarClass}">${initials}</div>
             <div>
-              <div class="font-semibold text-slate-900">${Atelier.escapeHtml(c.name)}</div>
+              <div class="font-semibold text-slate-900">${Atelier.escapeHtml(c.name)}</div>${familySummary(c)}
               <div class="text-xs text-slate-500">${c.id} · Since ${c.since || 'Unknown'}</div>
             </div>
           </div>
@@ -373,6 +387,7 @@
           <button type="button" onclick="restoreCustomer(${c.db_id}, this)" class="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-600 hover:bg-slate-100">Restore</button>
           <button type="button" onclick="confirmPermanentCustomerDelete(${c.db_id})" class="px-3 py-1.5 rounded-lg text-xs font-medium text-red-600 hover:bg-red-50">Delete Permanently</button>
           ` : `
+          ${!c.parent_customer_id ? `<button type="button" class="text-xs text-indigo-600 mr-2" onclick="addCustomerFamilyMember(${c.db_id})">+ Add Family Member</button>` : ''}
           <a href="/customers/${c.db_id}/ledger" class="w-8 h-8 rounded-md text-slate-400 hover:bg-slate-100 inline-flex items-center justify-center" title="Customer Ledger / Receive Payment"><i class="fa-solid fa-book text-xs"></i></a>
           <button class="w-8 h-8 rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-900 inline-flex items-center justify-center transition-colors" title="View" onclick="openCustomer360('${c.id}')"><i class="fa-regular fa-eye text-xs"></i></button>
 
@@ -596,6 +611,8 @@
     document.getElementById('edit-customer-form').action = '/customers/' + c.db_id;
     document.getElementById('edit-name').value = c.name || '';
     document.getElementById('edit-phone').value = c.phone || '';
+    document.getElementById('edit-phone').required = !c.parent_customer_id;
+    document.getElementById('edit-phone').previousElementSibling.textContent = c.parent_customer_id ? 'Personal Phone (Optional)' : 'Phone Number *';
     document.getElementById('edit-email').value = c.email || '';
     document.getElementById('edit-city').value = c.city || '';
     document.getElementById('edit-type').value = c.type || 'Regular';
@@ -635,7 +652,7 @@
           </div>
         </div>
         <div class="flex gap-2">
-          <a href="tel:${selectedCustomerFor360.phone}" class="w-9 h-9 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-900 flex items-center justify-center transition-colors"><i class="fa-solid fa-phone text-sm"></i></a>
+          <a href="tel:${Atelier.escapeHtml(selectedCustomerFor360.effective_phone || selectedCustomerFor360.phone || '')}" class="w-9 h-9 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-900 flex items-center justify-center transition-colors"><i class="fa-solid fa-phone text-sm"></i></a>
           <button type="button" onclick="sendCustomerSms(this)" title="Send SMS" class="w-9 h-9 rounded-lg border border-slate-200 text-emerald-500 hover:bg-emerald-50 flex items-center justify-center"><i class="fa-solid fa-comment-sms text-sm"></i></button>
           <button class="w-9 h-9 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 flex items-center justify-center transition-colors" onclick="closeModal()"><i class="fa-solid fa-xmark text-sm"></i></button>
         </div>
@@ -645,9 +662,11 @@
           <div class="space-y-4">
             <div>
               <div class="text-[11px] text-slate-500 uppercase font-bold tracking-widest">Contact Info</div>
-              <div class="text-sm text-slate-900 mt-1 font-medium">${selectedCustomerFor360.phone}</div>
-              <div class="text-sm text-slate-500">${selectedCustomerFor360.email}</div>
-              <div class="text-sm text-slate-500 mt-1 flex items-center gap-1"><i class="fa-solid fa-location-dot text-xs"></i> ${selectedCustomerFor360.city}</div>
+              ${familySummary(selectedCustomerFor360)}
+              ${!selectedCustomerFor360.parent_customer_id ? `<button type="button" class="text-xs text-indigo-600 mt-2" onclick="addCustomerFamilyMember(${selectedCustomerFor360.db_id})">+ Add Family Member</button>` : ''}
+              <div class="text-sm text-slate-900 mt-1 font-medium">${Atelier.escapeHtml(selectedCustomerFor360.effective_phone || selectedCustomerFor360.phone || '')}</div>
+              <div class="text-sm text-slate-500">${Atelier.escapeHtml(selectedCustomerFor360.email || '')}</div>
+              <div class="text-sm text-slate-500 mt-1 flex items-center gap-1"><i class="fa-solid fa-location-dot text-xs"></i> ${Atelier.escapeHtml(selectedCustomerFor360.city || '')}</div>
             </div>
             <div class="pt-4 border-t border-slate-200">
               <div class="text-[11px] text-slate-500 uppercase font-bold tracking-widest">Loyalty Score</div>
