@@ -430,18 +430,20 @@ class OrderController extends Controller
         foreach ($profile['fields'] ?? Measurement::FIELDS as $field) {
             $value = in_array($field, Measurement::FIELDS) ? $sheet->{$field} : ($sheet->details[$field] ?? null);
 
-            if ($value === null || $value === '') {
+            if ($value === null) {
                 continue;
             }
-
-            // 12.50 prints as 12.5, 12.00 prints as 12 — trailing zeros are
-            // noise on a receipt.
-            $clean = rtrim(rtrim(number_format((float) $value, 2, '.', ''), '0'), '.');
+            
+            $value = trim((string) $value);
+            
+            if ($value === '') {
+                continue;
+            }
 
             $rows[] = [
                 'key'   => $field,
                 'label' => Measurement::label($field, $profile['labels'][$field] ?? null),
-                'value' => $clean === '' ? '0' : $clean,
+                'value' => $value,
             ];
         }
 

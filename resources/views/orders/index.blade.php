@@ -57,6 +57,7 @@
   .rc-tb b { font: 700 15px 'IBM Plex Mono', monospace; white-space: nowrap;}
   .rc-stat { margin-top: 13px; text-align: center; font: 700 7.5px 'Space Grotesk', sans-serif; letter-spacing: .18em; border: 1px solid #000; border-radius: 3px; padding: 6px 4px; text-transform: uppercase; }
   .rc-note { text-align: center; font: 400 8.5px/1.65 'IBM Plex Mono', monospace; color: #333; margin-top: 13px; }
+  .rc-customer-message { text-align: center; font: 600 8.5px/1.6 'IBM Plex Mono', monospace; color: #000; margin-top: 13px; opacity: 1; }
   .rc-credit { margin-top: 15px; border: 1px solid #000; border-radius: 3px; padding: 10px 10px 12px; text-align: center; }
   .rc-credit .c1 { font: 600 7px 'IBM Plex Mono', monospace; color: #000; letter-spacing: .28em; margin-right: -.28em; text-transform: uppercase; }
   .rc-credit .c2 { font: 700 7.5px/1.6 'Space Grotesk', sans-serif; letter-spacing: .04em; margin-top: 4px; color: #000; text-transform: uppercase; }
@@ -70,7 +71,7 @@
   .rc-thx span { font: 700 8.5px 'Space Grotesk', sans-serif; letter-spacing: .4em; margin-right: -.4em; text-transform: uppercase; color: #000; }
 
   /* WORKSHOP COPY SPECIFIC CLASSES */
-  .rc-workshop { width: 302px; background: #fff; color: #000; padding: 19px 15px 21px; font: 400 10px/1.5 'IBM Plex Mono', monospace; border: 1px solid #BFBAB0; }
+  .rc-workshop { width: 302px; background: #fff; color: #000; padding: 5px 6px 21px; font: 400 10px/1.5 'IBM Plex Mono', monospace; border: 1px solid #BFBAB0; }
   .rc-workshop .rc-urgent { border: 1.5px solid #000; padding: 6px; text-align: center; font: 700 12px 'Space Grotesk', sans-serif; letter-spacing: .2em; text-transform: uppercase; border-radius: 3px; margin-bottom: 12px; }
   .rc-g { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 4px 0; }
   .rc-g .nm { font: 700 11.5px 'Space Grotesk', sans-serif; color: #000; }
@@ -79,10 +80,12 @@
   .rc-gs { margin-top: 10px; border: 1.5px solid #000; padding: 6px 12px; display: flex; justify-content: space-between; align-items: center; border-radius: 3px; }
   .rc-gs span { font: 700 9px 'Space Grotesk', sans-serif; letter-spacing: .24em; text-transform: uppercase; }
   .rc-gs b { font: 700 15px 'IBM Plex Mono', monospace; white-space: nowrap; }
-  .rc-workshop .rc-ms { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 10px; row-gap: 10px; margin-top: 12px; }
-  .rc-workshop .rc-ms .m-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; column-gap: 5px; min-width: 0; }
-  .rc-workshop .rc-ms .m-lbl { font: 700 13px/1.15 'Space Grotesk', sans-serif; color: #000; width: auto; min-width: 0; white-space: normal; overflow: visible; text-overflow: clip; }
-  .rc-workshop .rc-ms .m-val { font: 700 16px 'IBM Plex Mono', monospace; color: #000; justify-self: end; text-align: right; white-space: nowrap; min-width: 2.5ch; }
+  .rc-workshop .rc-ms { display: flex; flex-direction: column; gap: 4px; margin-top: 12px; }
+  .rc-workshop .rc-ms .ms-pair { display: grid; row-gap: 3px; }
+  .rc-workshop .rc-ms .ms-labels, .rc-workshop .rc-ms .ms-values { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 18px; align-items: baseline; }
+  .rc-workshop .rc-ms .m-lbl { font: 700 15px/1.15 'Space Grotesk', sans-serif; color: #000; white-space: nowrap; text-align: left; }
+  .rc-workshop .rc-ms .m-val { font: 800 18px 'IBM Plex Mono', monospace; color: #000; white-space: nowrap; text-align: left; overflow: visible; }
+  .rc-workshop .rc-ms .ms-divider { border-top: 1px dashed #d5d5d5; margin: 4px 0 6px; }
   .rc-inst { margin-top: 15px; border: 1.5px solid #000; border-radius: 3px; padding: 14px; }
   .rc-inst .lbl { font: 700 12px 'Space Grotesk', sans-serif; letter-spacing: .2em; text-transform: uppercase; margin-bottom: 10px; text-align: center; display: block; color: #000; }
   .rc-inst .val { font: 500 15px/1.6 'IBM Plex Mono', monospace; text-align: center; white-space: pre-wrap; color: #000; }
@@ -208,23 +211,30 @@
     html.printing-thermal body > :not(#thermal-print-area) { display: none !important; }
     html.printing-thermal body * { visibility: hidden; }
 
-    #thermal-print-area, #thermal-print-area * { visibility: visible; }
-
     #thermal-print-area {
       position: static; width: 100%; max-width: 100%; min-width: 0;
       height: auto; max-height: none; overflow: visible;
       margin: 0; padding: 0; transform: none; zoom: 1;
       background: #fff !important;
       display: block !important;
+      visibility: visible !important;
+    }
+
+    #thermal-print-area, #thermal-print-area * { 
+      visibility: visible !important; 
     }
 
     #thermal-print-area .rc,
     #thermal-print-area .rc-workshop {
-      width: 100%;
-      max-width: 100%;
-      min-width: 0;
+      display: block !important;
+      visibility: visible !important;
+      width: 72mm !important;
+      max-width: 72mm;
+      height: auto !important;
+      overflow: visible !important;
+      margin: 0 !important;
+      background: #fff !important;
       box-sizing: border-box;
-      background: #fff;
       border: none;
     }
 
@@ -250,6 +260,7 @@
       print-color-adjust: exact !important;
     }
     /* Preserve the approved white lettering on black copy-marker bars. */
+    #thermal-print-area .rc-customer-message { color: #000 !important; opacity: 1 !important; font-weight: 600 !important; }
     #thermal-print-area .slip-kind:not(.ghost),
     #thermal-print-area .slip-kind:not(.ghost) * { color: #fff !important; }
     #thermal-print-area .slip-mcell { border-bottom-color: #000 !important; }
@@ -955,7 +966,7 @@
       measure:     null,
     });
 
-    Atelier.api.get(ROUTES.receipt(dbId))
+    window._receiptLoadPromise = Atelier.api.get(ROUTES.receipt(dbId))
       .then(res => fillJobCard(res.receipt || {}))
       .catch(() => {
         const body = document.getElementById('job-measure-body');
@@ -976,11 +987,29 @@
 
     const body = document.getElementById('job-measure-body');
     if (body) {
-      const grid = rows => `<div class="rc-ms">${rows.map(x => `
-            <div class="m-row">
-              <span class="m-lbl">${Atelier.escapeHtml(x.label)}</span>
-              <span class="m-val">${Atelier.escapeHtml(x.value)}</span>
-            </div>`).join('')}</div>`;
+      const grid = rows => {
+        const pairs = [];
+        for (let i = 0; i < rows.length; i += 2) {
+          pairs.push(rows.slice(i, i + 2));
+        }
+        return `<div class="rc-ms">${pairs.map(pair => {
+          const m1 = pair[0];
+          const m2 = pair[1] || { label: '', value: '' };
+          return `
+            <div class="ms-pair">
+              <div class="ms-labels">
+                <span class="m-lbl">${Atelier.escapeHtml(m1.label)}</span>
+                <span class="m-lbl">${Atelier.escapeHtml(m2.label)}</span>
+              </div>
+              <div class="ms-values">
+                <span class="m-val">${Atelier.escapeHtml(m1.value)}</span>
+                <span class="m-val">${Atelier.escapeHtml(m2.value)}</span>
+              </div>
+            </div>
+            <div class="ms-divider"></div>
+          `;
+        }).join('')}</div>`;
+      };
 
       /* ---- Workshop-only measurement reordering and relabeling ----------
          Groups parent measurements with their "losing" partner on the same
@@ -1230,6 +1259,10 @@
    * @param {'both'|'customer'|'tailor'} which
    */
   window.printThermal = async function(which = 'both') {
+    if ((which === 'tailor' || which === 'both') && window._receiptLoadPromise) {
+      await window._receiptLoadPromise;
+    }
+
     const ids = which === 'customer' ? ['slip-customer']
               : which === 'tailor'   ? ['slip-tailor']
               : ['slip-customer', 'slip-tailor'];
@@ -1240,12 +1273,15 @@
     if (document.getElementById('thermal-print-area')) return;
     const area = document.createElement('div');
     area.id = 'thermal-print-area';
-    area.hidden = true;
+    // Ensure hidden while building, but use off-screen positioning if needed
+    area.style.position = 'absolute';
+    area.style.left = '-9999px';
 
     slips.forEach(slip => {
       const copy = slip.cloneNode(true);
       copy.removeAttribute('id');
       copy.classList.remove('slip-preview');
+      copy.classList.add('thermal-print-slip');
       copy.querySelectorAll('img').forEach(img => {
         img.src = new URL(img.getAttribute('src'), document.baseURI).href;
         img.loading = 'eager';
@@ -1275,14 +1311,63 @@
         img.onerror = () => finish(new Error('Receipt image could not load. Check the saved logo/stamp and retry.'));
         if (img.complete) loaded();
       })));
-      area.hidden = false;
+      
+      area.style.position = '';
+      area.style.left = '';
       document.documentElement.classList.add('printing-thermal');
+
+      // Force layout before print to ensure scrollHeight is accurate
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      area.offsetHeight;
+
+      // Calculate actual height dynamically for Workshop Copy only
+      const style = document.createElement('style');
+      style.id = 'thermal-dynamic-page-size';
+      let cssText = '';
+
+      if (which !== 'customer') {
+        const workshop = area.querySelector('.rc-workshop');
+        if (workshop) {
+          const pxToMm = px => px * 25.4 / 96;
+          const contentHeightPx = workshop.scrollHeight;
+          const contentHeightMm = Math.ceil(pxToMm(contentHeightPx)) + 15; // 15mm safe padding
+          
+          cssText = `
+            @media print {
+              @page workshopThermal {
+                size: 80mm ${contentHeightMm}mm !important;
+                margin: 0;
+              }
+              #thermal-print-area .rc-workshop {
+                page: workshopThermal;
+              }
+            }
+          `;
+        }
+      }
+
+      if (cssText) {
+        style.textContent = cssText;
+        document.head.appendChild(style);
+      }
+
+      const cleanup = () => {
+        document.documentElement.classList.remove('printing-thermal');
+        const printArea = document.getElementById('thermal-print-area');
+        if (printArea) printArea.remove();
+        const dynamicStyle = document.getElementById('thermal-dynamic-page-size');
+        if (dynamicStyle) dynamicStyle.remove();
+        window.removeEventListener('afterprint', cleanup);
+      };
+      
+      window.addEventListener('afterprint', cleanup, { once: true });
+      setTimeout(cleanup, 10000); // fallback cleanup
+
       window.print();
     } catch (error) {
-      Atelier.reportError(error, 'Could not print receipt images');
-    } finally {
       document.documentElement.classList.remove('printing-thermal');
       area.remove();
+      Atelier.reportError(error, 'Could not print receipt images');
     }
   };
 
@@ -1461,13 +1546,20 @@
         </div>
       `).join('');
       
-      let extraLinesHtml = (o.lines || []).filter(l => l.label.toLowerCase() !== 'total').map(line => `
+      const excludedBillingLabels = new Set(['subtotal', 'total']);
+      let extraLinesHtml = (o.lines || []).filter(l => {
+        const lbl = String(l.label || '').trim().toLowerCase();
+        return !excludedBillingLabels.has(lbl);
+      }).map(line => `
         <div class="rc-tr sub">
           <span class="k">${esc(line.label)}</span>
           <i class="dots"></i>
           <span class="v">${rs(line.amount)}</span>
         </div>
       `).join('');
+
+      const subtotalLine = (o.lines || []).find(l => String(l.label || '').trim().toLowerCase() === 'subtotal');
+      const subtotalAmount = subtotalLine ? subtotalLine.amount : (o.subtotal ?? o.total ?? 0);
 
       const customerSlip = `
         <div class="rc slip-preview" id="slip-customer">
@@ -1504,10 +1596,10 @@
           </div>
           <div class="rc-sec"><span>Payment</span></div>
           <div class="rc-tot">
-            ${extraLinesHtml}
             <div class="rc-tr">
-              <span class="k">Subtotal</span><i class="dots"></i><span class="v">${rs(o.total)}</span>
+              <span class="k">Subtotal</span><i class="dots"></i><span class="v">${rs(subtotalAmount)}</span>
             </div>
+            ${extraLinesHtml}
             <div class="rc-tb">
               <span>Total</span><b>${rs(o.total)}</b>
             </div>
@@ -1522,7 +1614,7 @@
           
           ${o.stamp ? `<div style="text-align:center; margin:8px 0"><img src="${esc(new URL(o.stamp, document.baseURI).href)}" style="max-height:48px; max-width:100%; opacity:.85" alt=""></div>` : ''}
           ${o.terms ? `<div class="rc-note" style="margin-top:2mm; text-align:center">${esc(o.terms)}</div>` : ''}
-          <p class="rc-note" style="text-align:center;">
+          <p class="rc-customer-message" style="text-align:center;">
             Thank you for choosing Best Tailor.<br>
             Please present this receipt when collecting your order.
           </p>
